@@ -59,7 +59,7 @@
         "Tests: input submission, empty validation, uppercase normalization, event emission"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Use Textual's Input widget. Test with Pilot framework."
     },
     {

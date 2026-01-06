@@ -7,6 +7,11 @@
 - **Coverage**: Entry points like `__main__.py` need explicit tests with mocked instances
 - **mypy --strict**: Requires all function signatures to have type annotations
 - **.gitignore**: Don't forget to exclude .venv/ directory
+- **Textual Events**: Define custom events as nested classes inheriting from `Message`
+- **Event Handlers**: Use `on_{widget_name}_{event_name}` pattern (snake_case)
+- **Input Validation**: Always strip whitespace before validation; clear value even on error
+- **CSS Classes**: Use `add_class()` / `remove_class()` for dynamic styling (error states)
+- **Test Event Tracking**: Store events in test app's instance variable for verification
 
 ---
 
@@ -37,5 +42,36 @@
 - When not using the `pilot` object from Textual's test context, omit it to avoid linter warnings
 - Type checking with mypy --strict catches dict type inconsistencies early
 - Entry point modules need explicit tests; mocking is straightforward with pytest-mock
+
+---
+
+## 2026-01-06 - VPR-002
+- Implemented Bloomberg-style command input bar with ticker validation
+- Created custom TickerInput widget extending Textual's Input
+- Added empty input validation with visual error states (red border)
+- Implemented automatic uppercase normalization for ticker symbols
+- Defined TickerLookup custom event for ticker submission
+- Integrated widget into main app layout with bottom docking
+- Wrote 9 comprehensive test cases covering all acceptance criteria
+- Achieved 100% test coverage, all mypy --strict and ruff checks pass
+
+**Files changed:**
+- `viper/widgets/__init__.py` - New widgets package
+- `viper/widgets/ticker_input.py` - TickerInput widget with validation and events
+- `viper/app.py` - Integrated TickerInput, added CSS styling and event handler
+- `tests/test_ticker_input.py` - 9 test cases for widget behavior
+- `tests/test_app.py` - Added tests for TickerInput integration
+- `AGENTS.md` - Documented widget patterns and event handling
+
+**Learnings:**
+- Custom widgets extend Textual base widgets and override specific methods
+- Events are defined as nested classes inheriting from `Message`
+- Event handler naming follows `on_{widget_name}_{event_name}` pattern (auto-detected)
+- CSS classes can be dynamically added/removed for state management (error styling)
+- Input validation should strip whitespace first, then validate the cleaned value
+- Always clear input value even on validation error for better UX
+- Test event handling by storing events in test app instance variable
+- TCSS `dock: bottom` positions widgets at screen bottom
+- Event testing requires proper test app setup with message handler
 
 ---
