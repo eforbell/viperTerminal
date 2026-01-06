@@ -43,7 +43,7 @@
         "mypy passes with --strict, ruff passes with no errors"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Foundation for all future features. Set up testing infrastructure first."
     },
     {

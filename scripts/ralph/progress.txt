@@ -1,1 +1,41 @@
 # Ralph Progress Log
+
+## Codebase Patterns
+- **Virtual Environments**: System Python is externally managed - always use `python3 -m venv .venv`
+- **pytest-asyncio**: Set `asyncio_mode = "auto"` in pyproject.toml for auto-detection
+- **Textual Testing**: Use `async with app.run_test()` (omit `as pilot` if not using it)
+- **Coverage**: Entry points like `__main__.py` need explicit tests with mocked instances
+- **mypy --strict**: Requires all function signatures to have type annotations
+- **.gitignore**: Don't forget to exclude .venv/ directory
+
+---
+
+## 2026-01-06 - VPR-001
+- Implemented complete Python project scaffold with pyproject.toml
+- Set up Textual app with Header, Footer, and green-on-black theme
+- Configured pytest, mypy (--strict), ruff with comprehensive settings
+- Created basic app entry point via `python -m viper` or `viper` command
+- Achieved 100% test coverage with 6 tests
+
+**Files changed:**
+- `pyproject.toml` - Project configuration with all dependencies and tool settings
+- `viper/__init__.py` - Package init with version
+- `viper/__main__.py` - Entry point with main() function
+- `viper/app.py` - Main Textual app with Header, Footer, quit binding
+- `tests/test_app.py` - Tests for app launch, widgets, keybindings, theme
+- `tests/test_main.py` - Test for main() entry point
+- `.gitignore` - Exclude venv, cache, coverage files
+- `README.md` - Basic usage documentation
+- `AGENTS.md` - Agent learnings document
+
+**Learnings:**
+- Textual's built-in Header/Footer widgets work out of the box, no custom styling needed initially
+- BINDINGS class attribute takes tuples: (key, action_name, description)
+- Virtual environment is required on externally-managed Python systems
+- pytest-cov can be configured in pyproject.toml for coverage thresholds
+- Ruff combines linting and formatting, replacing multiple tools
+- When not using the `pilot` object from Textual's test context, omit it to avoid linter warnings
+- Type checking with mypy --strict catches dict type inconsistencies early
+- Entry point modules need explicit tests; mocking is straightforward with pytest-mock
+
+---
