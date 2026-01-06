@@ -1,0 +1,297 @@
+{
+  "branchName": "viper/feature",
+  "projectName": "Viper Terminal",
+  "description": "A personal Bloomberg-like terminal for stock and crypto quotes with a beautiful console UI",
+  "principles": [
+    "Rock-solid quality over speed - every feature must be bulletproof before moving on",
+    "Comprehensive test coverage - unit tests, integration tests, edge cases",
+    "All tests must pass before a story is marked complete",
+    "No story is done until it's documented and tested",
+    "Fail fast, fail loudly - errors should be obvious and actionable"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "tui": "Textual (built on Rich)",
+    "stockData": "yfinance (Yahoo Finance wrapper)",
+    "cryptoData": "CoinGecko API (no auth required for basic endpoints)",
+    "testing": "pytest + pytest-asyncio + pytest-cov",
+    "mocking": "pytest-mock, responses (for HTTP mocking)",
+    "typecheck": "mypy --strict",
+    "linting": "ruff",
+    "packageManager": "uv or pip"
+  },
+  "testingRequirements": {
+    "coverage": "Minimum 90% line coverage for all new code",
+    "unitTests": "Every public function/method must have unit tests",
+    "integrationTests": "UI components tested with Textual's pilot testing framework",
+    "edgeCases": "Test invalid inputs, network failures, timeouts, empty responses",
+    "mocking": "External APIs (yfinance, CoinGecko) must be mocked in tests",
+    "ci": "All tests + typecheck + lint must pass before story completion"
+  },
+  "userStories": [
+    {
+      "id": "VPR-001",
+      "title": "Project scaffold and Textual app shell",
+      "acceptanceCriteria": [
+        "Python project structure with pyproject.toml (dependencies, scripts, pytest config)",
+        "pytest, pytest-asyncio, pytest-cov, mypy, ruff configured",
+        "Textual app boots and displays a header with 'VIPER TERMINAL'",
+        "Footer shows keybindings (q=quit)",
+        "App runs via 'python -m viper' or entry point",
+        "Basic color theme: green text on black background",
+        "Tests: app launches without error, header/footer render correctly",
+        "mypy passes with --strict, ruff passes with no errors"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Foundation for all future features. Set up testing infrastructure first."
+    },
+    {
+      "id": "VPR-002",
+      "title": "Command input bar with ticker parsing",
+      "acceptanceCriteria": [
+        "Input widget at bottom of screen (Bloomberg-style)",
+        "User can type a ticker symbol (e.g., AAPL, BTC)",
+        "Pressing Enter triggers a lookup action (emits event)",
+        "Input clears after submission",
+        "Show error message for empty input",
+        "Input normalizes to uppercase",
+        "Tests: input submission, empty validation, uppercase normalization, event emission"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Use Textual's Input widget. Test with Pilot framework."
+    },
+    {
+      "id": "VPR-003",
+      "title": "Stock quote fetching with yfinance",
+      "acceptanceCriteria": [
+        "Install yfinance as dependency",
+        "Create a data service module (viper/services/stock.py)",
+        "Define StockQuote dataclass with typed fields",
+        "Fetch: price, change, change%, volume, market cap, 52w high/low",
+        "Handle invalid tickers gracefully - return error result, not exception",
+        "Async wrapper to not block UI (run_in_executor)",
+        "Tests: valid ticker fetch (mocked), invalid ticker handling, network timeout, malformed response",
+        "100% test coverage on stock service module"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Use Ticker.fast_info for speed. All yfinance calls mocked in tests."
+    },
+    {
+      "id": "VPR-004",
+      "title": "Stock quote display panel",
+      "acceptanceCriteria": [
+        "QuotePanel widget displays fetched stock data",
+        "Show ticker symbol prominently at top",
+        "Green (#00ff00) for positive change, red (#ff0000) for negative",
+        "Format numbers: commas for thousands, 2 decimal places for prices",
+        "Show 'Loading...' spinner during fetch",
+        "Show error state with message when fetch fails",
+        "Empty state when no ticker selected",
+        "Tests: all display states (loading, success, error, empty), color logic, number formatting"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Create reusable QuotePanel widget. Snapshot tests for visual regression."
+    },
+    {
+      "id": "VPR-005",
+      "title": "Crypto quote fetching with CoinGecko",
+      "acceptanceCriteria": [
+        "Create crypto data service (viper/services/crypto.py)",
+        "Define CryptoQuote dataclass with typed fields",
+        "Maintain symbol->id mapping (btc->bitcoin, eth->ethereum, etc.)",
+        "Fetch: price (USD), 24h change%, market cap, 24h volume",
+        "Handle unknown symbols gracefully",
+        "Handle rate limits (429) with retry + exponential backoff",
+        "Handle network errors, timeouts",
+        "Tests: valid fetch (mocked), unknown symbol, rate limit handling, network errors",
+        "100% test coverage on crypto service module"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Use httpx or aiohttp for async requests. Mock all HTTP in tests."
+    },
+    {
+      "id": "VPR-006",
+      "title": "Unified quote lookup with asset type detection",
+      "acceptanceCriteria": [
+        "Create unified QuoteService that delegates to stock/crypto services",
+        "Support explicit prefix: 'BTC:CRYPTO', 'AAPL:STOCK'",
+        "Without prefix: check known crypto list first, then try stock",
+        "Return unified Quote type (union of StockQuote | CryptoQuote)",
+        "QuotePanel adapts display based on quote type",
+        "Tests: prefix parsing, auto-detection logic, fallback behavior, panel adaptation"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Keep detection logic simple and testable. Maintain crypto symbol list."
+    },
+    {
+      "id": "VPR-007",
+      "title": "Quote history and quick recall",
+      "acceptanceCriteria": [
+        "HistoryManager class stores last 20 looked-up tickers",
+        "Up/Down arrows in input cycle through history",
+        "History persists to ~/.config/viper/history.json",
+        "Handle missing/corrupt history file gracefully",
+        "Tests: add to history, cycle navigation, persistence, file corruption recovery"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Keep history logic decoupled from UI for easy testing."
+    },
+    {
+      "id": "VPR-008",
+      "title": "Watchlist panel",
+      "acceptanceCriteria": [
+        "WatchlistManager class handles add/remove/list operations",
+        "Commands: 'w AAPL' adds, 'd AAPL' removes",
+        "WatchlistPanel widget displays all watched tickers",
+        "Shows: ticker, last price, change% with colors",
+        "Auto-refresh every 60s (configurable)",
+        "Persist to ~/.config/viper/watchlist.json",
+        "Handle missing/corrupt file gracefully",
+        "Tests: add/remove logic, persistence, refresh timer, display formatting, file recovery"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Separate data management from UI widget."
+    },
+    {
+      "id": "VPR-009",
+      "title": "Multi-panel layout",
+      "acceptanceCriteria": [
+        "Screen divided: watchlist (30%) left, main quote (70%) right",
+        "Input bar spans full width at bottom",
+        "Header spans full width at top",
+        "Tab cycles focus between watchlist and quote panel",
+        "Visual focus indicator on active panel",
+        "Responsive: hide watchlist on very narrow terminals (<80 cols)",
+        "Tests: layout proportions, focus cycling, responsive behavior"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Use Textual's Grid or Horizontal containers."
+    },
+    {
+      "id": "VPR-010",
+      "title": "Keyboard navigation and shortcuts",
+      "acceptanceCriteria": [
+        "q = quit application",
+        "/ = focus input bar",
+        "Esc = clear input / close overlays",
+        "Tab = cycle panels",
+        "j/k = navigate lists (watchlist)",
+        "Enter on watchlist item = view that quote",
+        "? or F1 = show help (placeholder for VPR-015)",
+        "All bindings documented in code",
+        "Tests: each keybinding triggers correct action"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Use Textual's Bindings system. Test with Pilot.press()."
+    },
+    {
+      "id": "VPR-011",
+      "title": "Intraday price chart (sparkline)",
+      "acceptanceCriteria": [
+        "Fetch intraday data (1d, 5m intervals) via yfinance",
+        "SparklineWidget renders ASCII line chart",
+        "Show in quote panel below price data",
+        "Label with time range",
+        "Graceful fallback when data unavailable (show 'No data')",
+        "Tests: sparkline rendering, empty data handling, time label formatting"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Keep chart simple - ASCII art, not full graphics."
+    },
+    {
+      "id": "VPR-012",
+      "title": "Company/asset info panel",
+      "acceptanceCriteria": [
+        "InfoPanel widget shows extended metadata",
+        "Stocks: sector, industry, description, website, employees",
+        "Crypto: description, website, genesis date",
+        "Toggle with 'i' key",
+        "Scrollable content for long descriptions",
+        "Tests: panel toggle, content rendering for each asset type, scrolling"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Use Textual's ScrollableContainer."
+    },
+    {
+      "id": "VPR-013",
+      "title": "Error handling and status bar",
+      "acceptanceCriteria": [
+        "StatusBar widget at bottom shows: connection state, last refresh time",
+        "User-friendly error messages (not raw exceptions)",
+        "Network errors show 'Offline' status with retry hint",
+        "Timeout handling: 10s default, show 'Request timed out'",
+        "All errors logged to ~/.config/viper/viper.log",
+        "Log rotation: max 5MB, keep 3 backups",
+        "Tests: error message formatting, status transitions, log file creation"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Use Python's logging module with RotatingFileHandler."
+    },
+    {
+      "id": "VPR-014",
+      "title": "Configuration file support",
+      "acceptanceCriteria": [
+        "Load config from ~/.config/viper/config.toml",
+        "Configurable: refresh_interval, theme_colors, default_watchlist",
+        "Config dataclass with validation",
+        "Sensible defaults when no config exists",
+        "Invalid config values logged and fall back to defaults",
+        "Tests: config loading, missing file, invalid values, validation"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Use tomllib (stdlib in 3.11+). Pydantic optional for validation."
+    },
+    {
+      "id": "VPR-015",
+      "title": "Help screen and onboarding",
+      "acceptanceCriteria": [
+        "HelpScreen modal opens with F1 or ?",
+        "Lists all commands and keybindings in organized sections",
+        "Brief description of each feature",
+        "Esc or Enter dismisses modal",
+        "First-run detection: show welcome on first launch",
+        "Tests: help screen content, dismiss behavior, first-run logic"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "Use Textual's ModalScreen. Store first-run flag in config."
+    }
+  ],
+  "futureEnhancements": [
+    "News feed integration (RSS or API)",
+    "Options chain display",
+    "Portfolio tracking with P&L",
+    "Alerts and notifications",
+    "Historical chart with multiple timeframes (1W, 1M, 1Y)",
+    "Technical indicators (moving averages, RSI)",
+    "Export data to CSV",
+    "Multiple themes (dark green, amber, blue)",
+    "Split-screen with multiple quotes",
+    "WebSocket streaming for real-time updates"
+  ],
+  "dataSources": {
+    "stocks": {
+      "primary": "yfinance (Python library)",
+      "notes": "Free, no API key, wraps Yahoo Finance. Rate limits unknown but generous for personal use."
+    },
+    "crypto": {
+      "primary": "CoinGecko API",
+      "endpoint": "https://api.coingecko.com/api/v3",
+      "notes": "Free tier: 30 calls/min, 10k/month. No auth for basic endpoints."
+    }
+  }
+}
