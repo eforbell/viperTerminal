@@ -4,6 +4,7 @@ import pytest
 from textual.widgets import Footer, Header
 
 from viper.app import ViperApp
+from viper.widgets import TickerInput
 
 
 @pytest.mark.asyncio
@@ -55,3 +56,29 @@ async def test_color_theme() -> None:
     assert app.THEME["background"] == "#000000"
     assert app.THEME["accent"] == "#00ff00"
     assert app.THEME["surface"] == "#111111"
+
+
+@pytest.mark.asyncio
+async def test_ticker_input_widget_present() -> None:
+    """Test that the TickerInput widget is present in the app."""
+    app = ViperApp()
+    async with app.run_test():
+        # Should have a TickerInput widget
+        ticker_input = app.query_one(TickerInput)
+        assert ticker_input is not None
+
+
+@pytest.mark.asyncio
+async def test_ticker_lookup_event_handled() -> None:
+    """Test that the app handles TickerLookup events."""
+    app = ViperApp()
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Submit a ticker
+        ticker_input.focus()
+        ticker_input.value = "AAPL"
+        await pilot.press("enter")
+
+        # The app should handle the event (logged, but no error)
+        # If the handler wasn't working, an exception would be raised

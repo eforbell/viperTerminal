@@ -4,6 +4,8 @@ from textual.app import App, ComposeResult
 from textual.containers import Container
 from textual.widgets import Footer, Header
 
+from viper.widgets import TickerInput
+
 
 class ViperApp(App[None]):
     """A Bloomberg-like terminal for stocks and crypto quotes."""
@@ -22,6 +24,20 @@ class ViperApp(App[None]):
     Footer {
         background: $background;
         color: $accent;
+    }
+
+    TickerInput {
+        dock: bottom;
+        margin: 1 2;
+        border: solid $accent;
+    }
+
+    TickerInput.error {
+        border: solid red;
+    }
+
+    #main-container {
+        height: 1fr;
     }
     """
 
@@ -42,5 +58,15 @@ class ViperApp(App[None]):
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header(show_clock=False)
-        yield Container()
+        yield Container(id="main-container")
+        yield TickerInput()
         yield Footer()
+
+    def on_ticker_input_ticker_lookup(self, event: TickerInput.TickerLookup) -> None:
+        """Handle ticker lookup events.
+
+        Args:
+            event: The ticker lookup event containing the normalized ticker symbol.
+        """
+        # For now, just log the ticker (future stories will handle actual lookup)
+        self.log(f"Looking up ticker: {event.ticker}")

@@ -33,3 +33,13 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - CSS-in-Textual uses TCSS (Textual CSS), which is similar to CSS but more limited
 - Header and Footer widgets are built-in and work out of the box
 - Bindings are defined as class-level tuples: `BINDINGS = [("key", "action", "description")]`
+
+### VPR-002: Command Input Bar with Ticker Parsing
+- **Custom Widget Pattern**: Extend `Input` widget and override `on_input_submitted()` for custom behavior
+- **Event Emission**: Define custom events as nested classes that inherit from `Message`
+- **Event Handling**: Use snake_case method naming: `on_{widget_name}_{event_name}` (e.g., `on_ticker_input_ticker_lookup`)
+- **CSS Classes**: Use `add_class()` and `remove_class()` for dynamic styling (e.g., error states)
+- **Input Validation**: Always strip whitespace before validation; clear input even on error
+- **Event Testing**: Create test app with event tracking; use instance variable to collect events
+- **TCSS Docking**: Use `dock: bottom` to position widgets at the bottom of the screen
+- **Test Isolation**: Each test should use a fresh app instance for proper isolation
