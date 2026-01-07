@@ -46,3 +46,25 @@
   - Achieved 93% coverage on news.py, 571 total tests passing
 
 ---
+
+## 2026-01-07 - VPR-029
+- **What was implemented**: Unified crypto data source to use yfinance instead of CoinGecko
+- **Files changed**:
+  - `viper/services/crypto.py`: Replaced CoinGecko HTTP API with yfinance Ticker, updated symbol mapping
+  - `tests/test_crypto.py`: Rewrote all tests to mock yfinance objects instead of HTTP responses
+  - `tests/test_crypto_info.py`: Simplified tests with yfinance mocking
+  - `AGENTS.md`: Added VPR-029 learnings section
+- **Learnings**:
+  - yfinance supports crypto via SYMBOL-USD format (BTC-USD, ETH-USD, etc.)
+  - Auto-convert user input: "BTC" → "BTC-USD", also support explicit "-USD" suffix
+  - Use `await asyncio.to_thread()` to run synchronous yfinance calls without blocking UI
+  - Calculate 24h change from `.history(period="2d")`: compare last 2 Close prices
+  - Handle edge cases: empty history (0% change), division by zero (0% change)
+  - Mock pattern: `patch("yfinance.Ticker")` with MagicMock having fast_info, info, history attrs
+  - Use `pd.DataFrame` with `pd.date_range` index for realistic historical data mocks
+  - Renamed SYMBOL_TO_ID → SYMBOL_TO_PAIR, kept legacy alias for backward compatibility
+  - No retry logic needed - yfinance doesn't have aggressive rate limits like CoinGecko
+  - Achieved 93% coverage on crypto.py with 30 comprehensive tests
+  - All 547 existing non-crypto-history tests still pass (history tests fixed in VPR-030)
+
+---

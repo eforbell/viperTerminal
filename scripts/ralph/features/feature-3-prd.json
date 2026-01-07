@@ -57,7 +57,7 @@
         "Tests: all major crypto pairs (BTC, ETH, ADA, SOL, DOGE), auto-conversion"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": [],
       "notes": "Eliminates rate limit issues and simplifies codebase to single data source. yfinance supports all major crypto via SYMBOL-USD format."
