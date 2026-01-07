@@ -157,7 +157,7 @@
         "Tests: add/remove logic, persistence, refresh timer, display formatting, file recovery"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Separate data management from UI widget."
     },
     {

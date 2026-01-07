@@ -262,3 +262,45 @@
 
 ---
 
+## 2026-01-06 - VPR-008
+- Implemented WatchlistManager class for add/remove/list operations with JSON persistence
+- Created WatchlistPanel widget with auto-refresh timer (60s configurable)
+- Added command parsing for 'W TICKER' (add) and 'D TICKER' (remove) in app event handler
+- Implemented quote caching with loading/error states
+- Color-coded display: green for positive changes, red for negative
+- Uses VerticalScroll container for scrollable watchlist items
+- Wrote 36 comprehensive tests (25 for manager, 11 for panel)
+- Achieved 100% coverage for WatchlistManager, 93% for WatchlistPanel
+- Total project coverage: 95.52% (176 tests passing)
+
+**Files changed:**
+- `viper/services/watchlist.py` - WatchlistManager with add/remove/list/persistence
+- `viper/widgets/watchlist_panel.py` - WatchlistPanel with auto-refresh and display formatting
+- `viper/app.py` - Integrated watchlist_manager, added W/D command parsing
+- `viper/services/__init__.py` - Added watchlist to exports
+- `viper/widgets/__init__.py` - Added WatchlistPanel to exports
+- `tests/test_watchlist.py` - 25 tests for WatchlistManager
+- `tests/test_watchlist_panel.py` - 11 tests for WatchlistPanel
+- `AGENTS.md` - Added VPR-008 learnings
+
+**Learnings:**
+- **Manager Pattern**: Separate data management (WatchlistManager) from UI widget (WatchlistPanel) for testability
+- **Auto-refresh Timer**: Use `set_interval(seconds, async_method)` to schedule periodic async operations
+- **run_worker Pattern**: Call `self.run_worker(async_method())` to execute async operations from sync context (on_mount)
+- **Async Refresh**: Make refresh method async to fetch all quotes with await, enabling parallel fetches
+- **Quote Caching**: Store fetched quotes in dict so display can render cached data while refreshing
+- **Loading/Error States**: Show "Loading..." when quote not in cache, "Error" when fetch fails
+- **Type Narrowing with isinstance**: Use isinstance() checks (not hasattr) for mypy type narrowing with union types
+- **VerticalScroll Container**: Use VerticalScroll for scrollable lists that exceed widget height
+- **Dynamic Rendering**: Create _render_items() method that clears children and remounts with updated data
+- **Format String Alignment**: Use f-string alignment (`:8s`, `:>12s`, `:>8s`) for columnar display
+- **Timer Control Flag**: Use boolean flag (_refresh_timer_active) to control whether timer callbacks run
+- **on_mount/on_unmount Lifecycle**: Start timers in on_mount, stop in on_unmount for proper cleanup
+- **Worker Testing**: Use `await pilot.pause(delay)` to give async workers time to complete before assertions
+- **Mock Side Effect Functions**: Use async functions as side_effect to return different values per ticker
+- **Command Prefix Pattern**: Parse command prefixes (W, D) in event handler before normal ticker lookup
+- **Reuse Persistence Logic**: Same JSON persistence pattern as history - structured format, graceful errors
+- **Test All States**: Test empty state, loading state, error state, positive/negative colors, crypto quotes, timer
+
+---
+
