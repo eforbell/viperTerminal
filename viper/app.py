@@ -425,6 +425,14 @@ class ViperApp(App[None]):
         # Trigger a quote lookup for the selected ticker
         await self._fetch_and_display_quote(event.ticker)
 
+        # Also refresh the currently visible panel (chart or news)
+        if self._chart_panel_visible and self._current_ticker:
+            chart_panel = self.query_one(ChartPanel)
+            self.run_worker(chart_panel.load_chart(self._current_ticker, chart_panel._current_period))
+        elif self._news_panel_visible and self._current_ticker:
+            news_panel = self.query_one(NewsPanel)
+            self.run_worker(news_panel.load_news(self._current_ticker))
+
     async def on_ticker_input_ticker_lookup(self, event: TickerInput.TickerLookup) -> None:
         """Handle ticker lookup events.
 
@@ -456,6 +464,14 @@ class ViperApp(App[None]):
 
         # Regular quote lookup
         await self._fetch_and_display_quote(ticker)
+
+        # Also refresh the currently visible panel (chart or news)
+        if self._chart_panel_visible and self._current_ticker:
+            chart_panel = self.query_one(ChartPanel)
+            self.run_worker(chart_panel.load_chart(self._current_ticker, chart_panel._current_period))
+        elif self._news_panel_visible and self._current_ticker:
+            news_panel = self.query_one(NewsPanel)
+            self.run_worker(news_panel.load_news(self._current_ticker))
 
     async def _fetch_and_display_quote(self, ticker: str) -> None:
         """Fetch and display a quote for the given ticker.
