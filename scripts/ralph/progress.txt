@@ -75,3 +75,73 @@
 - Event testing requires proper test app setup with message handler
 
 ---
+
+## 2026-01-06 - VPR-003
+- Implemented async stock quote fetching service using yfinance
+- Created StockQuote and StockError dataclasses with Result type pattern
+- Used fast_info API for performance optimization
+- Implemented run_in_executor wrapper for async without blocking UI
+- Added timeout handling with asyncio.wait_for
+- Graceful error handling for invalid tickers, network errors, timeouts
+- Wrote 18 comprehensive tests with full mocking (98% overall coverage)
+- All tests pass, mypy --strict passes, ruff passes
+
+**Files changed:**
+- `viper/services/__init__.py` - Services package init
+- `viper/services/stock.py` - Stock quote service with StockQuote/StockError dataclasses
+- `tests/test_stock.py` - 18 comprehensive test cases
+- `AGENTS.md` - Added VPR-003 learnings
+- `pyproject.toml` - yfinance dependency (was already present)
+
+**Learnings:**
+- Use `asyncio.get_event_loop().run_in_executor()` to run blocking I/O without blocking UI
+- Return error results (dataclass) instead of raising exceptions for better type safety
+- Use `Result = Success | Error` union pattern for functions that can fail
+- `fast_info` provides essential fields faster than full `info` fetch
+- Use `.get(key, default)` for defensive API response handling
+- Wrap executor calls in `asyncio.wait_for()` for timeout support
+- Add `# type: ignore[import-untyped]` for libraries without type stubs
+- Use modern `X | None` syntax instead of `Optional[X]` (Python 3.10+)
+- Test all paths: success, invalid inputs, network errors, timeouts, malformed responses
+- Always mock external APIs (yfinance) in tests using `unittest.mock.patch`
+- Use `MagicMock()` for complex object mocking with nested attributes
+- Mock properties that raise exceptions using `type(obj).property_name = property(lambda: ...)`
+
+---
+
+## 2026-01-06 - VPR-004
+- Implemented QuotePanel widget with state machine pattern (empty, loading, success, error)
+- Created dynamic UI updates using container.remove_children() and mount()
+- Added color-coded display: green for positive changes, red for negative
+- Implemented number formatting with commas and proper decimal places
+- Integrated QuotePanel with main app to handle ticker lookup events
+- Made event handler async to fetch quotes without blocking UI
+- Wrote 10 comprehensive tests covering all states and edge cases
+- Added 3 integration tests for full ticker-to-quote flow
+- Achieved 99% test coverage, all tests pass, mypy --strict passes, ruff passes
+
+**Files changed:**
+- `viper/widgets/quote_panel.py` - QuotePanel widget with multi-state display
+- `viper/widgets/__init__.py` - Export QuotePanel
+- `viper/app.py` - Integrate QuotePanel and wire up async event handler
+- `tests/test_quote_panel.py` - 10 comprehensive tests for QuotePanel
+- `tests/test_app.py` - Added 3 integration tests with mocked async fetch
+- `AGENTS.md` - Added VPR-004 learnings
+
+**Learnings:**
+- Use `with Container(): yield Widget()` syntax in compose() for nested widgets
+- Can't mount to container before it's attached - use compose() for initial, mount() for runtime
+- Implement state machines with `_state` attribute and `show_*()` methods for each state
+- Use `container.remove_children()` to clear before remounting for state transitions
+- Pass children to Container constructor: `Container(widget1, widget2)` for initial setup
+- Use `str(label.render())` to get text content in tests, not `label.renderable`
+- Call `await pilot.pause()` after dynamic updates to let UI refresh before assertions
+- Apply CSS classes dynamically based on data values for conditional styling
+- Use f-string format specs: `:,` for thousands separators, `:.Nf` for decimals
+- Use ternary operators for simple if/else to satisfy ruff (SIM108)
+- Remove unnecessary else after return statements (ruff RET505)
+- Remove unused variables in conditional blocks (ruff F841)
+- Mock async functions with `AsyncMock` for integration tests
+- Use `await pilot.pause()` after triggering events to let async handlers complete
+
+---

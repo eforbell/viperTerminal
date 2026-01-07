@@ -1,5 +1,5 @@
 {
-  "branchName": "viper/feature",
+  "branchName": "viper/feature-mvp-terminal",
   "projectName": "Viper Terminal",
   "description": "A personal Bloomberg-like terminal for stock and crypto quotes with a beautiful console UI",
   "principles": [
@@ -76,7 +76,7 @@
         "100% test coverage on stock service module"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Use Ticker.fast_info for speed. All yfinance calls mocked in tests."
     },
     {
@@ -93,7 +93,7 @@
         "Tests: all display states (loading, success, error, empty), color logic, number formatting"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Create reusable QuotePanel widget. Snapshot tests for visual regression."
     },
     {
