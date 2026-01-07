@@ -6,7 +6,14 @@ from textual.widget import Widget
 from textual.widgets import Label, LoadingIndicator
 
 from viper.services.crypto import CryptoError, CryptoQuote
-from viper.services.stock import StockError, StockQuote
+from viper.services.stock import (
+    IntradayData,
+    IntradayError,
+    StockError,
+    StockQuote,
+    fetch_intraday_data,
+)
+from viper.widgets.sparkline import SparklineWidget
 
 # Union types for all possible quotes
 Quote = StockQuote | CryptoQuote
@@ -191,6 +198,41 @@ class QuotePanel(Widget):
         container.mount(
             Label(f"52W Range: {low_52w_str} - {high_52w_str}", classes="data-row")
         )
+
+        # Spacing before sparkline
+        container.mount(Label("", classes="data-row"))
+
+        # Fetch and display intraday sparkline chart
+        # Use run_worker to fetch intraday data asynchronously
+        self.run_worker(self._fetch_and_show_sparkline(quote.ticker, container))
+
+    async def _fetch_and_show_sparkline(
+        self, ticker: str, container: Container
+    ) -> None:
+        """Fetch intraday data and display sparkline chart.
+
+        Args:
+            ticker: Stock ticker symbol.
+            container: Container to mount the sparkline widget into.
+        """
+        # Fetch intraday data (1 day, 5 minute intervals)
+        result = await fetch_intraday_data(ticker, period="1d", interval="5m")
+
+        if isinstance(result, IntradayData):
+            # Success - create sparkline with data
+            sparkline = SparklineWidget(
+                prices=result.prices,
+                label=f"Intraday ({result.period}, {result.interval})",
+                width=60,
+            )
+        else:
+            # Error or no data - create sparkline with no data
+            sparkline = SparklineWidget(
+                prices=None, label="Intraday (1d, 5m)", width=60
+            )
+
+        # Mount the sparkline widget
+        container.mount(sparkline)
 
     def _render_crypto_quote(self, container: Container, quote: CryptoQuote) -> None:
         """Render a successful crypto quote display.

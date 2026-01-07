@@ -200,3 +200,29 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Test Event Emission**: Capture emitted events in test app to verify correct ticker is selected
 - **Combined Context Managers**: Ruff prefers single with statement with multiple contexts instead of nested
 - **Remove Unused Variables**: Remove variables that are queried but never used to satisfy ruff F841
+
+### VPR-011: Intraday Price Chart (Sparkline)
+- **DataFrame Access**: yfinance `history()` returns pandas DataFrame; access columns with `df["Close"]`
+- **Timestamp Conversion**: Convert pandas timestamps to datetime with `.to_pydatetime()` method on each timestamp
+- **Empty DataFrame Check**: Check `df.empty` and `df is None` to detect missing data
+- **List Conversion**: Use `.tolist()` to convert DataFrame column to Python list
+- **Sparkline Algorithm**: Normalize prices to 0-1 range, map to 8 vertical levels (Unicode block chars)
+- **Unicode Block Chars**: Use `▁▂▃▄▅▆▇█` for ASCII-style charts (8 levels from lowest to highest)
+- **Flat Line Handling**: When all prices are identical (range == 0), render as `─` characters
+- **Downsampling**: When data points exceed chart width, downsample by taking evenly spaced points
+- **Downsampling Formula**: `step = len(prices) / width; downsampled = [prices[int(i * step)] for i in range(width)]`
+- **Normalization**: `normalized = (price - min_price) / price_range` gives 0-1 range
+- **Block Index Mapping**: `block_index = min(int(normalized * 8), 7)` maps to 0-7 index (8 chars)
+- **Worker Pattern**: Use `run_worker(async_method())` to fetch sparkline data without blocking rendering
+- **Async Mounting**: Can call `container.mount()` from async worker to add widgets after initial render
+- **Widget Testing**: Need test app wrapper for widgets; can't test standalone widget without app context
+- **Test App Pattern**: Create minimal test app that mounts widget: `class TestApp(App): def compose(): yield widget`
+- **Datetime in Tests**: Use `timedelta()` for creating timestamp sequences instead of manual minute arithmetic
+- **Import timedelta**: Remember to import timedelta: `from datetime import timedelta`
+- **Pilot Pause**: Use `await pilot.pause()` after calling update methods to let DOM changes propagate
+- **Remove Children Async**: `remove_children()` is async; need to wait with pilot.pause() for DOM updates
+- **Stock-Only Features**: Sparkline only for stocks; crypto doesn't have intraday data (per PRD)
+- **Graceful Fallback**: Show "No data" label when intraday fetch fails instead of showing error
+- **Label Text Testing**: Use `str(label.render())` to get text content for assertions
+- **Test Coverage Goals**: Achieved 95.86% coverage with comprehensive sparkline and intraday tests
+- **Dataclass Imports**: Add new dataclasses to service __init__ exports for clean imports

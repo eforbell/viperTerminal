@@ -2,6 +2,7 @@
 
 import asyncio
 from dataclasses import dataclass
+from datetime import datetime
 
 import yfinance as yf  # type: ignore[import-untyped]
 
@@ -29,8 +30,28 @@ class StockError:
     error_message: str
 
 
+@dataclass
+class IntradayData:
+    """Intraday price data for sparkline chart."""
+
+    ticker: str
+    prices: list[float]  # List of closing prices
+    timestamps: list[datetime]  # Corresponding timestamps
+    interval: str  # e.g., "5m", "1h"
+    period: str  # e.g., "1d", "5d"
+
+
+@dataclass
+class IntradayError:
+    """Error result from intraday data fetch."""
+
+    ticker: str
+    error_message: str
+
+
 # Type alias for result
 StockResult = StockQuote | StockError
+IntradayResult = IntradayData | IntradayError
 
 
 async def fetch_stock_quote(ticker: str, timeout: float = 10.0) -> StockResult:
@@ -132,3 +153,95 @@ def _fetch_sync(ticker: str) -> StockResult:
         if "Connection" in error_msg or "Network" in error_msg:
             return StockError(ticker=ticker, error_message="Network error - check connection")
         return StockError(ticker=ticker, error_message=f"Failed to fetch quote: {error_msg}")
+
+
+async def fetch_intraday_data(
+    ticker: str, period: str = "1d", interval: str = "5m", timeout: float = 10.0
+) -> IntradayResult:
+    """
+    Fetch intraday price data for sparkline chart.
+
+    Args:
+        ticker: Stock ticker symbol (e.g., 'AAPL', 'TSLA')
+        period: Time period (e.g., '1d', '5d', '1mo')
+        interval: Data interval (e.g., '1m', '5m', '15m', '1h')
+        timeout: Maximum time to wait for response in seconds
+
+    Returns:
+        IntradayData on success, IntradayError on failure
+
+    Note:
+        This function uses run_in_executor to not block the UI event loop.
+        All network calls are performed in a thread pool.
+    """
+    ticker = ticker.upper().strip()
+
+    try:
+        # Run blocking yfinance call in executor
+        loop = asyncio.get_event_loop()
+        return await asyncio.wait_for(
+            loop.run_in_executor(None, _fetch_intraday_sync, ticker, period, interval),
+            timeout=timeout,
+        )
+    except TimeoutError:
+        return IntradayError(
+            ticker=ticker, error_message=f"Request timed out after {timeout}s"
+        )
+    except Exception as e:
+        return IntradayError(ticker=ticker, error_message=f"Unexpected error: {str(e)}")
+
+
+def _fetch_intraday_sync(ticker: str, period: str, interval: str) -> IntradayResult:
+    """
+    Synchronous intraday data fetch operation. Called from executor.
+
+    Args:
+        ticker: Stock ticker symbol
+        period: Time period for data
+        interval: Data interval
+
+    Returns:
+        IntradayData on success, IntradayError on failure
+    """
+    try:
+        stock = yf.Ticker(ticker)
+
+        # Fetch historical data
+        hist = stock.history(period=period, interval=interval)
+
+        # Check if we got any data
+        if hist is None or hist.empty:
+            return IntradayError(
+                ticker=ticker, error_message="No intraday data available"
+            )
+
+        # Extract close prices and timestamps
+        prices = hist["Close"].tolist()
+        timestamps = [ts.to_pydatetime() for ts in hist.index]
+
+        # Validate we got data
+        if not prices or not timestamps:
+            return IntradayError(
+                ticker=ticker, error_message="No intraday data available"
+            )
+
+        return IntradayData(
+            ticker=ticker,
+            prices=prices,
+            timestamps=timestamps,
+            interval=interval,
+            period=period,
+        )
+
+    except Exception as e:
+        # Handle all errors gracefully - return error result, not exception
+        error_msg = str(e)
+        if "404" in error_msg or "No data found" in error_msg:
+            return IntradayError(ticker=ticker, error_message="Invalid ticker symbol")
+        if "Connection" in error_msg or "Network" in error_msg:
+            return IntradayError(
+                ticker=ticker, error_message="Network error - check connection"
+            )
+        return IntradayError(
+            ticker=ticker, error_message=f"Failed to fetch intraday data: {error_msg}"
+        )

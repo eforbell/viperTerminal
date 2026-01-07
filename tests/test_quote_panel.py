@@ -1,12 +1,16 @@
 """Tests for the QuotePanel widget."""
 
+from datetime import datetime
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import Label, LoadingIndicator
 
 from viper.services.crypto import CryptoError, CryptoQuote
-from viper.services.stock import StockError, StockQuote
+from viper.services.stock import IntradayData, IntradayError, StockError, StockQuote
 from viper.widgets import QuotePanel
+from viper.widgets.sparkline import SparklineWidget
 
 
 class QuotePanelTestApp(App[None]):
@@ -502,3 +506,126 @@ async def test_quote_panel_crypto_error() -> None:
         error_labels = [label for label in labels if "Error:" in str(label.render())]
         assert len(error_labels) > 0
         assert any("Unknown crypto symbol" in str(label.render()) for label in error_labels)
+
+
+# Sparkline integration tests
+@pytest.mark.asyncio
+async def test_quote_panel_stock_with_sparkline_success() -> None:
+    """Test that stock quote displays sparkline when intraday data is available."""
+    app = QuotePanelTestApp()
+
+    # Mock successful intraday data fetch
+    # Create timestamps at 5-minute intervals
+    base_time = datetime(2024, 1, 1, 9, 30)
+    from datetime import timedelta
+
+    timestamps = [base_time + timedelta(minutes=i * 5) for i in range(10)]
+    mock_intraday_data = IntradayData(
+        ticker="AAPL",
+        prices=[150.0 + i for i in range(10)],
+        timestamps=timestamps,
+        interval="5m",
+        period="1d",
+    )
+
+    with patch(
+        "viper.widgets.quote_panel.fetch_intraday_data",
+        new=AsyncMock(return_value=mock_intraday_data),
+    ):
+        async with app.run_test() as pilot:
+            panel = app.query_one(QuotePanel)
+
+            quote = StockQuote(
+                ticker="AAPL",
+                price=150.50,
+                change=5.25,
+                change_percent=3.61,
+                volume=50000000,
+                market_cap=2500000000000,
+                high_52w=180.00,
+                low_52w=120.00,
+                name="Apple Inc.",
+            )
+
+            panel.show_quote(quote)
+
+            # Wait for async sparkline fetch and render
+            await pilot.pause(0.2)
+
+            # Should have a sparkline widget
+            sparklines = panel.query(SparklineWidget)
+            assert len(sparklines) == 1
+
+            # Sparkline should have data
+            sparkline = sparklines[0]
+            assert sparkline._prices == mock_intraday_data.prices
+            assert sparkline._label == "Intraday (1d, 5m)"
+
+
+@pytest.mark.asyncio
+async def test_quote_panel_stock_with_sparkline_error() -> None:
+    """Test that stock quote shows 'No data' sparkline when intraday fetch fails."""
+    app = QuotePanelTestApp()
+
+    # Mock failed intraday data fetch
+    mock_error = IntradayError(
+        ticker="AAPL", error_message="No intraday data available"
+    )
+
+    with patch(
+        "viper.widgets.quote_panel.fetch_intraday_data",
+        new=AsyncMock(return_value=mock_error),
+    ):
+        async with app.run_test() as pilot:
+            panel = app.query_one(QuotePanel)
+
+            quote = StockQuote(
+                ticker="AAPL",
+                price=150.50,
+                change=5.25,
+                change_percent=3.61,
+                volume=50000000,
+                market_cap=2500000000000,
+                high_52w=180.00,
+                low_52w=120.00,
+            )
+
+            panel.show_quote(quote)
+
+            # Wait for async sparkline fetch and render
+            await pilot.pause(0.2)
+
+            # Should have a sparkline widget
+            sparklines = panel.query(SparklineWidget)
+            assert len(sparklines) == 1
+
+            # Sparkline should show no data
+            sparkline = sparklines[0]
+            assert sparkline._prices is None
+            assert sparkline._label == "Intraday (1d, 5m)"
+
+
+@pytest.mark.asyncio
+async def test_quote_panel_crypto_no_sparkline() -> None:
+    """Test that crypto quotes do NOT display sparkline (stocks only)."""
+    app = QuotePanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(QuotePanel)
+
+        quote = CryptoQuote(
+            symbol="BTC",
+            price_usd=50000.00,
+            change_24h_percent=5.25,
+            market_cap_usd=1000000000000,
+            volume_24h_usd=50000000000,
+            name="Bitcoin",
+        )
+
+        panel.show_quote(quote)
+
+        # Wait a bit to ensure no async sparkline fetch happens
+        await pilot.pause(0.2)
+
+        # Should NOT have a sparkline widget (crypto doesn't support sparkline)
+        sparklines = panel.query(SparklineWidget)
+        assert len(sparklines) == 0
