@@ -28,6 +28,21 @@
 
 ## Progress Log
 
-(Ralph will append progress here as stories are completed)
+## 2026-01-07 - VPR-028
+- **What was implemented**: Fixed news service by replacing broken RSS feed with yfinance .news attribute
+- **Files changed**:
+  - `viper/services/news.py`: Replaced feedparser RSS parsing with yfinance ticker.news, added safe nested dict access helper
+  - `tests/test_news.py`: Rewrote all tests to mock yfinance instead of HTTP, added edge case tests
+  - `pyproject.toml`: Removed feedparser dependency (no longer needed)
+  - `AGENTS.md`: Added VPR-028 learnings section
+- **Learnings**:
+  - yfinance .news provides structured JSON (content.title, content.summary, etc.) - much simpler than RSS parsing
+  - Use `_safe_get_nested(data, keys, default)` helper for safely navigating nested dicts
+  - Validate "content" key exists and title is non-empty; skip malformed items with `continue`
+  - URL fallback: try `content.previewUrl` first, then `content.canonicalUrl.url`
+  - ISO date parsing: Replace 'Z' with '+00:00' for `datetime.fromisoformat()`
+  - Mock yfinance Ticker with `.news` attribute - simpler than mocking HTTP with respx
+  - Maintain backward-compatible interface (NewsItem dataclass) so no changes to widgets needed
+  - Achieved 93% coverage on news.py, 571 total tests passing
 
 ---

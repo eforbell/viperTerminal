@@ -38,7 +38,7 @@
         "Tests: valid fetch (mocked), empty news, malformed data, caching behavior"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": [],
       "notes": "Critical fix - news panel currently non-functional. yfinance .news attribute returns list of dicts with content.title, content.summary, etc. No API key required!"
