@@ -362,3 +362,34 @@
 - Use `getattr(info, "field_name", default)` for optional attributes
 
 ---
+
+## 2026-01-07 - VPR-010
+- **ALREADY IMPLEMENTED**: All keyboard navigation and shortcuts were already implemented in previous stories
+- Verified all keybindings: q (quit), / (focus input), Esc (clear/close), Tab (cycle panels), j/k (navigate lists), Enter (select item), ?/F1 (help placeholder)
+- App-level bindings defined in ViperApp.BINDINGS list with action methods
+- Widget-level bindings defined in WatchlistPanel.BINDINGS using Binding objects
+- All acceptance criteria already tested with 13 comprehensive tests
+- All 191 tests pass with 95.55% coverage, mypy --strict passes, ruff passes
+
+**Files checked:**
+- `viper/app.py` - Contains BINDINGS for q, tab, /, escape, ?/f1 with action methods
+- `viper/widgets/watchlist_panel.py` - Contains BINDINGS for j, k, enter with action methods and TickerSelected event
+- `tests/test_app.py` - Tests for /, Esc, ?, F1, Enter on watchlist (6 tests)
+- `tests/test_watchlist_panel.py` - Tests for j, k, Enter, empty list, visual highlight (7 tests)
+
+**Learnings:**
+- **Action Methods Pattern**: Define actions as `action_*()` methods; Textual automatically binds them from BINDINGS
+- **Multiple Key Binding**: Use comma-separated keys for same action: `"question_mark,f1"` binds both keys
+- **Widget vs App Bindings**: App uses BINDINGS list with tuples, widgets use Binding objects with show parameter
+- **show=False**: Hide binding from footer but still enable functionality (j/k navigation hidden from footer)
+- **Selection State**: Track `_selected_index` in widget, clamp during render to handle dynamic list changes
+- **Visual Selection**: Apply "selected" CSS class with background color to show current selection
+- **Navigation Clamping**: Use min/max in actions to prevent index from going out of bounds
+- **Empty State Handling**: Navigation actions should check if list is empty and return early
+- **Event Emission**: Press Enter emits TickerSelected custom event with current ticker
+- **Helper Methods**: Extract `_fetch_and_display_quote()` to avoid duplicating quote lookup logic
+- **Placeholder Actions**: OK to create action methods that do nothing for future features (help screen)
+- **Test Coverage**: Test each keybinding, boundary conditions, visual state, and event emission
+- **Already Complete**: Don't assume story needs work - verify what's already implemented first!
+
+---
