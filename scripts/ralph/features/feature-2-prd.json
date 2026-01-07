@@ -1,0 +1,346 @@
+{
+  "branchName": "viper/feature-2-charts-news",
+  "projectName": "Viper Terminal - Feature 2",
+  "description": "Historical price charts and news feed integration for Viper Terminal",
+  "principles": [
+    "Rock-solid quality over speed - every feature must be bulletproof before moving on",
+    "Comprehensive test coverage - unit tests, integration tests, edge cases",
+    "All tests must pass before a story is marked complete",
+    "No story is done until it's documented and tested",
+    "Fail fast, fail loudly - errors should be obvious and actionable",
+    "Reuse existing patterns from MVP - consistent architecture",
+    "Performance matters - charts must render quickly even with large datasets"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "tui": "Textual (built on Rich)",
+    "stockData": "yfinance (already integrated)",
+    "cryptoData": "CoinGecko API (already integrated)",
+    "newsData": "Yahoo Finance RSS (primary), Finnhub API (optional enhancement)",
+    "charting": "Custom Unicode/Braille renderer",
+    "testing": "pytest + pytest-asyncio + pytest-cov",
+    "mocking": "pytest-mock, respx (for HTTP mocking)",
+    "typecheck": "mypy --strict",
+    "linting": "ruff"
+  },
+  "userStories": [
+    {
+      "id": "VPR-016",
+      "title": "Historical price data service",
+      "acceptanceCriteria": [
+        "Create viper/services/history_data.py (avoid confusion with history.py)",
+        "Define HistoricalData dataclass: dates, prices, volumes, highs, lows, opens, closes",
+        "Fetch data via yfinance Ticker.history() with configurable period/interval",
+        "Support periods: 1W, 1M, 3M, 6M, 1Y, 2Y, 5Y, MAX",
+        "Handle invalid tickers gracefully - return HistoricalDataError",
+        "Handle empty data (new IPOs, delisted stocks)",
+        "Async wrapper to not block UI",
+        "Calculate period stats: high, low, % change, avg volume",
+        "Tests: valid fetch (mocked), all periods, empty data, invalid ticker, timeout"
+      ],
+      "priority": 1,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": [],
+      "notes": "Foundation for all chart features. yfinance already supports this via history() method."
+    },
+    {
+      "id": "VPR-017",
+      "title": "Chart rendering engine",
+      "acceptanceCriteria": [
+        "Create viper/widgets/chart_renderer.py",
+        "Implement BrailleChart class for high-resolution line charts",
+        "Braille patterns: 2x4 dots per character = 160x80 resolution in 80x20 chars",
+        "Support auto-scaling: normalize data to fit available height",
+        "Support auto-downsampling: reduce data points to fit width",
+        "Render Y-axis with price labels (left side)",
+        "Render X-axis with date labels (bottom)",
+        "Color support: green for uptrend, red for downtrend sections",
+        "Fallback to block characters (▁▂▃▄▅▆▇█) for simpler rendering",
+        "Tests: rendering with various data sizes, edge cases (flat line, single point)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "estimatedEffort": "Large",
+      "dependencies": ["VPR-016"],
+      "notes": "Core rendering logic. Braille gives ~8x resolution vs standard characters. This is the most complex story."
+    },
+    {
+      "id": "VPR-018",
+      "title": "Chart panel widget",
+      "acceptanceCriteria": [
+        "Create viper/widgets/chart_panel.py",
+        "ChartPanel widget displays historical price chart",
+        "Toggle with 'c' key (replaces quote panel when visible)",
+        "Show ticker and timeframe in header",
+        "Show period stats: high, low, % change",
+        "Loading state with spinner during data fetch",
+        "Error state when data unavailable",
+        "Empty state when no ticker selected",
+        "Responsive: adjust chart size to terminal dimensions",
+        "Tests: all display states, toggle behavior, responsive sizing"
+      ],
+      "priority": 3,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-016", "VPR-017"],
+      "notes": "Integrates chart renderer into the UI. Similar pattern to QuotePanel/InfoPanel."
+    },
+    {
+      "id": "VPR-019",
+      "title": "Timeframe selection",
+      "acceptanceCriteria": [
+        "Number keys 1-7 select timeframe when chart panel is visible",
+        "1=1W, 2=1M, 3=3M, 4=6M, 5=1Y, 6=5Y, 7=MAX",
+        "Visual indicator shows current timeframe (highlighted button style)",
+        "Timeframe persists until changed or ticker changes",
+        "Default to 1M on new ticker",
+        "Smooth transition: show loading while fetching new timeframe",
+        "Tests: each hotkey, visual indicator, persistence, default behavior"
+      ],
+      "priority": 4,
+      "passes": false,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-018"],
+      "notes": "Quick timeframe switching is essential for usability."
+    },
+    {
+      "id": "VPR-020",
+      "title": "Volume chart overlay",
+      "acceptanceCriteria": [
+        "Add volume bars below price chart (optional, toggle with 'v')",
+        "Volume bars use block characters (▁▂▃▄▅▆▇█)",
+        "Bars colored: green if close > open, red if close < open",
+        "Height proportional to volume (normalized to max in period)",
+        "Takes ~3 lines of vertical space",
+        "Volume stats shown: avg daily volume, volume today vs avg",
+        "Tests: volume rendering, color logic, toggle behavior"
+      ],
+      "priority": 5,
+      "passes": false,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-018"],
+      "notes": "Volume context helps understand price movements."
+    },
+    {
+      "id": "VPR-021",
+      "title": "Crypto historical charts",
+      "acceptanceCriteria": [
+        "Extend historical data service to support crypto via CoinGecko",
+        "CoinGecko market_chart endpoint: /coins/{id}/market_chart?vs_currency=usd&days=N",
+        "Map periods to days: 1W=7, 1M=30, 3M=90, 6M=180, 1Y=365, MAX=max",
+        "Handle CoinGecko rate limits (retry with backoff)",
+        "Auto-detect asset type and use appropriate data source",
+        "Tests: crypto fetch (mocked), rate limit handling, auto-detection"
+      ],
+      "priority": 6,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-016", "VPR-018"],
+      "notes": "yfinance has limited crypto history. CoinGecko provides better data for crypto."
+    },
+    {
+      "id": "VPR-022",
+      "title": "News data service",
+      "acceptanceCriteria": [
+        "Create viper/services/news.py",
+        "Define NewsItem dataclass: title, source, url, published_at, summary (optional)",
+        "Fetch news via Yahoo Finance RSS: https://feeds.finance.yahoo.com/rss/2.0/headline?s=TICKER",
+        "Parse RSS feed (use feedparser library)",
+        "Return list of NewsItem, sorted by recency",
+        "Handle missing/empty feeds gracefully",
+        "Handle network errors with appropriate error types",
+        "Cache results for 2 minutes (avoid repeated fetches)",
+        "Limit to 10 most recent items",
+        "Tests: valid fetch (mocked), empty feed, invalid ticker, network errors, caching"
+      ],
+      "priority": 7,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": [],
+      "notes": "Yahoo RSS is free, no API key needed. feedparser is well-maintained and handles edge cases."
+    },
+    {
+      "id": "VPR-023",
+      "title": "News panel widget",
+      "acceptanceCriteria": [
+        "Create viper/widgets/news_panel.py",
+        "NewsPanel widget displays news headlines for current ticker",
+        "Toggle with 'n' key",
+        "Show: headline (truncated to fit), source, relative time (2h ago, 1d ago)",
+        "j/k navigation through news items when panel focused",
+        "Visual highlight on selected item",
+        "Loading state during fetch",
+        "Empty state: 'No news available'",
+        "Auto-refresh when ticker changes",
+        "Tests: all display states, navigation, toggle, auto-refresh"
+      ],
+      "priority": 8,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-022"],
+      "notes": "Similar pattern to WatchlistPanel for navigation."
+    },
+    {
+      "id": "VPR-024",
+      "title": "News item expansion and browser integration",
+      "acceptanceCriteria": [
+        "Enter on news item opens full article in default browser",
+        "Use Python's webbrowser.open() for cross-platform support",
+        "Alternative: 'e' key expands item inline to show summary (if available)",
+        "Expanded view shows full headline + summary in a scrollable area",
+        "Esc collapses expanded item",
+        "Status bar shows 'Opening in browser...' feedback",
+        "Tests: browser open (mocked), expansion toggle, keyboard handling"
+      ],
+      "priority": 9,
+      "passes": false,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-023"],
+      "notes": "Essential for actually reading the news articles."
+    },
+    {
+      "id": "VPR-025",
+      "title": "Data caching layer",
+      "acceptanceCriteria": [
+        "Create viper/services/cache.py",
+        "Generic cache class with TTL (time-to-live) support",
+        "Cache historical data for 5 minutes",
+        "Cache news data for 2 minutes",
+        "Cache quotes for 30 seconds (don't re-fetch on panel toggle)",
+        "Clear cache for ticker when new ticker selected",
+        "Memory-only cache (no disk persistence needed)",
+        "Thread-safe implementation",
+        "Tests: cache hit/miss, TTL expiration, clearing, thread safety"
+      ],
+      "priority": 10,
+      "passes": false,
+      "estimatedEffort": "Small",
+      "dependencies": [],
+      "notes": "Reduces API calls and improves responsiveness. Can be implemented early and used by all services."
+    },
+    {
+      "id": "VPR-026",
+      "title": "Help screen updates",
+      "acceptanceCriteria": [
+        "Update HelpScreen with new keybindings: c (chart), n (news), v (volume), 1-7 (timeframes)",
+        "Add CHARTS section describing chart features",
+        "Add NEWS section describing news features",
+        "Update FEATURES section with new capabilities",
+        "Tests: help screen content includes new sections"
+      ],
+      "priority": 11,
+      "passes": false,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-018", "VPR-023"],
+      "notes": "Documentation is part of the feature."
+    },
+    {
+      "id": "VPR-027",
+      "title": "Configuration extensions",
+      "acceptanceCriteria": [
+        "Add config options: default_chart_timeframe, news_enabled, volume_enabled",
+        "Add config option: chart_style ('braille' or 'block')",
+        "Add config option: news_max_items (default 10)",
+        "Validate new config options with sensible defaults",
+        "Tests: new config options load correctly, validation, defaults"
+      ],
+      "priority": 12,
+      "passes": false,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-018", "VPR-023"],
+      "notes": "User customization for new features."
+    }
+  ],
+  "technicalNotes": {
+    "brailleCharting": {
+      "description": "Braille patterns allow 2x4 dots per character, giving much higher resolution than standard characters",
+      "unicodeRange": "U+2800 to U+28FF (256 patterns)",
+      "algorithm": [
+        "1. Normalize data to 0-1 range based on min/max",
+        "2. For each column, determine which of 4 vertical dots should be filled",
+        "3. Combine adjacent columns (2 cols = 1 braille char with 2x4 dots)",
+        "4. Map dot pattern to Unicode braille character",
+        "5. Apply colors based on trend direction"
+      ],
+      "example": "⣿⣶⣤⣀⡀ represents a descending line"
+    },
+    "rssFeeds": {
+      "yahooFinance": "https://feeds.finance.yahoo.com/rss/2.0/headline?s={TICKER}",
+      "googleNews": "https://news.google.com/rss/search?q={TICKER}+stock",
+      "notes": "Yahoo is more finance-focused, Google is broader but may have more noise"
+    },
+    "performanceConsiderations": [
+      "Downsample historical data before rendering (max ~200 points for 80-col terminal)",
+      "Cache aggressively to avoid repeated API calls",
+      "Render charts incrementally if data is very large",
+      "Use async workers for all data fetching"
+    ]
+  },
+  "dependencies": {
+    "new": [
+      "feedparser>=6.0.0 (RSS parsing)"
+    ],
+    "existing": [
+      "yfinance (already installed)",
+      "httpx (already installed for CoinGecko)",
+      "textual (already installed)"
+    ]
+  },
+  "milestones": [
+    {
+      "name": "M1: Historical Charts",
+      "stories": ["VPR-016", "VPR-017", "VPR-018", "VPR-019", "VPR-020"],
+      "description": "Complete stock charting capability with timeframe selection"
+    },
+    {
+      "name": "M2: Crypto Charts",
+      "stories": ["VPR-021"],
+      "description": "Extend charting to cryptocurrency"
+    },
+    {
+      "name": "M3: News Feed",
+      "stories": ["VPR-022", "VPR-023", "VPR-024"],
+      "description": "Complete news feed functionality"
+    },
+    {
+      "name": "M4: Polish",
+      "stories": ["VPR-025", "VPR-026", "VPR-027"],
+      "description": "Caching, documentation, configuration"
+    }
+  ],
+  "riskAssessment": [
+    {
+      "risk": "Braille rendering complexity",
+      "likelihood": "Medium",
+      "impact": "High",
+      "mitigation": "Start with block-character fallback, add braille as enhancement"
+    },
+    {
+      "risk": "Yahoo RSS feed changes/deprecation",
+      "likelihood": "Low",
+      "impact": "Medium",
+      "mitigation": "Abstract news source behind interface, easy to swap"
+    },
+    {
+      "risk": "CoinGecko rate limits for crypto charts",
+      "likelihood": "Medium",
+      "impact": "Medium",
+      "mitigation": "Aggressive caching, exponential backoff (already implemented for quotes)"
+    },
+    {
+      "risk": "Terminal compatibility with braille characters",
+      "likelihood": "Low",
+      "impact": "Medium",
+      "mitigation": "Detect terminal capabilities, fall back to ASCII if needed"
+    }
+  ],
+  "successCriteria": [
+    "All 12 stories pass with 90%+ test coverage",
+    "Charts render correctly for all timeframes (1W through MAX)",
+    "News loads and displays within 3 seconds",
+    "No performance regression (app stays responsive)",
+    "Works on terminals as small as 80x24",
+    "mypy --strict passes, ruff passes"
+  ]
+}
