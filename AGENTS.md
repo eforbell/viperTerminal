@@ -201,6 +201,26 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Combined Context Managers**: Ruff prefers single with statement with multiple contexts instead of nested
 - **Remove Unused Variables**: Remove variables that are queried but never used to satisfy ruff F841
 
+### VPR-012: Company/asset Info Panel
+- **VerticalScroll Container**: Use `VerticalScroll` for scrollable long content (descriptions)
+- **Modal Display Pattern**: Use styles.display to toggle visibility: `styles.display = "block"` (visible) or `"none"` (hidden)
+- **Display vs Visibility**: In Textual, use `widget.styles.display` for hiding/showing, not `widget.display` property
+- **CSS display Property**: Set via TCSS (`display: none;`) or dynamically (`styles.display = "block"`)
+- **Type-Specific Rendering**: Create separate render methods for different types (stock vs crypto) in same widget
+- **Safe Dict Access**: Use `.get()` with defaults when accessing API response dicts for optional fields
+- **Nested Dict Navigation**: Check `isinstance(value, dict)` before accessing nested fields in API responses
+- **List Navigation**: Check `isinstance(value, list)` and length before accessing list elements
+- **Employee Number Formatting**: Use f-string `:,` format for large numbers (164000 -> "164,000")
+- **Info vs fast_info**: Use `stock.info` (not `fast_info`) for extended metadata; it's slower but has sector, industry, description, etc.
+- **yfinance .info dict**: The `stock.info` property returns a regular dict, unlike `fast_info` which is an object
+- **Empty Dict Validation**: Use `is None` check, not `not info`, since empty dict `{}` is valid and should be allowed
+- **Variable Name Collision**: Use different variable names when fetching multiple info types (crypto_info_result vs stock_info_result) to avoid type checker confusion
+- **ComposeResult Import**: Must import `ComposeResult` from `textual.app` for type hints on compose() method
+- **Test Class Naming**: Avoid "Test" prefix for non-test classes (pytest tries to collect them); use descriptive suffix like "TestApp"
+- **Timeout in Tests**: Use `time.sleep()` in sync mock functions (not `asyncio.sleep()`); executors run in threads, not async
+- **InfoPanel Testing**: Test all display states (empty, stock info with/without fields, crypto info with/without fields)
+- **Malformed Data Testing**: Test defensive parsing with malformed API responses (wrong types, missing nested keys)
+
 ### VPR-011: Intraday Price Chart (Sparkline)
 - **DataFrame Access**: yfinance `history()` returns pandas DataFrame; access columns with `df["Close"]`
 - **Timestamp Conversion**: Convert pandas timestamps to datetime with `.to_pydatetime()` method on each timestamp

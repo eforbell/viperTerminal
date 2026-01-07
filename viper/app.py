@@ -4,12 +4,12 @@ from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal
 from textual.widgets import Footer, Header
 
-from viper.services.crypto import CryptoError, CryptoQuote
+from viper.services.crypto import CryptoError, CryptoInfo, CryptoInfoError, CryptoQuote, fetch_crypto_info
 from viper.services.history import HistoryManager
-from viper.services.quote import fetch_quote
-from viper.services.stock import StockError, StockQuote
+from viper.services.quote import fetch_quote, is_crypto_quote
+from viper.services.stock import StockError, StockInfo, StockInfoError, StockQuote, fetch_stock_info
 from viper.services.watchlist import WatchlistManager
-from viper.widgets import QuotePanel, TickerInput, WatchlistPanel
+from viper.widgets import InfoPanel, QuotePanel, TickerInput, WatchlistPanel
 
 
 class ViperApp(App[None]):
@@ -69,6 +69,17 @@ class ViperApp(App[None]):
     #quote-container:focus-within {
         border: double $accent;
     }
+
+    #info-container {
+        width: 70%;
+        border: solid $accent;
+        padding: 1;
+        display: none;
+    }
+
+    #info-container:focus-within {
+        border: double $accent;
+    }
     """
 
     # Green on black color theme
@@ -83,6 +94,7 @@ class ViperApp(App[None]):
         ("tab", "focus_next", "Next Panel"),
         ("/", "focus_input", "Focus Input"),
         ("escape", "clear_or_close", "Clear/Close"),
+        ("i", "toggle_info", "Toggle Info"),
         ("question_mark,f1", "show_help", "Help"),
     ]
 
@@ -92,6 +104,8 @@ class ViperApp(App[None]):
         self.title = "VIPER TERMINAL"
         self.history_manager = HistoryManager()
         self.watchlist_manager = WatchlistManager()
+        self._info_panel_visible = False
+        self._current_ticker: str | None = None
 
     def on_resize(self, event: object) -> None:
         """Handle terminal resize to show/hide watchlist on narrow screens.
@@ -129,6 +143,8 @@ class ViperApp(App[None]):
                 )
             with Container(id="quote-container"):
                 yield QuotePanel()
+            with Container(id="info-container"):
+                yield InfoPanel()
         yield TickerInput(history_manager=self.history_manager)
         yield Footer()
 
@@ -153,6 +169,27 @@ class ViperApp(App[None]):
         # Placeholder - will be implemented in VPR-015
         # For now, do nothing
         pass
+
+    def action_toggle_info(self) -> None:
+        """Toggle the info panel visibility."""
+        info_container = self.query_one("#info-container")
+        quote_container = self.query_one("#quote-container")
+
+        # Toggle visibility
+        if self._info_panel_visible:
+            # Hide info panel, show quote panel
+            info_container.styles.display = "none"
+            quote_container.styles.display = "block"
+            self._info_panel_visible = False
+        else:
+            # Show info panel, hide quote panel
+            quote_container.styles.display = "none"
+            info_container.styles.display = "block"
+            self._info_panel_visible = True
+
+            # If we have a current ticker, fetch and display info
+            if self._current_ticker:
+                self.run_worker(self._fetch_and_display_info(self._current_ticker))
 
     async def on_watchlist_panel_ticker_selected(
         self, event: WatchlistPanel.TickerSelected
@@ -215,5 +252,41 @@ class ViperApp(App[None]):
         # Display result based on type
         if isinstance(result, (StockQuote, CryptoQuote)):
             quote_panel.show_quote(result)
+            # Store current ticker for info panel
+            self._current_ticker = ticker
         elif isinstance(result, (StockError, CryptoError)):
             quote_panel.show_error(result)
+            self._current_ticker = None
+
+    async def _fetch_and_display_info(self, ticker: str) -> None:
+        """Fetch and display extended info for the given ticker.
+
+        Args:
+            ticker: The ticker symbol to fetch info for.
+        """
+        # Get the info panel
+        info_panel = self.query_one(InfoPanel)
+
+        # Fetch the quote first to determine asset type
+        quote_result = await fetch_quote(ticker)
+
+        # Determine if it's crypto or stock and fetch appropriate info
+        if isinstance(quote_result, CryptoQuote):
+            # Fetch crypto info
+            crypto_info_result = await fetch_crypto_info(ticker)
+            if isinstance(crypto_info_result, CryptoInfo):
+                info_panel.show_crypto_info(quote_result, crypto_info_result.info)
+            else:
+                # Error - show empty state
+                info_panel.show_empty()
+        elif isinstance(quote_result, StockQuote):
+            # Fetch stock info
+            stock_info_result = await fetch_stock_info(ticker)
+            if isinstance(stock_info_result, StockInfo):
+                info_panel.show_stock_info(quote_result, stock_info_result.info)
+            else:
+                # Error - show empty state
+                info_panel.show_empty()
+        else:
+            # Error fetching quote - show empty state
+            info_panel.show_empty()

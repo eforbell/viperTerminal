@@ -3,6 +3,7 @@
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 import yfinance as yf  # type: ignore[import-untyped]
 
@@ -49,9 +50,26 @@ class IntradayError:
     error_message: str
 
 
+@dataclass
+class StockInfo:
+    """Extended stock information."""
+
+    ticker: str
+    info: dict[str, object]
+
+
+@dataclass
+class StockInfoError:
+    """Error result from stock info fetch."""
+
+    ticker: str
+    error_message: str
+
+
 # Type alias for result
 StockResult = StockQuote | StockError
 IntradayResult = IntradayData | IntradayError
+StockInfoResult = StockInfo | StockInfoError
 
 
 async def fetch_stock_quote(ticker: str, timeout: float = 10.0) -> StockResult:
@@ -244,4 +262,70 @@ def _fetch_intraday_sync(ticker: str, period: str, interval: str) -> IntradayRes
             )
         return IntradayError(
             ticker=ticker, error_message=f"Failed to fetch intraday data: {error_msg}"
+        )
+
+
+async def fetch_stock_info(ticker: str, timeout: float = 10.0) -> StockInfoResult:
+    """
+    Fetch extended stock information for the info panel.
+
+    Args:
+        ticker: Stock ticker symbol (e.g., 'AAPL', 'TSLA')
+        timeout: Maximum time to wait for response in seconds
+
+    Returns:
+        StockInfo on success, StockInfoError on failure
+
+    Note:
+        This function uses run_in_executor to not block the UI event loop.
+        Returns full info dict with sector, industry, description, website, etc.
+    """
+    ticker = ticker.upper().strip()
+
+    try:
+        # Run blocking yfinance call in executor
+        loop = asyncio.get_event_loop()
+        return await asyncio.wait_for(
+            loop.run_in_executor(None, _fetch_stock_info_sync, ticker), timeout=timeout
+        )
+    except TimeoutError:
+        return StockInfoError(ticker=ticker, error_message=f"Request timed out after {timeout}s")
+    except Exception as e:
+        return StockInfoError(ticker=ticker, error_message=f"Unexpected error: {str(e)}")
+
+
+def _fetch_stock_info_sync(ticker: str) -> StockInfoResult:
+    """
+    Synchronous fetch operation for stock info. Called from executor.
+
+    Args:
+        ticker: Stock ticker symbol
+
+    Returns:
+        StockInfo on success, StockInfoError on failure
+    """
+    try:
+        stock = yf.Ticker(ticker)
+
+        # Fetch full info (slower than fast_info, but has extended metadata)
+        info = stock.info
+
+        # Validate we got data
+        if info is None or not isinstance(info, dict):
+            return StockInfoError(ticker=ticker, error_message="No information available")
+
+        # Return the full info dict (even if empty)
+        return StockInfo(ticker=ticker, info=info)
+
+    except Exception as e:
+        # Handle all errors gracefully - return error result, not exception
+        error_msg = str(e)
+        if "404" in error_msg or "No data found" in error_msg:
+            return StockInfoError(ticker=ticker, error_message="Invalid ticker symbol")
+        if "Connection" in error_msg or "Network" in error_msg:
+            return StockInfoError(
+                ticker=ticker, error_message="Network error - check connection"
+            )
+        return StockInfoError(
+            ticker=ticker, error_message=f"Failed to fetch info: {error_msg}"
         )

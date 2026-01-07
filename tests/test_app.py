@@ -7,9 +7,9 @@ from textual.containers import Horizontal
 from textual.widgets import Footer, Header
 
 from viper.app import ViperApp
-from viper.services.crypto import CryptoQuote
-from viper.services.stock import StockError, StockQuote
-from viper.widgets import QuotePanel, TickerInput, WatchlistPanel
+from viper.services.crypto import CryptoInfo, CryptoQuote
+from viper.services.stock import StockError, StockInfo, StockQuote
+from viper.widgets import InfoPanel, QuotePanel, TickerInput, WatchlistPanel
 
 
 @pytest.mark.asyncio
@@ -432,3 +432,175 @@ async def test_watchlist_enter_selects_item() -> None:
 
             # Quote panel should show the quote
             assert quote_panel._state == "success"
+
+
+# VPR-012: Company/asset info panel tests
+
+
+@pytest.mark.asyncio
+async def test_info_panel_present() -> None:
+    """Test that the InfoPanel widget is present in the app."""
+    app = ViperApp()
+    async with app.run_test():
+        # Should have an InfoPanel widget
+        info_panel = app.query_one(InfoPanel)
+        assert info_panel is not None
+
+
+@pytest.mark.asyncio
+async def test_info_panel_initially_hidden() -> None:
+    """Test that the InfoPanel is initially hidden."""
+    app = ViperApp()
+    async with app.run_test():
+        info_container = app.query_one("#info-container")
+        assert str(info_container.styles.display) == "none"
+
+
+@pytest.mark.asyncio
+async def test_i_key_toggles_info_panel() -> None:
+    """Test that pressing 'i' toggles the info panel visibility."""
+    app = ViperApp()
+    async with app.run_test() as pilot:
+        info_container = app.query_one("#info-container")
+        quote_container = app.query_one("#quote-container")
+
+        # Initially, info should be hidden, quote should be visible
+        assert str(info_container.styles.display) == "none"
+        assert str(quote_container.styles.display) == "block"
+
+        # Manually call the action (keybinding test is covered by existence of binding)
+        app.action_toggle_info()
+        await pilot.pause()
+
+        # Info should now be visible, quote should be hidden
+        assert str(info_container.styles.display) == "block"
+        assert str(quote_container.styles.display) == "none"
+
+        # Toggle back
+        app.action_toggle_info()
+        await pilot.pause()
+
+        # Should be back to original state
+        assert str(info_container.styles.display) == "none"
+        assert str(quote_container.styles.display) == "block"
+
+
+@pytest.mark.asyncio
+async def test_info_panel_shows_stock_info() -> None:
+    """Test that toggling info panel shows stock information."""
+    app = ViperApp()
+
+    # Mock stock quote and info
+    mock_quote = StockQuote(
+        ticker="AAPL",
+        price=150.00,
+        change=5.00,
+        change_percent=3.45,
+        volume=50000000,
+        market_cap=2500000000000,
+        high_52w=180.00,
+        low_52w=120.00,
+        name="Apple Inc.",
+    )
+
+    mock_info = StockInfo(
+        ticker="AAPL",
+        info={
+            "sector": "Technology",
+            "industry": "Consumer Electronics",
+            "longBusinessSummary": "Apple designs and manufactures consumer electronics.",
+            "website": "https://www.apple.com",
+            "fullTimeEmployees": 164000,
+        },
+    )
+
+    with patch("viper.app.fetch_quote", new_callable=AsyncMock) as mock_fetch_quote:
+        with patch("viper.app.fetch_stock_info", new_callable=AsyncMock) as mock_fetch_info:
+            mock_fetch_quote.return_value = mock_quote
+            mock_fetch_info.return_value = mock_info
+
+            async with app.run_test() as pilot:
+                ticker_input = app.query_one(TickerInput)
+                info_panel = app.query_one(InfoPanel)
+
+                # Submit a ticker to set current_ticker
+                ticker_input.focus()
+                ticker_input.value = "AAPL"
+                await pilot.press("enter")
+                await pilot.pause()
+
+                # Now press 'i' to show info panel
+                await pilot.press("i")
+                await pilot.pause(0.2)
+
+                # Info panel should have been called
+                assert mock_fetch_info.called
+
+                # Check that info panel has content
+                assert info_panel._current_quote is not None
+
+
+@pytest.mark.asyncio
+async def test_info_panel_shows_crypto_info() -> None:
+    """Test that toggling info panel shows crypto information."""
+    app = ViperApp()
+
+    # Mock crypto quote and info
+    mock_quote = CryptoQuote(
+        symbol="BTC",
+        price_usd=50000.0,
+        change_24h_percent=3.5,
+        market_cap_usd=1000000000000,
+        volume_24h_usd=50000000000.0,
+        name="Bitcoin",
+    )
+
+    mock_info = CryptoInfo(
+        symbol="BTC",
+        info={
+            "description": {"en": "Bitcoin is a decentralized digital currency."},
+            "links": {"homepage": ["https://bitcoin.org"]},
+            "genesis_date": "2009-01-03",
+        },
+    )
+
+    with patch("viper.app.fetch_quote", new_callable=AsyncMock) as mock_fetch_quote:
+        with patch("viper.app.fetch_crypto_info", new_callable=AsyncMock) as mock_fetch_info:
+            mock_fetch_quote.return_value = mock_quote
+            mock_fetch_info.return_value = mock_info
+
+            async with app.run_test() as pilot:
+                ticker_input = app.query_one(TickerInput)
+                info_panel = app.query_one(InfoPanel)
+
+                # Submit a ticker to set current_ticker
+                ticker_input.focus()
+                ticker_input.value = "BTC"
+                await pilot.press("enter")
+                await pilot.pause()
+
+                # Now press 'i' to show info panel
+                await pilot.press("i")
+                await pilot.pause(0.2)
+
+                # Info panel should have been called
+                assert mock_fetch_info.called
+
+                # Check that info panel has content
+                assert info_panel._current_quote is not None
+
+
+@pytest.mark.asyncio
+async def test_info_panel_empty_without_ticker() -> None:
+    """Test that info panel shows empty state when no ticker is selected."""
+    app = ViperApp()
+    async with app.run_test() as pilot:
+        info_panel = app.query_one(InfoPanel)
+
+        # Press 'i' without selecting a ticker first
+        await pilot.press("i")
+        await pilot.pause()
+
+        # Info panel should show empty state
+        content = info_panel.query_one("#info-content")
+        assert "No asset selected" in str(content.render())
