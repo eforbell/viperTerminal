@@ -280,6 +280,7 @@ class ChartPanel(Widget):
             prices=data.prices,
             dates=data.dates,
             dimensions=dimensions,
+            period=self._current_period,
         )
 
         # Mount each line of the chart
@@ -288,11 +289,13 @@ class ChartPanel(Widget):
 
         # Render volume bars if enabled
         if self._volume_enabled and len(data.volumes) > 0:
+            # Calculate chart area width (must match the price chart area)
+            chart_area_width = available_width - dimensions.y_axis_width
             volume_lines = self._renderer.render_volume_bars(
                 volumes=data.volumes,
                 opens=data.opens,
                 closes=data.prices,
-                width=available_width,
+                width=chart_area_width,
                 height=volume_height,
                 y_axis_width=dimensions.y_axis_width,
             )

@@ -54,6 +54,7 @@ class ChartRenderer:
         dimensions: ChartDimensions | None = None,
         volumes: list[int] | None = None,
         opens: list[float] | None = None,
+        period: str | None = None,
     ) -> RenderedChart:
         """Render price data as a chart.
 
@@ -63,6 +64,7 @@ class ChartRenderer:
             dimensions: Chart dimensions (default: 80x20 with axes)
             volumes: Optional list of volume values (same length as prices)
             opens: Optional list of open prices (for volume bar coloring)
+            period: Optional time period for date formatting (1W, 1M, 1Y, etc.)
 
         Returns:
             RenderedChart with lines ready for display
@@ -75,9 +77,9 @@ class ChartRenderer:
 
         # Delegate to specific renderer
         if self.style == ChartStyle.BRAILLE:
-            return self._render_braille(prices, dates, dimensions, volumes, opens)
+            return self._render_braille(prices, dates, dimensions, volumes, opens, period)
         else:
-            return self._render_block(prices, dates, dimensions, volumes, opens)
+            return self._render_block(prices, dates, dimensions, volumes, opens, period)
 
     def _render_braille(
         self,
@@ -86,6 +88,7 @@ class ChartRenderer:
         dimensions: ChartDimensions,
         volumes: list[int] | None = None,
         opens: list[float] | None = None,
+        period: str | None = None,
     ) -> RenderedChart:
         """Render chart using Braille patterns (2x4 dots per character).
 
@@ -146,7 +149,7 @@ class ChartRenderer:
 
         # Add X-axis labels
         if dimensions.include_x_axis:
-            x_axis_lines = self._create_x_axis(downsampled_dates, chart_width, dimensions.y_axis_width)
+            x_axis_lines = self._create_x_axis(downsampled_dates, chart_width, dimensions.y_axis_width, period)
             # X-axis returns multiple lines separated by \n
             chart_lines.extend(x_axis_lines.split("\n"))
 
@@ -258,6 +261,7 @@ class ChartRenderer:
         dimensions: ChartDimensions,
         volumes: list[int] | None = None,
         opens: list[float] | None = None,
+        period: str | None = None,
     ) -> RenderedChart:
         """Render chart using block characters (▁▂▃▄▅▆▇█).
 
@@ -323,7 +327,7 @@ class ChartRenderer:
 
         # Add X-axis labels
         if dimensions.include_x_axis:
-            x_axis_lines = self._create_x_axis(downsampled_dates, chart_width, dimensions.y_axis_width)
+            x_axis_lines = self._create_x_axis(downsampled_dates, chart_width, dimensions.y_axis_width, period)
             # X-axis returns multiple lines separated by \n
             chart_lines.extend(x_axis_lines.split("\n"))
 
@@ -409,13 +413,16 @@ class ChartRenderer:
 
         return result_lines
 
-    def _create_x_axis(self, dates: list[datetime] | None, chart_width: int, y_axis_width: int) -> str:
+    def _create_x_axis(
+        self, dates: list[datetime] | None, chart_width: int, y_axis_width: int, period: str | None = None
+    ) -> str:
         """Create X-axis with date labels.
 
         Args:
             dates: List of datetime objects (or None for empty axis)
             chart_width: Width of chart area
             y_axis_width: Width of Y-axis (for alignment)
+            period: Time period for formatting (1W, 1M, 1Y, 5Y, MAX, etc.)
 
         Returns:
             X-axis line with date labels
@@ -428,20 +435,36 @@ class ChartRenderer:
             # No dates - just return empty axis
             return f"{y_padding}{axis_line}\n{' ' * (y_axis_width + chart_width)}"
 
-        # Show first and last dates
-        first_date = dates[0].strftime("%m/%d")
-        last_date = dates[-1].strftime("%m/%d")
+        # Determine date format based on period
+        # Short periods: MM/DD
+        # Medium periods (1Y): MMM 'YY
+        # Long periods (2Y+, MAX): YYYY
+        if period in ("2Y", "5Y", "MAX"):
+            # Multi-year: show year
+            first_label = dates[0].strftime("%Y")
+            last_label = dates[-1].strftime("%Y")
+        elif period in ("1Y",):
+            # 1 year: show month and abbreviated year
+            first_label = dates[0].strftime("%b '%y")
+            last_label = dates[-1].strftime("%b '%y")
+        elif period in ("3M", "6M"):
+            # Multi-month: show month/day/year abbreviated
+            first_label = dates[0].strftime("%m/%d/%y")
+            last_label = dates[-1].strftime("%m/%d/%y")
+        else:
+            # Short periods (1W, 1M): show MM/DD
+            first_label = dates[0].strftime("%m/%d")
+            last_label = dates[-1].strftime("%m/%d")
 
         # Place labels
-        # Format: "MM/DD" + spaces + "MM/DD"
         total_width = chart_width
-        if total_width >= len(first_date) + len(last_date) + 2:
+        if total_width >= len(first_label) + len(last_label) + 2:
             # Enough space for both labels
-            padding = total_width - len(first_date) - len(last_date)
-            labels = f"{first_date}{' ' * padding}{last_date}"
+            padding = total_width - len(first_label) - len(last_label)
+            labels = f"{first_label}{' ' * padding}{last_label}"
         else:
             # Not enough space - just show first date
-            labels = first_date.ljust(total_width)
+            labels = first_label.ljust(total_width)
 
         return f"{y_padding}{axis_line}\n{' ' * y_axis_width}{labels}"
 
