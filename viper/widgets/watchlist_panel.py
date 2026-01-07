@@ -1,6 +1,7 @@
 """Watchlist panel widget for displaying watched tickers with live prices."""
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import VerticalScroll
 from textual.message import Message
 from textual.widget import Widget
@@ -16,6 +17,13 @@ class WatchlistPanel(Widget):
 
     # Make the panel focusable
     can_focus = True
+
+    # Keyboard bindings for navigation
+    BINDINGS = [
+        Binding("j", "navigate_down", "Next", show=False),
+        Binding("k", "navigate_up", "Previous", show=False),
+        Binding("enter", "select_item", "Select", show=False),
+    ]
 
     DEFAULT_CSS = """
     WatchlistPanel {
@@ -58,6 +66,11 @@ class WatchlistPanel(Widget):
         margin-top: 3;
     }
 
+    WatchlistPanel .selected {
+        background: #003300;
+        text-style: bold;
+    }
+
     WatchlistPanel VerticalScroll {
         height: 100%;
     }
@@ -89,6 +102,7 @@ class WatchlistPanel(Widget):
         self._refresh_interval = refresh_interval
         self._quotes: dict[str, Quote | QuoteError] = {}
         self._refresh_timer_active = False
+        self._selected_index = 0
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -131,18 +145,31 @@ class WatchlistPanel(Widget):
 
         if not tickers:
             container.mount(Label("No tickers in watchlist", classes="empty-state"))
+            self._selected_index = 0
             return
 
-        for ticker in tickers:
+        # Clamp selected index to valid range
+        if self._selected_index >= len(tickers):
+            self._selected_index = len(tickers) - 1
+        if self._selected_index < 0:
+            self._selected_index = 0
+
+        for i, ticker in enumerate(tickers):
             quote = self._quotes.get(ticker)
             if quote is None:
                 # Quote not loaded yet
                 line = f"{ticker}: Loading..."
-                label = Label(line, classes="watchlist-item neutral")
+                classes = "watchlist-item neutral"
+                if i == self._selected_index:
+                    classes += " selected"
+                label = Label(line, classes=classes)
             elif isinstance(quote, QuoteError):
                 # Error fetching quote
                 line = f"{ticker}: Error"
-                label = Label(line, classes="watchlist-item neutral")
+                classes = "watchlist-item neutral"
+                if i == self._selected_index:
+                    classes += " selected"
+                label = Label(line, classes=classes)
             else:
                 # Successful quote
                 line = self._format_quote_line(ticker, quote)
@@ -163,7 +190,12 @@ class WatchlistPanel(Widget):
                 else:
                     color_class = "neutral"
 
-                label = Label(line, classes=f"watchlist-item {color_class}")
+                # Add selected class if this is the selected item
+                classes = f"watchlist-item {color_class}"
+                if i == self._selected_index:
+                    classes += " selected"
+
+                label = Label(line, classes=classes)
 
             container.mount(label)
 
@@ -217,3 +249,35 @@ class WatchlistPanel(Widget):
         if ticker in self._quotes:
             del self._quotes[ticker]
         self._render_items()
+
+    def action_navigate_down(self) -> None:
+        """Navigate down to the next item in the watchlist (j key)."""
+        tickers = self._watchlist_manager.get_all()
+        if not tickers:
+            return
+
+        # Move selection down
+        self._selected_index = min(self._selected_index + 1, len(tickers) - 1)
+        self._render_items()
+
+    def action_navigate_up(self) -> None:
+        """Navigate up to the previous item in the watchlist (k key)."""
+        tickers = self._watchlist_manager.get_all()
+        if not tickers:
+            return
+
+        # Move selection up
+        self._selected_index = max(self._selected_index - 1, 0)
+        self._render_items()
+
+    def action_select_item(self) -> None:
+        """Select the currently highlighted item and emit TickerSelected event."""
+        tickers = self._watchlist_manager.get_all()
+        if not tickers or self._selected_index >= len(tickers):
+            return
+
+        # Get the selected ticker
+        selected_ticker = tickers[self._selected_index]
+
+        # Emit the TickerSelected message
+        self.post_message(self.TickerSelected(selected_ticker))

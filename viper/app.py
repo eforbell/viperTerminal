@@ -81,6 +81,9 @@ class ViperApp(App[None]):
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("tab", "focus_next", "Next Panel"),
+        ("/", "focus_input", "Focus Input"),
+        ("escape", "clear_or_close", "Clear/Close"),
+        ("question_mark,f1", "show_help", "Help"),
     ]
 
     def __init__(self) -> None:
@@ -118,17 +121,49 @@ class ViperApp(App[None]):
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header(show_clock=False)
-        with Container(id="main-container"):
-            with Horizontal(id="main-layout"):
-                with Container(id="watchlist-container"):
-                    yield WatchlistPanel(
-                        watchlist_manager=self.watchlist_manager,
-                        refresh_interval=60,
-                    )
-                with Container(id="quote-container"):
-                    yield QuotePanel()
+        with Container(id="main-container"), Horizontal(id="main-layout"):
+            with Container(id="watchlist-container"):
+                yield WatchlistPanel(
+                    watchlist_manager=self.watchlist_manager,
+                    refresh_interval=60,
+                )
+            with Container(id="quote-container"):
+                yield QuotePanel()
         yield TickerInput(history_manager=self.history_manager)
         yield Footer()
+
+    def action_focus_input(self) -> None:
+        """Focus the ticker input bar."""
+        ticker_input = self.query_one(TickerInput)
+        ticker_input.focus()
+
+    def action_clear_or_close(self) -> None:
+        """Clear input or close overlays when Escape is pressed."""
+        # Get the ticker input widget
+        ticker_input = self.query_one(TickerInput)
+
+        # If input has text, clear it
+        if ticker_input.value:
+            ticker_input.value = ""
+            ticker_input.remove_class("error")
+        # Otherwise, could close overlays in the future (for VPR-015)
+
+    def action_show_help(self) -> None:
+        """Show the help screen (placeholder for VPR-015)."""
+        # Placeholder - will be implemented in VPR-015
+        # For now, do nothing
+        pass
+
+    async def on_watchlist_panel_ticker_selected(
+        self, event: WatchlistPanel.TickerSelected
+    ) -> None:
+        """Handle ticker selection from watchlist.
+
+        Args:
+            event: The ticker selected event from the watchlist panel.
+        """
+        # Trigger a quote lookup for the selected ticker
+        await self._fetch_and_display_quote(event.ticker)
 
     async def on_ticker_input_ticker_lookup(self, event: TickerInput.TickerLookup) -> None:
         """Handle ticker lookup events.
@@ -160,6 +195,14 @@ class ViperApp(App[None]):
             return
 
         # Regular quote lookup
+        await self._fetch_and_display_quote(ticker)
+
+    async def _fetch_and_display_quote(self, ticker: str) -> None:
+        """Fetch and display a quote for the given ticker.
+
+        Args:
+            ticker: The ticker symbol to fetch.
+        """
         # Get the quote panel
         quote_panel = self.query_one(QuotePanel)
 

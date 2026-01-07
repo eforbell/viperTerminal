@@ -78,10 +78,14 @@ def _fetch_sync(ticker: str) -> StockResult:
         # Use fast_info for speed (as per PRD notes)
         info = stock.fast_info
 
-        # Extract required fields
-        # fast_info provides: last_price, open, previous_close, currency, market_cap, etc.
-        price = info.get("last_price")
-        previous_close = info.get("previous_close")
+        # Extract required fields using direct attribute access
+        # (fast_info.get() doesn't work reliably - must use attributes)
+        try:
+            price = info.last_price
+            previous_close = info.previous_close
+        except (AttributeError, KeyError):
+            price = None
+            previous_close = None
 
         # Validate we got the essential data
         if price is None or previous_close is None:
@@ -91,9 +95,9 @@ def _fetch_sync(ticker: str) -> StockResult:
         change = price - previous_close
         change_percent = (change / previous_close) * 100 if previous_close != 0 else 0.0
 
-        # Get additional fields with defaults
-        volume = info.get("last_volume", 0)
-        market_cap = info.get("market_cap", 0)
+        # Get additional fields with defaults (use getattr for optional fields)
+        volume = getattr(info, "last_volume", 0) or 0
+        market_cap = getattr(info, "market_cap", 0) or 0
 
         # Get 52-week high/low from regular info (not available in fast_info)
         # We'll try to get it, but fall back to current price if not available

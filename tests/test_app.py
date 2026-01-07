@@ -243,7 +243,6 @@ async def test_tab_cycles_focus_between_panels() -> None:
     app = ViperApp()
     async with app.run_test() as pilot:
         watchlist_panel = app.query_one(WatchlistPanel)
-        quote_panel = app.query_one(QuotePanel)
 
         # Focus the watchlist panel first
         watchlist_panel.focus()
@@ -284,3 +283,152 @@ async def test_layout_proportions() -> None:
         # Note: actual width calculation happens at render time
         assert watchlist_container.id == "watchlist-container"
         assert quote_container.id == "quote-container"
+
+
+# VPR-010: Keyboard navigation and shortcuts tests
+
+
+@pytest.mark.asyncio
+async def test_slash_focuses_input() -> None:
+    """Test that pressing '/' focuses the input bar."""
+    app = ViperApp()
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+        quote_panel = app.query_one(QuotePanel)
+
+        # Focus should not be on input initially
+        quote_panel.focus()
+        await pilot.pause()
+        assert app.focused != ticker_input
+
+        # Press '/' to focus input
+        await pilot.press("/")
+        await pilot.pause()
+
+        # Input should now have focus
+        assert app.focused == ticker_input
+
+
+@pytest.mark.asyncio
+async def test_escape_clears_input() -> None:
+    """Test that pressing Escape clears input content."""
+    app = ViperApp()
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Type something in the input
+        ticker_input.focus()
+        ticker_input.value = "AAPL"
+        await pilot.pause()
+        assert ticker_input.value == "AAPL"
+
+        # Press Escape to clear
+        await pilot.press("escape")
+        await pilot.pause()
+
+        # Input should be cleared
+        assert ticker_input.value == ""
+
+
+@pytest.mark.asyncio
+async def test_escape_clears_error_state() -> None:
+    """Test that pressing Escape also clears error state from input."""
+    app = ViperApp()
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Add error class and some text
+        ticker_input.focus()
+        ticker_input.value = "test"
+        ticker_input.add_class("error")
+        await pilot.pause()
+        assert "error" in ticker_input.classes
+
+        # Press Escape to clear
+        await pilot.press("escape")
+        await pilot.pause()
+
+        # Error class should be removed
+        assert "error" not in ticker_input.classes
+        assert ticker_input.value == ""
+
+
+@pytest.mark.asyncio
+async def test_question_mark_triggers_help_action() -> None:
+    """Test that pressing '?' triggers the help action (placeholder for VPR-015)."""
+    app = ViperApp()
+    async with app.run_test() as pilot:
+        # Press '?' to trigger help
+        await pilot.press("?")
+        await pilot.pause()
+
+        # Placeholder does nothing for now, just verify no error
+        # Will be fully implemented in VPR-015
+        assert True
+
+
+@pytest.mark.asyncio
+async def test_f1_triggers_help_action() -> None:
+    """Test that pressing F1 triggers the help action (placeholder for VPR-015)."""
+    app = ViperApp()
+    async with app.run_test() as pilot:
+        # Press F1 to trigger help
+        await pilot.press("f1")
+        await pilot.pause()
+
+        # Placeholder does nothing for now, just verify no error
+        # Will be fully implemented in VPR-015
+        assert True
+
+
+@pytest.mark.asyncio
+async def test_watchlist_enter_selects_item() -> None:
+    """Test that pressing Enter on a watchlist item triggers quote lookup."""
+    app = ViperApp()
+
+    # Pre-populate watchlist
+    app.watchlist_manager.add("AAPL")
+    app.watchlist_manager.add("TSLA")
+
+    # Mock quote for watchlist refresh
+    mock_quote = StockQuote(
+        ticker="AAPL",
+        price=150.00,
+        change=5.00,
+        change_percent=3.45,
+        volume=50000000,
+        market_cap=2500000000000,
+        high_52w=180.00,
+        low_52w=120.00,
+        name="Apple Inc.",
+    )
+
+    with patch("viper.app.fetch_quote", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = mock_quote
+
+        async with app.run_test() as pilot:
+            watchlist_panel = app.query_one(WatchlistPanel)
+            quote_panel = app.query_one(QuotePanel)
+
+            # Wait for watchlist to load
+            await pilot.pause(0.1)
+
+            # Focus watchlist panel
+            watchlist_panel.focus()
+            await pilot.pause()
+
+            # Quote panel should be in empty state
+            assert quote_panel._state == "empty"
+
+            # Press Enter to select the first item (AAPL)
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Should have triggered a quote fetch for AAPL
+            assert mock_fetch.call_count >= 1
+            # The last call should be for AAPL (from Enter)
+            last_call = mock_fetch.call_args_list[-1]
+            assert last_call[0][0] == "AAPL"
+
+            # Quote panel should show the quote
+            assert quote_panel._state == "success"

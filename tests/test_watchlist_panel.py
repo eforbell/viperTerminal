@@ -381,3 +381,278 @@ async def test_refresh_interval_timer(
 
         # Should have called fetch again
         assert mock_fetch.call_count > initial_call_count
+
+
+# VPR-010: Keyboard navigation tests
+
+
+@pytest.mark.asyncio
+async def test_j_key_navigates_down(watchlist_manager: WatchlistManager) -> None:
+    """Test that pressing 'j' navigates down the watchlist."""
+    # Add multiple items to watchlist
+    watchlist_manager.add("AAPL")
+    watchlist_manager.add("TSLA")
+    watchlist_manager.add("MSFT")
+
+    mock_quote = StockQuote(
+        ticker="AAPL",
+        name="Apple Inc.",
+        price=150.0,
+        change=5.0,
+        change_percent=3.45,
+        volume=100000,
+        market_cap=2500000000,
+        high_52w=180.0,
+        low_52w=120.0,
+    )
+
+    with patch("viper.widgets.watchlist_panel.fetch_quote", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = mock_quote
+
+        app = WatchlistTestApp(watchlist_manager)
+        async with app.run_test() as pilot:
+            panel = app.query_one(WatchlistPanel)
+
+            # Wait for initial refresh
+            await pilot.pause(0.1)
+
+            # Focus the panel
+            panel.focus()
+            await pilot.pause()
+
+            # Initially selected index should be 0
+            assert panel._selected_index == 0
+
+            # Press 'j' to move down
+            await pilot.press("j")
+            await pilot.pause()
+
+            # Selected index should be 1
+            assert panel._selected_index == 1
+
+            # Press 'j' again to move down
+            await pilot.press("j")
+            await pilot.pause()
+
+            # Selected index should be 2
+            assert panel._selected_index == 2
+
+            # Press 'j' again - should stay at 2 (last item)
+            await pilot.press("j")
+            await pilot.pause()
+
+            # Selected index should still be 2 (can't go beyond last item)
+            assert panel._selected_index == 2
+
+
+@pytest.mark.asyncio
+async def test_k_key_navigates_up(watchlist_manager: WatchlistManager) -> None:
+    """Test that pressing 'k' navigates up the watchlist."""
+    # Add multiple items to watchlist
+    watchlist_manager.add("AAPL")
+    watchlist_manager.add("TSLA")
+    watchlist_manager.add("MSFT")
+
+    mock_quote = StockQuote(
+        ticker="AAPL",
+        name="Apple Inc.",
+        price=150.0,
+        change=5.0,
+        change_percent=3.45,
+        volume=100000,
+        market_cap=2500000000,
+        high_52w=180.0,
+        low_52w=120.0,
+    )
+
+    with patch("viper.widgets.watchlist_panel.fetch_quote", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = mock_quote
+
+        app = WatchlistTestApp(watchlist_manager)
+        async with app.run_test() as pilot:
+            panel = app.query_one(WatchlistPanel)
+
+            # Wait for initial refresh
+            await pilot.pause(0.1)
+
+            # Focus the panel
+            panel.focus()
+            await pilot.pause()
+
+            # Move to index 2 first
+            panel._selected_index = 2
+            panel._render_items()
+            await pilot.pause()
+            assert panel._selected_index == 2
+
+            # Press 'k' to move up
+            await pilot.press("k")
+            await pilot.pause()
+
+            # Selected index should be 1
+            assert panel._selected_index == 1
+
+            # Press 'k' again to move up
+            await pilot.press("k")
+            await pilot.pause()
+
+            # Selected index should be 0
+            assert panel._selected_index == 0
+
+            # Press 'k' again - should stay at 0 (first item)
+            await pilot.press("k")
+            await pilot.pause()
+
+            # Selected index should still be 0 (can't go before first item)
+            assert panel._selected_index == 0
+
+
+@pytest.mark.asyncio
+async def test_enter_emits_ticker_selected(watchlist_manager: WatchlistManager) -> None:
+    """Test that pressing Enter emits TickerSelected event."""
+    # Add items to watchlist
+    watchlist_manager.add("AAPL")
+    watchlist_manager.add("TSLA")
+
+    mock_quote = StockQuote(
+        ticker="AAPL",
+        name="Apple Inc.",
+        price=150.0,
+        change=5.0,
+        change_percent=3.45,
+        volume=100000,
+        market_cap=2500000000,
+        high_52w=180.0,
+        low_52w=120.0,
+    )
+
+    with patch("viper.widgets.watchlist_panel.fetch_quote", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = mock_quote
+
+        # Test app that captures messages
+        class MessageCapturingApp(App[None]):
+            def __init__(self, watchlist_manager: WatchlistManager) -> None:
+                super().__init__()
+                self.watchlist_manager = watchlist_manager
+                self.captured_messages: list[WatchlistPanel.TickerSelected] = []
+
+            def compose(self):
+                yield WatchlistPanel(
+                    watchlist_manager=self.watchlist_manager,
+                    refresh_interval=60,
+                )
+
+            def on_watchlist_panel_ticker_selected(
+                self, event: WatchlistPanel.TickerSelected
+            ) -> None:
+                self.captured_messages.append(event)
+
+        app = MessageCapturingApp(watchlist_manager)
+        async with app.run_test() as pilot:
+            panel = app.query_one(WatchlistPanel)
+
+            # Wait for initial refresh
+            await pilot.pause(0.1)
+
+            # Focus the panel
+            panel.focus()
+            await pilot.pause()
+
+            # Selected index should be 0 (AAPL)
+            assert panel._selected_index == 0
+
+            # Press Enter to select
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Should have emitted TickerSelected event with AAPL
+            assert len(app.captured_messages) == 1
+            assert app.captured_messages[0].ticker == "AAPL"
+
+            # Navigate down and press Enter again
+            await pilot.press("j")
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Should have emitted another event with TSLA
+            assert len(app.captured_messages) == 2
+            assert app.captured_messages[1].ticker == "TSLA"
+
+
+@pytest.mark.asyncio
+async def test_navigation_works_with_empty_watchlist(watchlist_manager: WatchlistManager) -> None:
+    """Test that j/k/enter don't crash when watchlist is empty."""
+    # Don't add any items
+
+    app = WatchlistTestApp(watchlist_manager)
+    async with app.run_test() as pilot:
+        panel = app.query_one(WatchlistPanel)
+
+        # Wait for initial mount
+        await pilot.pause(0.1)
+
+        # Focus the panel
+        panel.focus()
+        await pilot.pause()
+
+        # Try navigation keys - should not crash
+        await pilot.press("j")
+        await pilot.pause()
+        await pilot.press("k")
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # Index should still be 0
+        assert panel._selected_index == 0
+
+
+@pytest.mark.asyncio
+async def test_selected_item_visual_highlight(watchlist_manager: WatchlistManager) -> None:
+    """Test that the selected item has the 'selected' CSS class."""
+    # Add items to watchlist
+    watchlist_manager.add("AAPL")
+    watchlist_manager.add("TSLA")
+
+    mock_quote = StockQuote(
+        ticker="AAPL",
+        name="Apple Inc.",
+        price=150.0,
+        change=5.0,
+        change_percent=3.45,
+        volume=100000,
+        market_cap=2500000000,
+        high_52w=180.0,
+        low_52w=120.0,
+    )
+
+    with patch("viper.widgets.watchlist_panel.fetch_quote", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = mock_quote
+
+        app = WatchlistTestApp(watchlist_manager)
+        async with app.run_test() as pilot:
+            panel = app.query_one(WatchlistPanel)
+
+            # Wait for initial refresh
+            await pilot.pause(0.1)
+
+            # Get the labels in the content
+            from textual.widgets import Label
+            labels = panel.query("Label.watchlist-item")
+
+            # First item (index 0) should have 'selected' class
+            first_label = labels.first(Label)
+            assert "selected" in first_label.classes
+
+            # Press 'j' to move down
+            panel.focus()
+            await pilot.press("j")
+            await pilot.pause()
+
+            # Refresh labels
+            labels = panel.query("Label.watchlist-item")
+
+            # Now second item should have 'selected' class
+            second_label = labels.nodes[1]
+            assert "selected" in second_label.classes

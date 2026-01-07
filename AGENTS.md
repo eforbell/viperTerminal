@@ -49,7 +49,9 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Error as Data**: Return error results (dataclass) instead of raising exceptions for better type safety
 - **Union Result Types**: Use `Result = Success | Error` pattern for functions that can fail
 - **yfinance fast_info**: Use `ticker.fast_info` for faster responses; it provides essential fields without full info fetch
-- **Defensive Defaults**: Use `.get(key, default)` on API responses and provide sensible fallback values
+- **⚠️ fast_info is NOT a dict**: Access values via attributes (`info.last_price`), NOT dict-style (`info.get("last_price")`). The `.get()` method exists but returns `None` for attribute names!
+- **Attribute Access for fast_info**: Use `info.last_price`, `info.previous_close`, `info.last_volume`, `info.market_cap`
+- **Optional Attributes**: Use `getattr(info, "field_name", default)` for optional fields that may not exist
 - **Timeout Handling**: Wrap executor calls in `asyncio.wait_for()` for timeout support
 - **Type Stubs**: Add `# type: ignore[import-untyped]` for libraries without type stubs (mypy --strict)
 - **Modern Type Syntax**: Use `X | None` instead of `Optional[X]` (Python 3.10+ union syntax)
@@ -57,6 +59,7 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Mock External APIs**: Always mock yfinance (or any external API) in tests - use `unittest.mock.patch`
 - **Test Edge Cases**: Zero division protection, missing data fields, API exceptions
 - **MagicMock for Objects**: Use `MagicMock()` to mock complex objects with nested attributes (e.g., `ticker.fast_info`)
+- **Mock fast_info as Object**: Create mock with attributes (`mock.last_price = 150.0`), NOT as a dict
 - **Property Mocking**: Use `type(obj).property_name = property(lambda: value)` to mock properties that raise exceptions
 
 ### VPR-004: Stock Quote Display Panel
@@ -171,3 +174,29 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Layout Testing**: Test that containers exist with correct IDs; actual proportions are handled by Textual's CSS engine
 - **Focus Testing**: Test `can_focus` attribute and basic Tab key functionality
 - **Integration Testing**: Add tests for layout structure, focusable widgets, and basic navigation
+
+### VPR-010: Keyboard Navigation and Shortcuts
+- **Action Methods**: Define actions as `action_*` methods; Textual binds them to keys automatically
+- **Binding Format**: Use tuples in BINDINGS: `("key", "action_name", "description")`
+- **Multiple Keys**: Bind multiple keys to same action with comma: `("question_mark,f1", "show_help", "Help")`
+- **Widget Bindings**: Widgets can define their own BINDINGS with `Binding()` objects for local keybindings
+- **Binding Visibility**: Use `show=False` in Binding() to hide from footer but still enable the key
+- **List Navigation**: Use j/k keys for Vim-style navigation (j=down, k=up) in list widgets
+- **Selection State**: Track selected index with `_selected_index` attribute; clamp to valid range in render
+- **Visual Selection**: Apply "selected" CSS class to highlight currently selected item (background color)
+- **Selection Clamping**: Clamp index in _render_items() to handle list size changes (removals, empty state)
+- **Navigation Actions**: Use min/max to prevent selection from going out of bounds
+- **Enter to Select**: Emit custom event (TickerSelected) when Enter is pressed on selected item
+- **Focus Input**: Use `widget.focus()` to programmatically set focus to input bar
+- **Escape for Clear**: Check if input has text before clearing; also remove error state
+- **Placeholder Actions**: Create action methods that do nothing for future features (help screen)
+- **Message Handling**: Use `on_{widget_name}_{event_name}` pattern to handle custom widget events
+- **Extract Common Logic**: Create helper methods (_fetch_and_display_quote) to avoid code duplication
+- **Empty State Handling**: Navigation actions should handle empty lists gracefully (early return)
+- **Index Reset**: Reset selected_index to 0 when list becomes empty
+- **Test All Keys**: Write tests for each keybinding (/, Esc, ?, F1, j, k, Enter)
+- **Test Boundaries**: Test navigation at start/end of list (can't go beyond)
+- **Test Visual State**: Verify CSS classes are applied correctly for selection highlighting
+- **Test Event Emission**: Capture emitted events in test app to verify correct ticker is selected
+- **Combined Context Managers**: Ruff prefers single with statement with multiple contexts instead of nested
+- **Remove Unused Variables**: Remove variables that are queried but never used to satisfy ruff F841

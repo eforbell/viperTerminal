@@ -344,3 +344,21 @@
 
 ---
 
+## 2026-01-06 - BUG FIX: yfinance fast_info attribute access
+- **Issue**: Stock quotes always returned "Error: Invalid ticker or no data available"
+- **Root Cause**: yfinance `fast_info` is NOT a dict - it's a `FastInfo` object with properties
+- **Bug**: Code used `info.get("last_price")` which returns `None`, not the actual value
+- **Fix**: Changed to direct attribute access: `info.last_price`, `info.previous_close`, etc.
+
+**Files changed:**
+- `viper/services/stock.py` - Fixed fast_info access pattern
+- `tests/test_stock.py` - Updated mocks to use attribute-based objects instead of dicts
+- `AGENTS.md` - Added warning about fast_info access pattern
+
+**Learnings:**
+- yfinance `FastInfo` has a `.get()` method but it doesn't work like dict.get()
+- Always test with real API calls during development, not just mocked tests
+- Mocks should mirror actual API behavior - FastInfo uses attributes, not dict keys
+- Use `getattr(info, "field_name", default)` for optional attributes
+
+---
