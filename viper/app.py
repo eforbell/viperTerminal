@@ -404,6 +404,16 @@ class ViperApp(App[None]):
             chart_panel = self.query_one("#chart-container ChartPanel", ChartPanel)
             chart_panel.toggle_volume()
 
+    def on_news_panel_browser_opening(self, event: NewsPanel.BrowserOpening) -> None:
+        """Handle browser opening event from news panel.
+
+        Args:
+            event: The browser opening event with URL.
+        """
+        status_bar = self.query_one(StatusBar)
+        status_bar.set_message("Opening in browser...")
+        self.logger.info(f"Opening news URL: {event.url}")
+
     async def on_watchlist_panel_ticker_selected(
         self, event: WatchlistPanel.TickerSelected
     ) -> None:

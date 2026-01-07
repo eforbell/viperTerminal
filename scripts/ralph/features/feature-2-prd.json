@@ -194,7 +194,7 @@
         "Tests: browser open (mocked), expansion toggle, keyboard handling"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-023"],
       "notes": "Essential for actually reading the news articles."

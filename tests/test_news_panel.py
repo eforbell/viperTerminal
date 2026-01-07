@@ -1,6 +1,7 @@
 """Tests for the news panel widget."""
 
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -315,7 +316,6 @@ class TestNewsPanelLoadNews:
     @pytest.mark.asyncio
     async def test_load_news_sets_loading_state(self) -> None:
         """Test that load_news sets initial loading state."""
-        from unittest.mock import AsyncMock, patch
         
         panel = NewsPanel()
         
@@ -332,7 +332,6 @@ class TestNewsPanelLoadNews:
     @pytest.mark.asyncio
     async def test_load_news_success(self) -> None:
         """Test successful news loading."""
-        from unittest.mock import AsyncMock, patch
         
         panel = NewsPanel()
         items = [create_news_item(title=f"News {i}") for i in range(3)]
@@ -350,7 +349,6 @@ class TestNewsPanelLoadNews:
     @pytest.mark.asyncio
     async def test_load_news_error(self) -> None:
         """Test error handling in load_news."""
-        from unittest.mock import AsyncMock, patch
         from viper.services.news import NewsError
         
         panel = NewsPanel()
@@ -368,7 +366,6 @@ class TestNewsPanelLoadNews:
     @pytest.mark.asyncio
     async def test_load_news_ticker_change_during_fetch(self) -> None:
         """Test that stale results are ignored if ticker changes."""
-        from unittest.mock import AsyncMock, patch
         
         panel = NewsPanel()
         items = [create_news_item()]
@@ -402,3 +399,163 @@ class TestNewsPanelBindings:
         panel = NewsPanel()
         binding_keys = [b.key for b in panel.BINDINGS]
         assert "k" in binding_keys
+
+    def test_has_enter_binding(self) -> None:
+        """Test panel has enter key binding for browser open."""
+        panel = NewsPanel()
+        binding_keys = [b.key for b in panel.BINDINGS]
+        assert "enter" in binding_keys
+
+    def test_has_e_binding(self) -> None:
+        """Test panel has e key binding for expand."""
+        panel = NewsPanel()
+        binding_keys = [b.key for b in panel.BINDINGS]
+        assert "e" in binding_keys
+
+    def test_has_escape_binding(self) -> None:
+        """Test panel has escape key binding for collapse."""
+        panel = NewsPanel()
+        binding_keys = [b.key for b in panel.BINDINGS]
+        assert "escape" in binding_keys
+
+
+class TestNewsPanelExpansion:
+    """Test news item expansion functionality."""
+
+    def test_initial_expanded_state(self) -> None:
+        """Test panel starts with no expanded item."""
+        panel = NewsPanel()
+        assert panel._expanded_index is None
+        assert not panel.is_expanded()
+
+    def test_toggle_expand_sets_expanded_index(self) -> None:
+        """Test toggling expand sets the expanded index."""
+        panel = NewsPanel()
+        panel._news_items = [create_news_item() for _ in range(3)]
+        panel._selected_index = 1
+        
+        # Mock render to avoid widget query errors
+        with patch.object(panel, "_render_content"):
+            panel.action_toggle_expand()
+        
+        assert panel._expanded_index == 1
+        assert panel.is_expanded()
+
+    def test_toggle_expand_collapses_if_already_expanded(self) -> None:
+        """Test toggling expand on same item collapses it."""
+        panel = NewsPanel()
+        panel._news_items = [create_news_item() for _ in range(3)]
+        panel._selected_index = 1
+        panel._expanded_index = 1  # Already expanded
+        
+        with patch.object(panel, "_render_content"):
+            panel.action_toggle_expand()
+        
+        assert panel._expanded_index is None
+        assert not panel.is_expanded()
+
+    def test_collapse_clears_expanded_index(self) -> None:
+        """Test collapse action clears expanded index."""
+        panel = NewsPanel()
+        panel._news_items = [create_news_item() for _ in range(3)]
+        panel._expanded_index = 2
+        
+        with patch.object(panel, "_render_content"):
+            panel.action_collapse()
+        
+        assert panel._expanded_index is None
+
+    def test_collapse_does_nothing_if_not_expanded(self) -> None:
+        """Test collapse does nothing if no item is expanded."""
+        panel = NewsPanel()
+        panel._news_items = [create_news_item() for _ in range(3)]
+        panel._expanded_index = None
+        
+        # Should not call render if nothing to collapse
+        with patch.object(panel, "_render_content") as mock_render:
+            panel.action_collapse()
+            mock_render.assert_not_called()
+
+    def test_expand_empty_list_does_nothing(self) -> None:
+        """Test expand does nothing with empty news list."""
+        panel = NewsPanel()
+        panel._news_items = []
+        
+        with patch.object(panel, "_render_content") as mock_render:
+            panel.action_toggle_expand()
+            mock_render.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_load_news_resets_expanded_index(self) -> None:
+        """Test loading news resets expanded state."""
+        panel = NewsPanel()
+        panel._expanded_index = 2  # Expanded
+        
+        with patch("viper.widgets.news_panel.fetch_news", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = [create_news_item()]
+            
+            with patch.object(panel, "_render_content"):
+                await panel.load_news("AAPL")
+        
+        assert panel._expanded_index is None
+
+    def test_show_empty_resets_expanded_index(self) -> None:
+        """Test show_empty resets expanded state."""
+        panel = NewsPanel()
+        panel._expanded_index = 2
+        
+        with patch.object(panel, "_render_content"):
+            panel.show_empty()
+        
+        assert panel._expanded_index is None
+
+
+class TestNewsPanelBrowserOpen:
+    """Test browser opening functionality."""
+
+    def test_open_in_browser_with_url(self) -> None:
+        """Test opening news item in browser."""
+        
+        panel = NewsPanel()
+        item = create_news_item(url="https://example.com/news")
+        panel._news_items = [item]
+        panel._selected_index = 0
+        
+        # Mock webbrowser.open and post_message
+        with patch("viper.widgets.news_panel.webbrowser.open") as mock_open:
+            with patch.object(panel, "post_message") as mock_post:
+                panel.action_open_in_browser()
+                
+                mock_open.assert_called_once_with("https://example.com/news")
+                mock_post.assert_called_once()
+                # Check the message type
+                call_args = mock_post.call_args[0][0]
+                assert isinstance(call_args, NewsPanel.BrowserOpening)
+                assert call_args.url == "https://example.com/news"
+
+    def test_open_in_browser_no_item_selected(self) -> None:
+        """Test open in browser with no item does nothing."""
+        
+        panel = NewsPanel()
+        panel._news_items = []
+        
+        with patch("viper.widgets.news_panel.webbrowser.open") as mock_open:
+            panel.action_open_in_browser()
+            mock_open.assert_not_called()
+
+    def test_open_in_browser_empty_url(self) -> None:
+        """Test open in browser with empty URL does nothing."""
+        
+        panel = NewsPanel()
+        item = create_news_item(url="")  # Empty URL
+        panel._news_items = [item]
+        panel._selected_index = 0
+        
+        with patch("viper.widgets.news_panel.webbrowser.open") as mock_open:
+            panel.action_open_in_browser()
+            mock_open.assert_not_called()
+
+    def test_browser_opening_event(self) -> None:
+        """Test BrowserOpening event creation."""
+        event = NewsPanel.BrowserOpening("https://example.com")
+        assert event.url == "https://example.com"

@@ -1,11 +1,13 @@
 """News panel widget for displaying news headlines for a ticker."""
 
+import webbrowser
 from datetime import datetime
 from typing import Optional
 
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, VerticalScroll
+from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Label, LoadingIndicator
 
@@ -15,6 +17,15 @@ from viper.services.news import NewsError, NewsItem, NewsResult, fetch_news
 class NewsPanel(Widget):
     """Panel for displaying news headlines with navigation support."""
 
+    # Custom event for browser open notification
+    class BrowserOpening(Message):
+        """Event emitted when opening a URL in browser."""
+
+        def __init__(self, url: str) -> None:
+            """Initialize with URL being opened."""
+            self.url = url
+            super().__init__()
+
     # Make the panel focusable
     can_focus = True
 
@@ -22,6 +33,9 @@ class NewsPanel(Widget):
     BINDINGS = [
         Binding("j", "navigate_down", "Next", show=False, priority=True),
         Binding("k", "navigate_up", "Previous", show=False, priority=True),
+        Binding("enter", "open_in_browser", "Open", show=False, priority=True),
+        Binding("e", "toggle_expand", "Expand", show=False, priority=True),
+        Binding("escape", "collapse", "Collapse", show=False, priority=True),
     ]
 
     DEFAULT_CSS = """
@@ -53,8 +67,19 @@ class NewsPanel(Widget):
         text-style: italic;
     }
 
+    NewsPanel .news-summary {
+        color: #aaaaaa;
+        margin-top: 1;
+        padding: 0 1;
+    }
+
     NewsPanel .selected {
         background: #003300;
+    }
+
+    NewsPanel .expanded {
+        background: #002200;
+        padding: 1;
     }
 
     NewsPanel .empty-state {
@@ -91,6 +116,7 @@ class NewsPanel(Widget):
         self._current_ticker: Optional[str] = None
         self._news_items: list[NewsItem] = []
         self._selected_index = 0
+        self._expanded_index: int | None = None  # Index of expanded item, or None
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -107,6 +133,7 @@ class NewsPanel(Widget):
         self._current_ticker = ticker
         self._state = "loading"
         self._selected_index = 0
+        self._expanded_index = None  # Reset expansion on new ticker
         self._render_content()
 
         # Fetch news
@@ -132,6 +159,7 @@ class NewsPanel(Widget):
         self._current_ticker = None
         self._news_items = []
         self._selected_index = 0
+        self._expanded_index = None
         self._render_content()
 
     def _render_content(self) -> None:
@@ -177,19 +205,41 @@ class NewsPanel(Widget):
             self._selected_index = 0
 
         for i, item in enumerate(self._news_items):
-            # Format the news item
-            headline = self._truncate_text(item.title, 80)
-            relative_time = self._format_relative_time(item.published_at)
-            meta = f"{item.source} • {relative_time}"
+            is_selected = i == self._selected_index
+            is_expanded = i == self._expanded_index
 
-            # Create news item container
+            # Create news item container with appropriate classes
             classes = "news-item"
-            if i == self._selected_index:
+            if is_selected:
                 classes += " selected"
+            if is_expanded:
+                classes += " expanded"
 
             item_container = Container(classes=classes)
-            item_container.mount(Label(headline, classes="news-headline"))
-            item_container.mount(Label(meta, classes="news-meta"))
+
+            if is_expanded:
+                # Expanded view: full headline + summary
+                item_container.mount(Label(item.title, classes="news-headline"))
+                relative_time = self._format_relative_time(item.published_at)
+                meta = f"{item.source} • {relative_time}"
+                item_container.mount(Label(meta, classes="news-meta"))
+
+                # Show summary if available
+                if item.summary:
+                    item_container.mount(Label(item.summary, classes="news-summary"))
+                else:
+                    item_container.mount(
+                        Label("[No summary available - press Enter to open in browser]",
+                              classes="news-summary")
+                    )
+            else:
+                # Compact view: truncated headline + meta
+                headline = self._truncate_text(item.title, 80)
+                relative_time = self._format_relative_time(item.published_at)
+                meta = f"{item.source} • {relative_time}"
+                item_container.mount(Label(headline, classes="news-headline"))
+                item_container.mount(Label(meta, classes="news-meta"))
+
             container.mount(item_container)
 
     def _truncate_text(self, text: str, max_length: int) -> str:
@@ -260,3 +310,40 @@ class NewsPanel(Widget):
         if not self._news_items or self._selected_index >= len(self._news_items):
             return None
         return self._news_items[self._selected_index]
+
+    def action_open_in_browser(self) -> None:
+        """Open the selected news item in the default browser (Enter key)."""
+        item = self.get_selected_item()
+        if item and item.url:
+            # Post notification event before opening
+            self.post_message(self.BrowserOpening(item.url))
+            # Open in browser
+            webbrowser.open(item.url)
+
+    def action_toggle_expand(self) -> None:
+        """Toggle expansion of the selected news item (e key)."""
+        if not self._news_items:
+            return
+
+        if self._expanded_index == self._selected_index:
+            # Collapse if already expanded
+            self._expanded_index = None
+        else:
+            # Expand the selected item
+            self._expanded_index = self._selected_index
+
+        self._render_content()
+
+    def action_collapse(self) -> None:
+        """Collapse any expanded news item (Escape key)."""
+        if self._expanded_index is not None:
+            self._expanded_index = None
+            self._render_content()
+
+    def is_expanded(self) -> bool:
+        """Check if any item is currently expanded.
+
+        Returns:
+            True if an item is expanded, False otherwise.
+        """
+        return self._expanded_index is not None
