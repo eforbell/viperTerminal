@@ -39,7 +39,7 @@
         "Tests: valid fetch (mocked), all periods, empty data, invalid ticker, timeout"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": [],
       "notes": "Foundation for all chart features. yfinance already supports this via history() method."
@@ -60,7 +60,7 @@
         "Tests: rendering with various data sizes, edge cases (flat line, single point)"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Large",
       "dependencies": ["VPR-016"],
       "notes": "Core rendering logic. Braille gives ~8x resolution vs standard characters. This is the most complex story."

@@ -16,12 +16,73 @@
 - **Responsive Layout**: Use `on_resize()` handler (no @media queries in TCSS)
 
 ### New Patterns (Add as discovered)
-- (none yet)
+- **Period Mapping**: User-friendly periods (1W, 1M) map to yfinance periods (5d, 1mo) via dicts
+- **Interval Selection**: Match data interval to period length for appropriate granularity
+- **Volume Integer Conversion**: Convert pandas volume to int: `[int(v) for v in hist["Volume"].tolist()]`
+- **Mock DataFrames**: Use `pd.DataFrame` with `pd.date_range` index for realistic test mocks
 
 ---
 
 ## Progress Log
 
-(Feature 2 development starts below)
+## 2026-01-07 - VPR-016
+- Implemented historical price data service with full OHLCV support
+- Created history_data.py with HistoricalData, HistoricalStats, HistoricalDataError dataclasses
+- Added fetch_historical_data() async function with executor pattern
+- Supports all 8 periods: 1W, 1M, 3M, 6M, 1Y, 2Y, 5Y, MAX
+- Added calculate_stats() for period metrics (high, low, % change, avg volume)
+
+### Files Changed
+- `viper/services/history_data.py` (new, 201 lines)
+- `tests/test_history_data.py` (new, 355 lines)
+- `AGENTS.md` (updated with VPR-016 learnings)
+
+### Learnings
+- Named file history_data.py to avoid collision with existing history.py (quote history feature)
+- Used PERIOD_MAP and INTERVAL_MAP dicts to translate user periods to yfinance API
+- yfinance returns pandas DataFrame; must convert to Python lists for dataclass
+- Volume values need explicit int() conversion from pandas to avoid float types
+- Mock tests with pd.DataFrame and pd.date_range for realistic historical data
+- Comprehensive tests: 18 test cases covering all periods, errors, edge cases
+- All tests pass, mypy --strict passes, ready for chart renderer integration
 
 ---
+## 2026-01-07 - VPR-017
+- Implemented chart rendering engine with Braille and block character support
+- Created chart_renderer.py with ChartRenderer, ChartDimensions, RenderedChart classes
+- Braille rendering: 2x4 dots per character (Unicode U+2800-U+28FF) for high resolution
+- Block rendering: fallback using ▁▂▃▄▅▆▇█ characters (8 vertical levels)
+- Auto-scaling: normalize data to 0-1 range, scale to chart height
+- Auto-downsampling: evenly-spaced sampling when data exceeds chart width
+- Y-axis: 3-5 price labels distributed vertically, right-aligned with │ separator
+- X-axis: two-line design (border + date labels showing first/last dates)
+
+### Files Changed
+- `viper/widgets/chart_renderer.py` (new, 434 lines, 96% test coverage)
+- `tests/test_chart_renderer.py` (new, 393 lines, 29 tests)
+- `AGENTS.md` (updated with VPR-017 learnings)
+- `scripts/ralph/features/feature-2-prd.json` (marked VPR-017 as passing)
+
+### Learnings
+- **Type Overloading**: Used `@overload` decorator for _downsample method to preserve type safety (list[float] vs list[datetime])
+- **Downsampling Gotcha**: Must use original data for min/max to avoid losing extremes during downsampling
+- **Type Narrowing**: Required `cast()` and `isinstance()` checks to help mypy understand type narrowing in generic functions
+- **Multi-Line Returns**: When functions return strings with `\n`, use `.split("\n")` and `.extend()` not `.append()`
+- **Braille Unicode**: Range U+2800-U+28FF provides 256 patterns (2 columns × 4 rows of dots per character)
+- **Braille Dot Mapping**: Left column uses dots 1-3,7; right column uses dots 4-6,8
+- **Chart Dimensions**: Subtract axis widths from total dimensions before rendering chart area
+- **Normalization Formula**: `(value - min) / (max - min)` maps to 0-1, then scale to target resolution
+- **Even-Spaced Downsampling**: `step = len(data) / target; sampled = [data[int(i * step)] for i in range(target)]`
+- **Floating Point Tests**: Use epsilon tolerance (0.011) instead of exact equality for float comparisons
+- **Edge Case Testing**: 29 tests covering empty data, single point, flat lines, zigzag, negative prices, large ranges
+- **Dataclass Pattern**: RenderedChart dataclass cleanly returns multiple related values (lines, dimensions, min/max)
+- **Type Assertions**: Add `assert isinstance()` checks when downcasting union types to help mypy
+
+### Implementation Notes
+- Skipped color support (green/red for trends) - marked as enhancement for later
+- Focus was on core rendering quality and comprehensive testing
+- Both rendering styles (Braille and Block) fully functional and tested
+- Ready for integration into ChartPanel widget (VPR-018)
+
+---
+
