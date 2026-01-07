@@ -135,6 +135,7 @@ class ViperApp(App[None]):
         ("escape", "clear_or_close", "Clear/Close"),
         ("i", "toggle_info", "Toggle Info"),
         ("c", "toggle_chart", "Toggle Chart"),
+        ("v", "toggle_volume", "Toggle Volume"),
         ("1", "timeframe_1", "1W"),
         ("2", "timeframe_2", "1M"),
         ("3", "timeframe_3", "3M"),
@@ -340,6 +341,13 @@ class ViperApp(App[None]):
     def action_timeframe_7(self) -> None:
         """Change chart timeframe to MAX."""
         self._change_chart_timeframe("7")
+
+    def action_toggle_volume(self) -> None:
+        """Toggle volume bars on the chart panel."""
+        # Only toggle volume when chart panel is visible
+        if self._chart_panel_visible:
+            chart_panel = self.query_one("#chart-container ChartPanel", ChartPanel)
+            chart_panel.toggle_volume()
 
     async def on_watchlist_panel_ticker_selected(
         self, event: WatchlistPanel.TickerSelected

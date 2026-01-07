@@ -106,6 +106,7 @@ class ChartPanel(Widget):
         self._current_ticker: str | None = None
         self._current_period: str = "1M"  # Default period
         self._renderer = ChartRenderer(style=style)
+        self._volume_enabled: bool = False  # Volume bars toggle state
         # Timeframe mappings
         self._timeframes = {
             "1": "1W",
@@ -236,6 +237,19 @@ class ChartPanel(Widget):
             change_str = f"{change_sign}{self._format_number(abs(stats.change_percent), 2)}%"
 
             stats_line = f"High: {high_str}  Low: {low_str}  Change: {change_str}"
+
+            # Add volume stats if volume is enabled
+            if self._volume_enabled and len(data.volumes) > 0:
+                avg_volume_str = self._format_number(stats.avg_volume, 0)
+                last_volume = data.volumes[-1]
+                last_volume_str = self._format_number(last_volume, 0)
+
+                # Calculate volume vs average
+                volume_ratio = (last_volume / stats.avg_volume * 100) if stats.avg_volume > 0 else 0
+                volume_vs_avg = f"{volume_ratio:.0f}%"
+
+                stats_line += f"  Avg Vol: {avg_volume_str}  Last: {last_volume_str} ({volume_vs_avg})"
+
             container.mount(Label(stats_line, classes=change_class))
 
             # Spacing
@@ -243,7 +257,9 @@ class ChartPanel(Widget):
 
         # Calculate available dimensions for chart
         # Reserve space for header (2 lines), timeframe bar (1 line), stats (2 lines), and padding
-        available_height = self.size.height - 7
+        # If volume is enabled, reserve additional 3 lines for volume bars
+        volume_height = 3 if self._volume_enabled else 0
+        available_height = self.size.height - 7 - volume_height
         available_width = self.size.width - 4  # Account for padding
 
         # Ensure minimum dimensions
@@ -269,6 +285,19 @@ class ChartPanel(Widget):
         # Mount each line of the chart
         for line in rendered.lines:
             container.mount(Label(line, classes="chart-line", markup=False))
+
+        # Render volume bars if enabled
+        if self._volume_enabled and len(data.volumes) > 0:
+            volume_lines = self._renderer.render_volume_bars(
+                volumes=data.volumes,
+                opens=data.opens,
+                closes=data.prices,
+                width=available_width,
+                height=volume_height,
+                y_axis_width=dimensions.y_axis_width,
+            )
+            for line in volume_lines:
+                container.mount(Label(line, classes="chart-line", markup=False))
 
     def _format_number(self, value: float, decimals: int) -> str:
         """Format a number with commas and specified decimal places.
@@ -329,3 +358,17 @@ class ChartPanel(Widget):
             The timeframe period, or None if key is invalid
         """
         return self._timeframes.get(key)
+
+    def toggle_volume(self) -> None:
+        """Toggle volume bars display."""
+        self._volume_enabled = not self._volume_enabled
+        # Re-render to show/hide volume bars
+        self._render_content()
+
+    def is_volume_enabled(self) -> bool:
+        """Check if volume bars are currently enabled.
+
+        Returns:
+            True if volume is enabled, False otherwise
+        """
+        return self._volume_enabled

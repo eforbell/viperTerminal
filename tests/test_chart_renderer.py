@@ -397,3 +397,132 @@ class TestEdgeCases:
 
         # Should render without issues (no upsampling, just spread out)
         assert result.height == 10
+
+
+class TestVolumeRendering:
+    """Test suite for volume bar rendering."""
+
+    def test_render_volume_bars_basic(self) -> None:
+        """Test basic volume bar rendering."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        volumes = [1000000, 2000000, 1500000, 3000000, 2500000]
+        opens = [100.0, 105.0, 103.0, 108.0, 110.0]
+        closes = [105.0, 103.0, 108.0, 110.0, 112.0]
+
+        result = renderer.render_volume_bars(
+            volumes=volumes,
+            opens=opens,
+            closes=closes,
+            width=50,
+            height=3,
+            y_axis_width=12,
+        )
+
+        # Should return 3 lines (height=3)
+        assert len(result) == 3
+        # Each line should have y-axis padding
+        for line in result:
+            assert line.startswith(" " * 12)
+
+    def test_render_volume_bars_empty(self) -> None:
+        """Test volume bar rendering with empty data."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+
+        result = renderer.render_volume_bars(
+            volumes=[],
+            opens=[],
+            closes=[],
+            width=50,
+            height=3,
+            y_axis_width=12,
+        )
+
+        # Should return empty list for empty data
+        assert result == []
+
+    def test_render_volume_bars_color_logic(self) -> None:
+        """Test that volume bars use correct colors based on close vs open."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        # Setup: close > open = green, close < open = red
+        volumes = [1000000, 2000000, 1500000]
+        opens = [100.0, 105.0, 103.0]
+        closes = [105.0, 103.0, 108.0]  # up, down, up
+
+        result = renderer.render_volume_bars(
+            volumes=volumes,
+            opens=opens,
+            closes=closes,
+            width=10,
+            height=3,
+            y_axis_width=12,
+        )
+
+        # Check that ANSI color codes are present
+        volume_line = result[1]  # Middle line has the volume bars
+        assert "\033[32m" in volume_line or "\033[31m" in volume_line  # Green or red color code
+
+    def test_render_volume_bars_normalization(self) -> None:
+        """Test that volume bars are normalized to max volume."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        # Max volume should get tallest bar (█)
+        volumes = [1000000, 5000000, 2000000]  # Middle is max
+        opens = [100.0, 100.0, 100.0]
+        closes = [101.0, 101.0, 101.0]  # All green
+
+        result = renderer.render_volume_bars(
+            volumes=volumes,
+            opens=opens,
+            closes=closes,
+            width=10,
+            height=3,
+            y_axis_width=12,
+        )
+
+        # Volume line should contain block characters
+        volume_line = result[1]
+        # Check for block characters
+        block_chars = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+        has_block = any(char in volume_line for char in block_chars)
+        assert has_block
+
+    def test_render_volume_bars_downsampling(self) -> None:
+        """Test that volume bars downsample when data exceeds width."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        # 100 data points but only 20 width
+        volumes = [i * 10000 for i in range(100)]
+        opens = [100.0 + i for i in range(100)]
+        closes = [101.0 + i for i in range(100)]
+
+        result = renderer.render_volume_bars(
+            volumes=volumes,
+            opens=opens,
+            closes=closes,
+            width=20,
+            height=3,
+            y_axis_width=12,
+        )
+
+        # Should still render successfully
+        assert len(result) == 3
+        # Volume line should have reasonable length
+        volume_line = result[1]
+        assert len(volume_line) > 0
+
+    def test_render_volume_bars_zero_volumes(self) -> None:
+        """Test volume bars with all zero volumes."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        volumes = [0, 0, 0, 0, 0]
+        opens = [100.0, 100.0, 100.0, 100.0, 100.0]
+        closes = [101.0, 101.0, 101.0, 101.0, 101.0]
+
+        result = renderer.render_volume_bars(
+            volumes=volumes,
+            opens=opens,
+            closes=closes,
+            width=10,
+            height=3,
+            y_axis_width=12,
+        )
+
+        # Should handle zero volumes gracefully
+        assert len(result) == 3

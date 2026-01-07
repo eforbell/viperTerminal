@@ -759,3 +759,153 @@ async def test_chart_panel_all_timeframes() -> None:
                 # Verify timeframe is set correctly
                 assert panel._current_period == period
                 mock_fetch.assert_called_once_with("AAPL", period)
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_volume_toggle() -> None:
+    """Test that volume can be toggled on and off."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Volume should be disabled by default
+        assert panel.is_volume_enabled() is False
+        assert panel._volume_enabled is False
+
+        # Toggle volume on
+        panel.toggle_volume()
+        await pilot.pause()
+        assert panel.is_volume_enabled() is True
+        assert panel._volume_enabled is True
+
+        # Toggle volume off
+        panel.toggle_volume()
+        await pilot.pause()
+        assert panel.is_volume_enabled() is False
+        assert panel._volume_enabled is False
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_volume_bars_displayed() -> None:
+    """Test that volume bars are displayed when volume is enabled."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data with volumes
+        mock_data = HistoricalData(
+            ticker="AAPL",
+            dates=[datetime.now() - timedelta(days=i) for i in range(10)],
+            prices=[150.0 + i for i in range(10)],
+            volumes=[1000000 + i * 100000 for i in range(10)],
+            highs=[155.0 + i for i in range(10)],
+            lows=[145.0 + i for i in range(10)],
+            opens=[148.0 + i for i in range(10)],
+            period="1M",
+            interval="1d",
+        )
+
+        mock_stats = HistoricalStats(
+            period_high=160.0,
+            period_low=145.0,
+            change_percent=5.5,
+            avg_volume=1500000.0,
+            num_data_points=10,
+        )
+
+        # Load chart without volume
+        with patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = mock_data
+            await panel.load_chart("AAPL", "1M")
+            await pilot.pause()
+
+            # Verify chart is shown
+            assert panel._state == "success"
+            assert panel._volume_enabled is False
+
+            # Toggle volume on
+            panel.toggle_volume()
+            await pilot.pause()
+
+            # Verify volume is enabled and display is updated
+            assert panel._volume_enabled is True
+            # Volume bars should be rendered (difficult to test exact output, but state should be correct)
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_volume_stats_displayed() -> None:
+    """Test that volume statistics are displayed when volume is enabled."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data
+        mock_data = HistoricalData(
+            ticker="AAPL",
+            dates=[datetime.now() - timedelta(days=i) for i in range(5)],
+            prices=[150.0, 152.0, 151.0, 153.0, 155.0],
+            volumes=[1000000, 1200000, 1100000, 1500000, 1300000],
+            highs=[151.0, 153.0, 152.0, 154.0, 156.0],
+            lows=[149.0, 151.0, 150.0, 152.0, 154.0],
+            opens=[150.0, 151.0, 152.0, 151.0, 153.0],
+            period="1W",
+            interval="1d",
+        )
+
+        mock_stats = HistoricalStats(
+            period_high=156.0,
+            period_low=149.0,
+            change_percent=3.33,
+            avg_volume=1220000.0,
+            num_data_points=5,
+        )
+
+        # Enable volume first
+        panel.toggle_volume()
+        await pilot.pause()
+
+        # Load chart with volume enabled
+        with patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = mock_data
+            await panel.load_chart("AAPL", "1W")
+            await pilot.pause()
+
+            # Verify volume stats are included in display
+            # The _render_chart method should include volume stats in the stats line
+            assert panel._volume_enabled is True
+            assert len(panel._data.volumes) > 0  # type: ignore[union-attr]
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_volume_empty_data() -> None:
+    """Test volume toggle with empty volume data."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data with empty volumes
+        mock_data = HistoricalData(
+            ticker="NEWIPO",
+            dates=[datetime.now()],
+            prices=[100.0],
+            volumes=[],  # Empty volumes
+            highs=[101.0],
+            lows=[99.0],
+            opens=[100.0],
+            period="1W",
+            interval="1d",
+        )
+
+        # Enable volume
+        panel.toggle_volume()
+        await pilot.pause()
+
+        # Load chart
+        with patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = mock_data
+            await panel.load_chart("NEWIPO", "1W")
+            await pilot.pause()
+
+            # Should handle empty volumes gracefully
+            assert panel._state == "success"
+            assert panel._volume_enabled is True

@@ -376,3 +376,30 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Test UI Display**: Verify timeframe bar displays all periods and highlights the active one correctly
 - **Mock Async Methods**: Use `AsyncMock` for mocking `fetch_historical_data` in tests
 - **Test Persistence**: Verify that timeframe persists across operations until explicitly changed
+
+### VPR-020: Volume Chart Overlay
+- **ANSI Color Codes**: Use raw ANSI codes for colored volume bars: `\033[32m` (green), `\033[31m` (red), `\033[0m` (reset)
+- **Block Character Levels**: Use 9-level block character array including space: `[" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]`
+- **Volume Normalization**: Normalize volumes to 0-1 range using max volume: `normalized = vol / max_volume`
+- **Volume Color Logic**: Green if `close > open`, red otherwise (matches candlestick convention)
+- **Separate Render Method**: Create `render_volume_bars()` method that returns list of strings (like chart rendering)
+- **Y-Axis Alignment**: Prepend Y-axis padding (e.g., 12 spaces) to volume bars to align with price chart
+- **Height Management**: Reserve 3 lines for volume bars, adjust main chart height accordingly: `height - volume_height`
+- **Conditional Rendering**: Only render volume bars when `_volume_enabled` flag is True
+- **Volume Toggle Method**: Simple toggle method that flips bool flag and calls `_render_content()` to re-render
+- **Volume Stats Display**: Add avg volume and last volume (with % of avg) to stats line when volume enabled
+- **Volume Ratio Calculation**: `volume_ratio = (last_volume / avg_volume * 100)` for "today vs avg" metric
+- **Format Large Numbers**: Use `_format_number(value, 0)` for volumes (no decimals, with commas)
+- **Type Overloading for int**: Add `@overload` for `list[int]` to `_downsample` method alongside float/datetime overloads
+- **Type Narrowing with isinstance**: Use `isinstance(data[0], int)` to narrow return type in generic downsample function
+- **Multiple Overload Pattern**: When adding new types to generic methods, add overload AND update implementation signature
+- **Volume Empty Check**: Check `len(data.volumes) > 0` before attempting to render volume bars
+- **Conditional Key Bindings**: Volume toggle ('v' key) only works when chart panel is visible (check `_chart_panel_visible`)
+- **Test Color Codes**: Test for presence of ANSI codes (`\033[32m` or `\033[31m`) in volume output
+- **Test Block Characters**: Verify volume line contains at least one block character from the set
+- **Test Empty Volumes**: Handle edge case of empty volumes list gracefully (return empty list)
+- **Test Zero Volumes**: Handle all-zero volumes without division by zero (set `max_volume = 1` if zero)
+- **Test Volume Toggle State**: Test both `is_volume_enabled()` method and `_volume_enabled` flag
+- **Test Volume Downsampling**: Verify that volume bars downsample correctly when data points exceed width
+- **Test Volume with Stats**: Verify volume stats (avg, last, ratio) appear in stats line when enabled
+- **Test Volume Persistence**: Volume toggle state persists across chart reloads until explicitly changed

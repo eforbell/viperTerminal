@@ -52,6 +52,8 @@ class ChartRenderer:
         prices: list[float],
         dates: list[datetime] | None = None,
         dimensions: ChartDimensions | None = None,
+        volumes: list[int] | None = None,
+        opens: list[float] | None = None,
     ) -> RenderedChart:
         """Render price data as a chart.
 
@@ -59,6 +61,8 @@ class ChartRenderer:
             prices: List of price values to render
             dates: Optional list of datetime objects (same length as prices)
             dimensions: Chart dimensions (default: 80x20 with axes)
+            volumes: Optional list of volume values (same length as prices)
+            opens: Optional list of open prices (for volume bar coloring)
 
         Returns:
             RenderedChart with lines ready for display
@@ -71,15 +75,17 @@ class ChartRenderer:
 
         # Delegate to specific renderer
         if self.style == ChartStyle.BRAILLE:
-            return self._render_braille(prices, dates, dimensions)
+            return self._render_braille(prices, dates, dimensions, volumes, opens)
         else:
-            return self._render_block(prices, dates, dimensions)
+            return self._render_block(prices, dates, dimensions, volumes, opens)
 
     def _render_braille(
         self,
         prices: list[float],
         dates: list[datetime] | None,
         dimensions: ChartDimensions,
+        volumes: list[int] | None = None,
+        opens: list[float] | None = None,
     ) -> RenderedChart:
         """Render chart using Braille patterns (2x4 dots per character).
 
@@ -250,6 +256,8 @@ class ChartRenderer:
         prices: list[float],
         dates: list[datetime] | None,
         dimensions: ChartDimensions,
+        volumes: list[int] | None = None,
+        opens: list[float] | None = None,
     ) -> RenderedChart:
         """Render chart using block characters (▁▂▃▄▅▆▇█).
 
@@ -331,14 +339,17 @@ class ChartRenderer:
     def _downsample(self, data: list[float], target_size: int) -> list[float]: ...
 
     @overload
+    def _downsample(self, data: list[int], target_size: int) -> list[int]: ...
+
+    @overload
     def _downsample(self, data: list[datetime], target_size: int) -> list[datetime]: ...
 
     @overload
     def _downsample(self, data: None, target_size: int) -> list[float]: ...
 
     def _downsample(
-        self, data: list[float] | list[datetime] | None, target_size: int
-    ) -> list[float] | list[datetime]:
+        self, data: list[float] | list[int] | list[datetime] | None, target_size: int
+    ) -> list[float] | list[int] | list[datetime]:
         """Downsample data to fit target size.
 
         Uses simple even-spaced sampling.
@@ -361,7 +372,12 @@ class ChartRenderer:
         # Mypy can't infer the type of the list comprehension
         # Cast to help it understand the result type matches input type
         result = [data[int(i * step)] for i in range(target_size)]
-        return cast(list[float], result) if isinstance(data[0], (int, float)) else cast(list[datetime], result)
+        if isinstance(data[0], datetime):
+            return cast(list[datetime], result)
+        elif isinstance(data[0], int):
+            return cast(list[int], result)
+        else:
+            return cast(list[float], result)
 
     def _add_y_axis(self, chart_lines: list[str], min_value: float, max_value: float, axis_width: int) -> list[str]:
         """Add Y-axis with price labels to the left of chart.
@@ -428,6 +444,101 @@ class ChartRenderer:
             labels = first_date.ljust(total_width)
 
         return f"{y_padding}{axis_line}\n{' ' * y_axis_width}{labels}"
+
+    def render_volume_bars(
+        self,
+        volumes: list[int],
+        opens: list[float],
+        closes: list[float],
+        width: int,
+        height: int = 3,
+        y_axis_width: int = 12,
+    ) -> list[str]:
+        """Render volume bars below the price chart.
+
+        Args:
+            volumes: List of volume values
+            opens: List of open prices (for color determination)
+            closes: List of close prices (for color determination)
+            width: Width of chart area (should match price chart)
+            height: Height in characters for volume bars (default: 3)
+            y_axis_width: Width of Y-axis for alignment
+
+        Returns:
+            List of strings representing volume bar lines with ANSI color codes
+        """
+        if not volumes or not opens or not closes:
+            return []
+
+        # Downsample to fit width
+        downsampled_volumes_raw = self._downsample(volumes, width)
+        downsampled_opens_raw = self._downsample(opens, width)
+        downsampled_closes_raw = self._downsample(closes, width)
+
+        # Type narrowing
+        assert isinstance(downsampled_volumes_raw, list) and (
+            not downsampled_volumes_raw or isinstance(downsampled_volumes_raw[0], (int, float))
+        )
+        assert isinstance(downsampled_opens_raw, list) and (
+            not downsampled_opens_raw or isinstance(downsampled_opens_raw[0], (int, float))
+        )
+        assert isinstance(downsampled_closes_raw, list) and (
+            not downsampled_closes_raw or isinstance(downsampled_closes_raw[0], (int, float))
+        )
+
+        downsampled_volumes: list[int] = [int(v) for v in downsampled_volumes_raw]
+        downsampled_opens: list[float] = downsampled_opens_raw
+        downsampled_closes: list[float] = downsampled_closes_raw
+
+        # Normalize volumes to 0-1 range
+        max_volume = max(downsampled_volumes) if downsampled_volumes else 1
+        if max_volume == 0:
+            max_volume = 1
+
+        # Block characters for volume (8 levels)
+        block_chars = [" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+
+        # ANSI color codes
+        green = "\033[32m"
+        red = "\033[31m"
+        reset = "\033[0m"
+
+        # Build volume bar string with colors
+        volume_bars = []
+        for i, vol in enumerate(downsampled_volumes):
+            # Normalize to 0-1
+            normalized = vol / max_volume
+            # Map to block character (0-8)
+            block_idx = min(int(normalized * 8), 8)
+            block_char = block_chars[block_idx]
+
+            # Determine color: green if close > open, red otherwise
+            if i < len(downsampled_closes) and i < len(downsampled_opens):
+                if downsampled_closes[i] > downsampled_opens[i]:
+                    volume_bars.append(f"{green}{block_char}{reset}")
+                else:
+                    volume_bars.append(f"{red}{block_char}{reset}")
+            else:
+                volume_bars.append(block_char)
+
+        # Create volume bar line
+        volume_line = "".join(volume_bars)
+
+        # Create result with Y-axis padding for alignment
+        y_padding = " " * y_axis_width
+        result_lines = []
+
+        # Add spacing line before volume bars
+        result_lines.append(y_padding + " " * width)
+
+        # Add volume label
+        result_lines.append(y_padding + volume_line)
+
+        # Add spacing lines to reach target height
+        for _ in range(height - 2):
+            result_lines.append(y_padding + " " * width)
+
+        return result_lines
 
 
 def create_chart(
