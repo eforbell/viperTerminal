@@ -173,3 +173,57 @@
 
 ---
 
+## 2026-01-07 - VPR-020
+- Implemented volume chart overlay with toggle functionality
+- Created render_volume_bars() method in ChartRenderer for volume visualization
+- Volume bars use 9-level block characters (▁▂▃▄▅▆▇█) with ANSI color codes
+- Green bars for up days (close > open), red for down days (close < open)
+- Height proportional to volume (normalized to max in period)
+- Volume stats displayed: avg daily volume, last volume, and % vs average
+- Toggle with 'v' key (only active when chart panel is visible)
+- Volume bars take 3 lines of vertical space below price chart
+
+### Files Changed
+- `viper/widgets/chart_renderer.py` (added render_volume_bars method, extended _downsample overloads)
+- `viper/widgets/chart_panel.py` (added volume toggle, volume stats display, height management)
+- `viper/app.py` (added 'v' key binding and action_toggle_volume method)
+- `tests/test_chart_renderer.py` (added 6 volume rendering tests)
+- `tests/test_chart_panel.py` (added 4 volume toggle tests)
+- `AGENTS.md` (added VPR-020 learnings section with 27 patterns)
+- `scripts/ralph/features/feature-2-prd.json` (marked VPR-020 as passing)
+
+### Learnings
+- **ANSI Color Codes for Terminal**: Raw ANSI codes work in Textual: `\033[32m` (green), `\033[31m` (red), `\033[0m` (reset)
+- **9-Level Block Array**: Include space as first element: `[" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]` for 0-8 mapping
+- **Volume Color Convention**: Match candlestick coloring: green if close > open (up day), red otherwise
+- **Separate Volume Rendering**: Create dedicated method that returns list[str], keeps concerns separated from price chart
+- **Y-Axis Alignment**: Prepend Y-axis padding (12 spaces) to volume lines to align with main chart
+- **Height Reservation**: Subtract volume_height from available chart height when enabled: `height - volume_height`
+- **Conditional Rendering Check**: Always check `_volume_enabled and len(data.volumes) > 0` before rendering
+- **Toggle Pattern**: Simple toggle flips bool flag then calls `_render_content()` to trigger re-render
+- **Volume Stats in Stats Line**: Append volume info to existing stats line when enabled (don't create separate line)
+- **Volume Ratio Display**: Show last volume as percentage of average: `(last_vol / avg_vol * 100)`
+- **Format Volumes**: Use `_format_number(value, 0)` for volumes (no decimals, with thousand separators)
+- **Type Overload for list[int]**: Must add explicit `@overload` for list[int] to generic _downsample method
+- **Type Narrowing with isinstance**: Use `isinstance(data[0], int)` to help mypy understand return type
+- **Multiple Type Support**: When adding new type to generic method, update BOTH overload AND implementation signature
+- **Zero Volume Safety**: Set `max_volume = 1` if max is 0 to avoid division by zero
+- **Conditional Key Binding**: Volume toggle only processes when `_chart_panel_visible` is True
+- **Test ANSI Codes**: Check for presence of `\033[32m` or `\033[31m` in rendered output
+- **Test Block Characters**: Verify at least one block character from the set is present in output
+- **Test Edge Cases**: Empty volumes, all-zero volumes, single volume, very large volumes
+- **Test Toggle State**: Test both public method `is_volume_enabled()` and internal `_volume_enabled` flag
+- **Test with Mock Data**: Use HistoricalData with volumes in tests, vary open/close to test colors
+- **Test Downsampling**: Verify volume bars correctly downsample when data points exceed width
+- **Test Stats Display**: Verify volume stats appear in stats line when volume is enabled
+- **Coverage**: All 61 tests pass (35 chart_renderer + 26 chart_panel), mypy --strict passes, ready for next story
+
+### Implementation Notes
+- Volume bars integrate seamlessly with existing chart rendering pipeline
+- No changes to HistoricalData dataclass needed - volumes already available
+- Color-coded volume bars provide instant visual feedback on market sentiment
+- Volume stats help contextualize whether current volume is unusual or normal
+- Ready for crypto historical charts feature (VPR-021)
+
+---
+
