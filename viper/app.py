@@ -1,7 +1,7 @@
 """Main Textual application for Viper Terminal."""
 
 from textual.app import App, ComposeResult
-from textual.containers import Container
+from textual.containers import Container, Horizontal
 from textual.widgets import Footer, Header
 
 from viper.services.crypto import CryptoError, CryptoQuote
@@ -44,6 +44,31 @@ class ViperApp(App[None]):
     #main-container {
         height: 1fr;
     }
+
+    #main-layout {
+        height: 100%;
+        width: 100%;
+    }
+
+    #watchlist-container {
+        width: 30%;
+        border: solid $accent;
+        padding: 0;
+    }
+
+    #watchlist-container:focus-within {
+        border: double $accent;
+    }
+
+    #quote-container {
+        width: 70%;
+        border: solid $accent;
+        padding: 0;
+    }
+
+    #quote-container:focus-within {
+        border: double $accent;
+    }
     """
 
     # Green on black color theme
@@ -53,7 +78,10 @@ class ViperApp(App[None]):
         "surface": "#111111",
     }
 
-    BINDINGS = [("q", "quit", "Quit")]
+    BINDINGS = [
+        ("q", "quit", "Quit"),
+        ("tab", "focus_next", "Next Panel"),
+    ]
 
     def __init__(self) -> None:
         """Initialize the Viper Terminal app."""
@@ -62,11 +90,43 @@ class ViperApp(App[None]):
         self.history_manager = HistoryManager()
         self.watchlist_manager = WatchlistManager()
 
+    def on_resize(self, event: object) -> None:
+        """Handle terminal resize to show/hide watchlist on narrow screens.
+
+        Args:
+            event: The resize event (not used, but required by Textual).
+        """
+        # Get terminal width
+        width = self.size.width
+
+        # Get watchlist container
+        try:
+            watchlist_container = self.query_one("#watchlist-container")
+            quote_container = self.query_one("#quote-container")
+        except Exception:
+            # Containers not yet mounted
+            return
+
+        # Hide watchlist on narrow terminals (< 80 columns)
+        if width < 80:
+            watchlist_container.display = False
+            quote_container.styles.width = "100%"
+        else:
+            watchlist_container.display = True
+            quote_container.styles.width = "70%"
+
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header(show_clock=False)
         with Container(id="main-container"):
-            yield QuotePanel()
+            with Horizontal(id="main-layout"):
+                with Container(id="watchlist-container"):
+                    yield WatchlistPanel(
+                        watchlist_manager=self.watchlist_manager,
+                        refresh_interval=60,
+                    )
+                with Container(id="quote-container"):
+                    yield QuotePanel()
         yield TickerInput(history_manager=self.history_manager)
         yield Footer()
 

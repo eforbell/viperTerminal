@@ -154,3 +154,20 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Mock Side Effect Functions**: Use async functions as side_effect to return different values per call
 - **Test Coverage**: Test empty state, loading state, error state, positive/negative colors, crypto quotes, timer
 - **Unused Imports**: Remove unused imports (Container, CryptoQuote) - ruff will auto-fix
+
+### VPR-009: Multi-Panel Layout
+- **Horizontal Layout**: Use `Horizontal` container for side-by-side panel layout (30% watchlist, 70% quote)
+- **Nested Containers**: Use nested Containers with IDs for targeted CSS styling and querying
+- **Panel Composition**: Wrap each major widget (WatchlistPanel, QuotePanel) in a Container for layout control
+- **Focus Management**: Set `can_focus = True` on widgets to make them focusable for Tab cycling
+- **Built-in Tab Cycling**: Use built-in `focus_next` action; Textual handles Tab cycling automatically
+- **Visual Focus Indicators**: Use `:focus-within` pseudo-class in CSS to style containers when child widgets are focused
+- **Border Styles**: Use `border: solid` for normal state, `border: double` for focused state to show active panel
+- **Responsive Design Limitation**: Textual CSS doesn't support `@media` queries - must handle programmatically
+- **on_resize Handler**: Override `on_resize()` method to handle terminal size changes dynamically
+- **Dynamic Display Toggle**: Use `widget.display = False` to hide widgets; set `styles.width` to adjust layout
+- **Terminal Width Check**: Check `self.size.width` to get current terminal width
+- **Graceful Query Failures**: Wrap queries in try/except during resize - containers may not be mounted yet
+- **Layout Testing**: Test that containers exist with correct IDs; actual proportions are handled by Textual's CSS engine
+- **Focus Testing**: Test `can_focus` attribute and basic Tab key functionality
+- **Integration Testing**: Add tests for layout structure, focusable widgets, and basic navigation

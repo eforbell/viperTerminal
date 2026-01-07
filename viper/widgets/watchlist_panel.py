@@ -14,6 +14,9 @@ from viper.services.watchlist import WatchlistManager
 class WatchlistPanel(Widget):
     """Panel for displaying watchlist items with prices and changes."""
 
+    # Make the panel focusable
+    can_focus = True
+
     DEFAULT_CSS = """
     WatchlistPanel {
         height: 100%;

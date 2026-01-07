@@ -12,6 +12,11 @@
 - **Input Validation**: Always strip whitespace before validation; clear value even on error
 - **CSS Classes**: Use `add_class()` / `remove_class()` for dynamic styling (error states)
 - **Test Event Tracking**: Store events in test app's instance variable for verification
+- **Textual Layout**: Use `Horizontal` for side-by-side panels, nested Containers for structure
+- **Focusable Widgets**: Set `can_focus = True` class attribute on widgets to enable Tab cycling
+- **CSS Pseudo-classes**: Use `:focus-within` to style container when child widgets are focused
+- **No @media Queries**: Textual CSS doesn't support @media - use `on_resize()` handler instead
+- **Dynamic Widget Display**: Use `widget.display = False` to hide, `widget.display = True` to show
 
 ---
 

@@ -16,6 +16,9 @@ QuoteError = StockError | CryptoError
 class QuotePanel(Widget):
     """Panel for displaying stock quote data with loading and error states."""
 
+    # Make the panel focusable
+    can_focus = True
+
     DEFAULT_CSS = """
     QuotePanel {
         height: 100%;
