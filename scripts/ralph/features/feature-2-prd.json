@@ -155,7 +155,7 @@
         "Tests: valid fetch (mocked), empty feed, invalid ticker, network errors, caching"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": [],
       "notes": "Yahoo RSS is free, no API key needed. feedparser is well-maintained and handles edge cases."

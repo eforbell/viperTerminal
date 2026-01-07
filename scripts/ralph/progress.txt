@@ -284,3 +284,71 @@
 
 ---
 
+## 2026-01-07 - VPR-022
+- Implemented news fetching service using Yahoo Finance RSS feeds
+- Created news.py with NewsItem, NewsError dataclasses and NewsResult union type
+- Added fetch_news() async function with Yahoo Finance RSS integration
+- Implemented 2-minute TTL caching for both success and error results
+- Used feedparser library for robust RSS parsing with bozo flag error detection
+- Two-tier architecture: async wrapper with executor pattern calling sync helper
+- Comprehensive error handling: timeout, connection, HTTP (404, 500), parsing, generic exceptions
+- Source extraction from title using "Title - Source" pattern parsing
+- Published date parsing with fallback to datetime.now() on invalid dates
+- Optional summary field mapped from RSS description element
+
+### Files Changed
+- `viper/services/news.py` (new, 196 lines, 100% coverage)
+- `tests/test_news.py` (new, 597 lines, 27 tests)
+- `AGENTS.md` (added VPR-022 section with 44 learnings)
+- `scripts/ralph/features/feature-2-prd.json` (marked VPR-022 as passing)
+
+### Learnings
+- **feedparser Installation**: Installed feedparser 6.0.12 for RSS parsing (no type stubs available)
+- **Type Ignore Pattern**: Use `import feedparser  # type: ignore[import-untyped]` for untyped libraries
+- **Yahoo RSS Endpoint**: `https://feeds.finance.yahoo.com/rss/2.0/headline?s={TICKER}` - free, no API key
+- **Caching Pattern**: Module-level dict with (timestamp, result) tuples and TTL check via timedelta
+- **Cache Error Results**: Cache NewsError results to prevent repeated failing requests (same TTL)
+- **Executor for Blocking I/O**: Use `loop.run_in_executor(None, sync_func, args)` for feedparser
+- **httpx Sync Client**: Use `with httpx.Client(timeout=timeout)` for sync HTTP in executor
+- **raise_for_status()**: Call after request to convert HTTP errors to HTTPStatusError exceptions
+- **feedparser Structure**: Returns dict with .entries list and .bozo flag for parsing errors
+- **Bozo Flag Check**: `feed.bozo and isinstance(feed.get("bozo_exception"), Exception)` detects parse errors
+- **hasattr Pattern**: Use `hasattr(entry, "field")` for optional RSS fields (title, link, summary, pubDate)
+- **Date Parsing**: `time.mktime(entry.published_parsed)` converts time.struct_time to timestamp
+- **Date Fallback**: Wrap date parsing in try/except, fall back to `datetime.now()` on ValueError
+- **Source Extraction**: Parse "Title - Source" with `title.rsplit(" - ", 1)` and check len == 2
+- **Default Source**: Use "Yahoo Finance" as default source when not found in title
+- **Empty Feed Check**: Return NewsError when `len(items) == 0` after parsing all entries
+- **httpx Error Types**: TimeoutException, ConnectError, HTTPStatusError, RequestError - catch separately
+- **404 Handling**: Check `e.response.status_code == 404` for specific "No news feed available" message
+- **Generic Exception**: Final `except Exception as e` for unexpected errors with descriptive message
+- **clear_news_cache Function**: Provide function to clear specific ticker or all cache (optional ticker param)
+- **Global Cache Modification**: Use `global _cache` when clearing all cache with `_cache.clear()`
+- **Ticker Normalization**: Always `.upper().strip()` on input for cache key consistency
+- **Empty String for URL**: Use `""` instead of None for missing URL to avoid Optional complexity
+- **Mock RSS Helpers**: Create `create_mock_rss_feed(num_items)` for realistic test data generation
+- **respx HTTP Mocking**: Use `@respx.mock` decorator with `respx.get(url).mock(return_value=Response(...))`
+- **Fixed Test Dates**: Use "Mon, 01 Jan 2024 12:00:00 +0000" in mock RSS for predictable assertions
+- **Test All Errors**: 27 tests cover timeout, connection, 404, 500, request, parse, empty, edge cases
+- **Test Cache Lifecycle**: Test cache hit, miss, expiration (mock cache timestamp), clearing (all/specific)
+- **Test Missing Fields**: Test RSS without summary, pubDate, source, verify graceful handling
+- **Mock Executor**: Use `patch("asyncio.get_event_loop")` to mock executor and raise exceptions
+- **Mock feedparser**: Use `patch("feedparser.parse")` to trigger generic exception path
+- **Mock time.mktime**: Use `patch("time.mktime")` to trigger date parsing exception path
+- **100% Coverage**: Achieved with 27 comprehensive tests covering all code paths
+- **Test Organization**: Grouped by TestNewsItem, TestNewsError, TestFetchNews, TestClearCache, TestParsingEdgeCases
+- **Error Caching Test**: Verify 404 error is cached and second call returns cached error
+- **Ticker Normalization Test**: Verify "  aapl  " normalizes and caches under "AAPL"
+- **Time Tolerance Tests**: Use `(datetime.now() - result).total_seconds() < 60` for time comparisons
+- **Union Result Type**: `NewsResult = list[NewsItem] | NewsError` provides type-safe error handling
+- **Optional Dataclass Field**: Use `Optional[str] = None` for summary field in NewsItem
+- **Multi-Source Ready**: Architecture easily supports additional sources (Google News, Finnhub, etc.)
+
+### Implementation Notes
+- All acceptance criteria met: RSS parsing, caching, error handling, tests
+- Ready for news panel widget integration (VPR-023)
+- mypy --strict passes, all 27 tests pass
+- Service follows same patterns as crypto.py and history_data.py for consistency
+
+---
+
