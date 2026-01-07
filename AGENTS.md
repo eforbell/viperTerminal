@@ -246,3 +246,27 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Label Text Testing**: Use `str(label.render())` to get text content for assertions
 - **Test Coverage Goals**: Achieved 95.86% coverage with comprehensive sparkline and intraday tests
 - **Dataclass Imports**: Add new dataclasses to service __init__ exports for clean imports
+
+### VPR-014: Configuration File Support
+- **tomllib for TOML**: Use Python 3.11+ built-in `tomllib` for reading TOML files (`import tomllib`)
+- **Binary Mode**: TOML files must be opened in binary mode: `open(file, "rb")` for tomllib.load()
+- **TOML Structure**: Top-level keys (refresh_interval) must come before or after [tables], not inside them
+- **Table Syntax**: Use `[section_name]` for nested dicts in TOML (e.g., `[theme_colors]`)
+- **Dataclass with Defaults**: Use `@dataclass` with `field(default_factory=...)` for mutable defaults (dict, list)
+- **Post-Init Validation**: Use `__post_init__()` to validate config values after initialization
+- **Validation Pattern**: Check types and ranges; log warnings for invalid values; replace with defaults
+- **Graceful Fallback**: Return default Config() when file missing, invalid TOML, or read errors occur
+- **Config Path**: Use `Path.home() / ".config" / "viper" / "config.toml"` for user config file
+- **Partial Config**: Support partial config files - only override specified values, use defaults for rest
+- **Dictionary Extraction**: Extract values from TOML dict conditionally: `if "key" in data: config_dict["key"] = data["key"]`
+- **Default Watchlist**: Load default watchlist from config and add to WatchlistManager on app init
+- **Config in App**: Load config early in __init__() before creating managers to use config values
+- **Refresh Interval**: Pass config.refresh_interval to WatchlistPanel instead of hardcoded value
+- **Logging Config**: Log loaded config values (refresh_interval) for debugging and transparency
+- **Test with tmp_path**: Use pytest's tmp_path fixture to create temporary config files for testing
+- **Mock get_config_path**: Use `@patch("viper.config.get_config_path")` to control config file location in tests
+- **Test All Paths**: Test missing file, valid full config, partial config, invalid TOML, read errors, validation
+- **Invalid Type Testing**: Test that invalid types (string instead of dict) trigger validation and fall back to defaults
+- **Empty Config File**: Empty TOML file should load successfully and use all defaults
+- **Type Safety**: All config loading code passes mypy --strict with no issues
+- **No Breaking Changes**: Config is optional - app works perfectly with default values if no config file exists

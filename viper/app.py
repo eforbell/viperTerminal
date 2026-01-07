@@ -4,6 +4,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal
 from textual.widgets import Footer, Header
 
+from viper.config import load_config
 from viper.services.crypto import CryptoError, CryptoInfo, CryptoInfoError, CryptoQuote, fetch_crypto_info
 from viper.services.history import HistoryManager
 from viper.services.quote import fetch_quote, is_crypto_quote
@@ -122,14 +123,25 @@ class ViperApp(App[None]):
         """Initialize the Viper Terminal app."""
         super().__init__()
         self.title = "VIPER TERMINAL"
-        self.history_manager = HistoryManager()
-        self.watchlist_manager = WatchlistManager()
-        self._info_panel_visible = False
-        self._current_ticker: str | None = None
 
         # Set up logging
         setup_logging()
         self.logger = get_logger()
+
+        # Load configuration
+        self.config = load_config()
+        self.logger.info(f"Using refresh interval: {self.config.refresh_interval}s")
+
+        # Initialize managers
+        self.history_manager = HistoryManager()
+        self.watchlist_manager = WatchlistManager()
+
+        # Load default watchlist from config if provided
+        for ticker in self.config.default_watchlist:
+            self.watchlist_manager.add(ticker)
+
+        self._info_panel_visible = False
+        self._current_ticker: str | None = None
 
     def on_resize(self, event: object) -> None:
         """Handle terminal resize to show/hide watchlist on narrow screens.
@@ -163,7 +175,7 @@ class ViperApp(App[None]):
             with Container(id="watchlist-container"):
                 yield WatchlistPanel(
                     watchlist_manager=self.watchlist_manager,
-                    refresh_interval=60,
+                    refresh_interval=self.config.refresh_interval,
                 )
             with Container(id="quote-container"):
                 yield QuotePanel()
