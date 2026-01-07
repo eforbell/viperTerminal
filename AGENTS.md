@@ -403,3 +403,40 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Test Volume Downsampling**: Verify that volume bars downsample correctly when data points exceed width
 - **Test Volume with Stats**: Verify volume stats (avg, last, ratio) appear in stats line when enabled
 - **Test Volume Persistence**: Volume toggle state persists across chart reloads until explicitly changed
+### VPR-021: Crypto Historical Charts
+- **Auto-Detection Pattern**: Use simple lookup in SYMBOL_TO_ID mapping to determine crypto vs stock ticker
+- **Multi-Source Architecture**: Route to different data sources based on asset type detection (yfinance for stocks, CoinGecko for crypto)
+- **CoinGecko market_chart Endpoint**: Use `/coins/{id}/market_chart?vs_currency=usd&days=N` for historical data
+- **CoinGecko Days Mapping**: Map user periods to days parameter: 1W=7, 1M=30, 3M=90, 6M=180, 1Y=365, 2Y=730, 5Y=1825, MAX=max
+- **CoinGecko Response Format**: Returns `{"prices": [[timestamp_ms, price], ...], "total_volumes": [[timestamp_ms, volume], ...]}`
+- **Timestamp Conversion**: CoinGecko uses millisecond timestamps, convert with `datetime.fromtimestamp(ms / 1000)`
+- **OHLC for Crypto**: CoinGecko market_chart doesn't provide OHLC, use price for all fields (acceptable for charting)
+- **Volume Padding**: If fewer volume points than price points, pad with zeros: `while len(volumes) < len(prices): volumes.append(0)`
+- **Interval Heuristic**: Calculate interval label from average time between points: <1h="5m", <24h="1h", else="1d"
+- **Rate Limit Retry Pattern**: Reuse exponential backoff pattern from crypto.py: check for 429, wait 2^attempt seconds
+- **Rate Limit Error Detection**: Check for "rate limit" in error message (case-insensitive) to trigger retry logic
+- **Retry Loop Exit**: Return immediately on success, only retry on rate limit errors, exhaust retries before returning error
+- **httpx AsyncClient**: Use `async with httpx.AsyncClient() as client:` for async HTTP requests
+- **httpx Error Handling**: Catch TimeoutError, ConnectError, RequestError separately for specific error messages
+- **API Error Codes**: Handle 429 (rate limit), 404 (not found), and other status codes with descriptive messages
+- **respx Mocking**: Use `@respx.mock` decorator and `respx.get().mock(return_value=Response())` for HTTP mocking
+- **respx Side Effects**: Use `route.side_effect = [Response1, Response2, ...]` to simulate retry scenarios
+- **respx Call Counting**: Use `route.call_count` to verify number of HTTP calls made during retries
+- **Mock Response Helper**: Create `create_mock_coingecko_response()` helper that generates realistic timestamp/price/volume arrays
+- **Test All Periods**: Test all 7 periods (1W-MAX) with parameterized mapping to verify correct days parameter
+- **Test Rate Limit Success**: Mock 2 failures (429) then success to verify retry logic works correctly
+- **Test Rate Limit Exhaustion**: Mock all attempts as 429 to verify max_retries is respected and error returned
+- **Test Empty Data**: Mock response with empty prices array to verify graceful error handling
+- **Test Malformed Response**: Mock response with invalid JSON structure to verify parsing error handling
+- **Test Volume Padding**: Mock response with fewer volumes than prices to verify padding logic works
+- **Test Timestamp Conversion**: Verify millisecond timestamps are correctly converted to datetime objects
+- **Test Timezone Awareness**: Use flexible assertions for dates (year in [2023, 2024]) to handle timezone differences
+- **Test Auto-Routing**: Verify BTC/ETH route to CoinGecko while AAPL routes to yfinance automatically
+- **Test Case Insensitivity**: Verify lowercase crypto symbols ("btc") are properly normalized and work correctly
+- **Test Coverage**: Added 20 new tests for crypto functionality, total 38 tests, all passing
+- **Module Coverage**: Achieved 91% coverage on history_data.py (exceeds 90% threshold)
+- **Import Pattern**: Import SYMBOL_TO_ID from crypto.py to reuse existing crypto symbol mapping
+- **Function Signature Extension**: Add `max_retries` parameter to `fetch_historical_data()` for crypto retry logic
+- **Private Helper Functions**: Name internal functions with leading underscore: `_is_crypto_ticker()`, `_fetch_crypto_historical()`
+- **Result Type Consistency**: All fetch functions return `HistoricalResult = HistoricalData | HistoricalDataError` for consistency
+- **Error Message Clarity**: Include ticker symbol and descriptive message in all error results for debugging
