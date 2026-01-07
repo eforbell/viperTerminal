@@ -142,6 +142,25 @@
       "relatedFeature": "feature-1",
       "effort": "Large",
       "notes": "Requires paid API (Alpaca, Polygon.io) or complex websocket setup with free sources"
+    },
+    {
+      "id": "FE-013",
+      "title": "Replace CoinGecko with yfinance for crypto (Feature 3)",
+      "description": "Switch crypto data from CoinGecko to yfinance using USD pair format (e.g., BTC-USD, ETH-USD). Eliminates rate limit issues and simplifies codebase to single data source.",
+      "priority": "High",
+      "relatedFeature": "feature-2",
+      "effort": "Medium",
+      "notes": "yfinance supports crypto with format SYMBOL-USD. Benefits: (1) No rate limits, (2) Single unified API, (3) Consistent data format. Changes needed: crypto.py, history_data.py, quote.py. Add user guidance for crypto format (BTC-USD) or auto-convert BTC → BTC-USD. Consider :CRYPTO prefix to force USD pair (e.g., :CRYPTO BTC → BTC-USD).",
+      "implementation": {
+        "affected_files": [
+          "viper/services/crypto.py - replace CoinGecko with yfinance",
+          "viper/services/history_data.py - remove CoinGecko historical, use yfinance",
+          "viper/services/quote.py - update crypto detection logic",
+          "viper/widgets/help_screen.py - add crypto format guidance (BTC-USD)"
+        ],
+        "crypto_symbols": "Map common symbols: BTC→BTC-USD, ETH→ETH-USD, etc.",
+        "testing": "Test major crypto pairs: BTC-USD, ETH-USD, ADA-USD, SOL-USD"
+      }
     }
   ]
 }
