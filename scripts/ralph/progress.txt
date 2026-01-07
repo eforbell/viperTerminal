@@ -473,3 +473,49 @@
 
 ---
 
+
+## 2026-01-07 - VPR-013
+- Implemented StatusBar widget showing connection state (Online/Offline) and last refresh time
+- Created user-friendly error message formatter with format_error_message() function
+- Added network error detection with is_network_error() helper
+- Set up logging to ~/.config/viper/viper.log using RotatingFileHandler (5MB max, 3 backups)
+- Integrated logging throughout app for successful operations and error tracking
+- StatusBar updates based on quote fetch results - shows Offline for network errors
+- Enhanced _fetch_and_display_quote() with comprehensive error handling and logging
+- Enhanced _fetch_and_display_info() with logging for info panel operations
+- Wrote 36 comprehensive tests (6 status bar, 21 error formatter, 9 logger)
+- All tests pass, mypy --strict passes, 93.77% overall coverage
+
+**Files changed:**
+- `viper/widgets/status_bar.py` - New StatusBar widget with set_online(), set_offline(), update_last_refresh()
+- `viper/utils/logger.py` - Logging setup with RotatingFileHandler and idempotent configuration
+- `viper/utils/error_formatter.py` - Error message formatting and network error detection
+- `viper/utils/__init__.py` - Utils package exports
+- `viper/widgets/__init__.py` - Added StatusBar to exports
+- `viper/app.py` - Integrated StatusBar, added logging, enhanced error handling
+- `tests/test_status_bar.py` - 6 tests for StatusBar widget states
+- `tests/test_error_formatter.py` - 21 tests for error formatting and network detection
+- `tests/test_logger.py` - 9 tests for logging setup and configuration
+- `tests/test_app.py` - Fixed info panel tests to use action methods instead of pilot.press
+
+**Learnings:**
+- **Idempotent Setup**: Use global flag to make setup_logging() idempotent - prevents duplicate handlers
+- **Test Reset Pattern**: Create _reset_logging() helper for tests, use autouse fixture to reset state
+- **Error Field Names**: StockError uses `.ticker`, CryptoError uses `.symbol` - both use `.error_message`
+- **Formatted Error Propagation**: Create new error instances with formatted messages for display
+- **Type Annotation for Unions**: Explicitly annotate union types when mypy can't infer from isinstance checks
+- **Check Order Matters**: Check "timeout" before "network" to avoid keyword overlap in error detection
+- **Logging Best Practice**: Log at INFO for success, ERROR for failures, use .exception() for tracebacks
+- **StatusBar Docking**: dock: bottom CSS positions widget at screen bottom like Footer
+- **Textual Widget State**: Use instance variables (_connection_state) and update methods for state changes
+- **Horizontal Layout**: StatusBar uses Horizontal container to arrange labels side-by-side
+- **Label Updates**: Call label.update(text) to change displayed content dynamically
+- **DateTime Formatting**: Use strftime("%H:%M:%S") for time display in status bar
+- **Try/Except in Widgets**: Wrap query_one() in try/except for widgets not yet mounted
+- **pilot.press() Focus Issue**: pilot.press("i") types into focused widget; use app.action_X() in tests instead
+- **RotatingFileHandler**: maxBytes=5*1024*1024, backupCount=3 for 5MB files with 3 backups
+- **Logging Format**: "%(asctime)s - %(levelname)s - %(message)s" provides timestamp, level, and message
+- **Path.home()**: Use Path.home() / ".config" / "viper" for XDG-compliant config directory
+
+---
+
