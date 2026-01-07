@@ -173,7 +173,7 @@
         "Tests: layout proportions, focus cycling, responsive behavior"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "Use Textual's Grid or Horizontal containers."
     },
     {

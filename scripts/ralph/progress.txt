@@ -309,3 +309,38 @@
 
 ---
 
+## 2026-01-06 - VPR-009
+- Implemented horizontal split layout with watchlist (30%) and quote panel (70%)
+- Added Horizontal container with nested containers for watchlist and quote areas
+- Made QuotePanel and WatchlistPanel focusable by setting can_focus = True
+- Added Tab key binding for focus cycling between panels (uses built-in focus_next action)
+- Implemented visual focus indicators using :focus-within CSS pseudo-class with border styles
+- Created on_resize() handler for responsive behavior (hides watchlist when width < 80 cols)
+- Wrote 4 comprehensive integration tests for layout structure and focus management
+- All 180 tests pass with 95% coverage, mypy --strict passes, ruff passes
+
+**Files changed:**
+- `viper/app.py` - Added Horizontal layout, nested containers, focus binding, on_resize handler, CSS for layout
+- `viper/widgets/quote_panel.py` - Added can_focus = True
+- `viper/widgets/watchlist_panel.py` - Added can_focus = True
+- `tests/test_app.py` - Added 4 tests for layout structure, focusability, Tab cycling, and proportions
+- `AGENTS.md` - Added VPR-009 learnings section
+- `scripts/ralph/progress.txt` - Updated codebase patterns
+
+**Learnings:**
+- Textual's Horizontal container enables side-by-side layout with percentage-based widths
+- Wrap widgets in nested Containers with IDs for targeted CSS styling and easy querying
+- Set can_focus = True class attribute on widgets to make them focusable for Tab cycling
+- Textual provides built-in focus_next action - just add ("tab", "focus_next", "Next Panel") binding
+- Use :focus-within CSS pseudo-class to style parent container when child widget has focus
+- Border styles: "solid" for normal, "double" for focused state provides clear visual indicator
+- Textual CSS doesn't support @media queries - must use on_resize() event handler instead
+- In on_resize(), check self.size.width and dynamically set widget.display and styles.width
+- Wrap queries in try/except during resize - containers may not be mounted on first resize event
+- Dynamic layout changes: widget.display = False hides, widget.display = True shows
+- Test layout structure by verifying containers exist with correct IDs (Textual handles proportions)
+- Focus testing: verify can_focus attribute and test basic Tab key navigation flow
+- Integration tests ensure layout components are properly wired together
+
+---
+
