@@ -529,8 +529,8 @@ async def test_info_panel_shows_stock_info() -> None:
                 await pilot.press("enter")
                 await pilot.pause()
 
-                # Now press 'i' to show info panel
-                await pilot.press("i")
+                # Now toggle info panel
+                app.action_toggle_info()
                 await pilot.pause(0.2)
 
                 # Info panel should have been called
@@ -579,8 +579,8 @@ async def test_info_panel_shows_crypto_info() -> None:
                 await pilot.press("enter")
                 await pilot.pause()
 
-                # Now press 'i' to show info panel
-                await pilot.press("i")
+                # Now toggle info panel
+                app.action_toggle_info()
                 await pilot.pause(0.2)
 
                 # Info panel should have been called

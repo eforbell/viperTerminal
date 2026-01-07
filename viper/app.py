@@ -9,7 +9,8 @@ from viper.services.history import HistoryManager
 from viper.services.quote import fetch_quote, is_crypto_quote
 from viper.services.stock import StockError, StockInfo, StockInfoError, StockQuote, fetch_stock_info
 from viper.services.watchlist import WatchlistManager
-from viper.widgets import InfoPanel, QuotePanel, TickerInput, WatchlistPanel
+from viper.utils import format_error_message, get_logger, is_network_error, setup_logging
+from viper.widgets import InfoPanel, QuotePanel, StatusBar, TickerInput, WatchlistPanel
 
 
 class ViperApp(App[None]):
@@ -27,6 +28,25 @@ class ViperApp(App[None]):
     }
 
     Footer {
+        background: $background;
+        color: $accent;
+    }
+
+    StatusBar {
+        dock: bottom;
+        height: 1;
+        background: $background;
+        color: $accent;
+        padding: 0 2;
+    }
+
+    StatusBar Horizontal {
+        width: 100%;
+        height: 1;
+    }
+
+    StatusBar Label {
+        width: 1fr;
         background: $background;
         color: $accent;
     }
@@ -107,6 +127,10 @@ class ViperApp(App[None]):
         self._info_panel_visible = False
         self._current_ticker: str | None = None
 
+        # Set up logging
+        setup_logging()
+        self.logger = get_logger()
+
     def on_resize(self, event: object) -> None:
         """Handle terminal resize to show/hide watchlist on narrow screens.
 
@@ -146,6 +170,7 @@ class ViperApp(App[None]):
             with Container(id="info-container"):
                 yield InfoPanel()
         yield TickerInput(history_manager=self.history_manager)
+        yield StatusBar()
         yield Footer()
 
     def action_focus_input(self) -> None:
@@ -240,23 +265,64 @@ class ViperApp(App[None]):
         Args:
             ticker: The ticker symbol to fetch.
         """
-        # Get the quote panel
+        # Get the quote panel and status bar
         quote_panel = self.query_one(QuotePanel)
+        status_bar = self.query_one(StatusBar)
 
         # Show loading state
         quote_panel.show_loading()
 
-        # Fetch the quote using unified service (auto-detects stock vs crypto)
-        result = await fetch_quote(ticker)
+        try:
+            # Fetch the quote using unified service (auto-detects stock vs crypto)
+            result = await fetch_quote(ticker)
 
-        # Display result based on type
-        if isinstance(result, (StockQuote, CryptoQuote)):
-            quote_panel.show_quote(result)
-            # Store current ticker for info panel
-            self._current_ticker = ticker
-        elif isinstance(result, (StockError, CryptoError)):
-            quote_panel.show_error(result)
+            # Display result based on type
+            if isinstance(result, (StockQuote, CryptoQuote)):
+                quote_panel.show_quote(result)
+                # Store current ticker for info panel
+                self._current_ticker = ticker
+                # Update status bar
+                status_bar.set_online()
+                status_bar.update_last_refresh()
+                # Log successful fetch
+                self.logger.info(f"Successfully fetched quote for {ticker}")
+            elif isinstance(result, (StockError, CryptoError)):
+                # Format error message for display
+                formatted_error = format_error_message(result)
+                # Create a new error with the formatted message
+                display_error: StockError | CryptoError
+                if isinstance(result, StockError):
+                    display_error = StockError(result.ticker, formatted_error)
+                else:
+                    display_error = CryptoError(result.symbol, formatted_error)
+
+                quote_panel.show_error(display_error)
+                self._current_ticker = None
+
+                # Update status bar based on error type
+                if is_network_error(result):
+                    status_bar.set_offline()
+                else:
+                    status_bar.set_online()
+
+                # Log the error
+                self.logger.error(f"Error fetching quote for {ticker}: {result.error_message}")
+
+        except Exception as e:
+            # Handle unexpected errors
+            formatted_error = format_error_message(e)
+            error = StockError(ticker, formatted_error)
+            quote_panel.show_error(error)
             self._current_ticker = None
+
+            # Update status bar
+            if is_network_error(e):
+                status_bar.set_offline()
+            else:
+                status_bar.set_online()
+
+            # Log the exception
+            self.logger.exception(f"Unexpected error fetching quote for {ticker}: {e}")
 
     async def _fetch_and_display_info(self, ticker: str) -> None:
         """Fetch and display extended info for the given ticker.
@@ -267,26 +333,41 @@ class ViperApp(App[None]):
         # Get the info panel
         info_panel = self.query_one(InfoPanel)
 
-        # Fetch the quote first to determine asset type
-        quote_result = await fetch_quote(ticker)
+        try:
+            # Fetch the quote first to determine asset type
+            quote_result = await fetch_quote(ticker)
 
-        # Determine if it's crypto or stock and fetch appropriate info
-        if isinstance(quote_result, CryptoQuote):
-            # Fetch crypto info
-            crypto_info_result = await fetch_crypto_info(ticker)
-            if isinstance(crypto_info_result, CryptoInfo):
-                info_panel.show_crypto_info(quote_result, crypto_info_result.info)
+            # Determine if it's crypto or stock and fetch appropriate info
+            if isinstance(quote_result, CryptoQuote):
+                # Fetch crypto info
+                crypto_info_result = await fetch_crypto_info(ticker)
+                if isinstance(crypto_info_result, CryptoInfo):
+                    info_panel.show_crypto_info(quote_result, crypto_info_result.info)
+                    self.logger.info(f"Successfully fetched crypto info for {ticker}")
+                else:
+                    # Error - show empty state
+                    info_panel.show_empty()
+                    self.logger.error(
+                        f"Error fetching crypto info for {ticker}: {crypto_info_result.error_message}"
+                    )
+            elif isinstance(quote_result, StockQuote):
+                # Fetch stock info
+                stock_info_result = await fetch_stock_info(ticker)
+                if isinstance(stock_info_result, StockInfo):
+                    info_panel.show_stock_info(quote_result, stock_info_result.info)
+                    self.logger.info(f"Successfully fetched stock info for {ticker}")
+                else:
+                    # Error - show empty state
+                    info_panel.show_empty()
+                    self.logger.error(
+                        f"Error fetching stock info for {ticker}: {stock_info_result.error_message}"
+                    )
             else:
-                # Error - show empty state
+                # Error fetching quote - show empty state
                 info_panel.show_empty()
-        elif isinstance(quote_result, StockQuote):
-            # Fetch stock info
-            stock_info_result = await fetch_stock_info(ticker)
-            if isinstance(stock_info_result, StockInfo):
-                info_panel.show_stock_info(quote_result, stock_info_result.info)
-            else:
-                # Error - show empty state
-                info_panel.show_empty()
-        else:
-            # Error fetching quote - show empty state
+                self.logger.error(f"Error fetching quote for info panel for {ticker}")
+
+        except Exception as e:
+            # Handle unexpected errors
             info_panel.show_empty()
+            self.logger.exception(f"Unexpected error fetching info for {ticker}: {e}")
