@@ -140,7 +140,7 @@
         "Tests: add to history, cycle navigation, persistence, file corruption recovery"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "Keep history logic decoupled from UI for easy testing."
     },
     {

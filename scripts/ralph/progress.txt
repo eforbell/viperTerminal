@@ -220,4 +220,45 @@
 - Helper functions improve readability: is_crypto_quote(), is_stock_quote()
 
 ---
+## 2026-01-06 - VPR-007
+- Implemented HistoryManager class for persistent ticker history (last 20 items)
+- Created JSON-based persistence to ~/.config/viper/history.json
+- Added Up/Down arrow navigation in TickerInput widget for cycling through history
+- Implemented graceful error handling for missing/corrupt history files
+- Added automatic deduplication (moves duplicates to top) and size limiting
+- Navigation state resets when user types (excluding up/down arrows)
+- Integrated HistoryManager into main app and TickerInput widget
+- Wrote 31 comprehensive tests for HistoryManager (persistence, navigation, corruption)
+- Wrote 10 integration tests for TickerInput history navigation
+- Achieved 98% test coverage with 140 tests passing, all type checks and linting pass
+
+**Files changed:**
+- `viper/services/history.py` - New HistoryManager class with persistence and navigation
+- `viper/services/__init__.py` - Added history module to exports
+- `viper/widgets/ticker_input.py` - Added history_manager parameter and on_key() handler for Up/Down navigation
+- `viper/app.py` - Instantiated HistoryManager and passed to TickerInput
+- `tests/test_history.py` - 31 comprehensive tests for all HistoryManager functionality
+- `tests/test_ticker_input.py` - Added 10 tests for history navigation integration
+- `AGENTS.md` - Added VPR-007 learnings section
+
+**Learnings:**
+- Store user data in `~/.config/viper/` following XDG Base Directory spec
+- Use `Path.mkdir(parents=True, exist_ok=True)` for safe nested directory creation
+- JSON persistence with structured format: `{"history": [...]}` allows versioning
+- Graceful error handling: try/except on load/save with fallback to empty/no-persist
+- Validate loaded JSON data: check type with isinstance(), filter invalid items
+- Deduplication pattern: remove old instance, insert at front (most recent first)
+- Navigation index pattern: -1 = not navigating, 0+ = current position in history
+- `on_key()` event handler intercepts keyboard before default Input behavior
+- `event.prevent_default()` stops default arrow key behavior (cursor movement)
+- Set `self.cursor_position` after filling value to position cursor at end
+- Reset navigation on typing: check `event.key not in ("up", "down")`
+- Optional dependency injection: accept `manager | None`, check before use
+- Fail silently on OSError during save - don't crash the app
+- Use `tmp_path` fixture for file system tests with automatic cleanup
+- Return copies from getters: `list.copy()` prevents external modification
+- Boundary conditions: stay at end when at last item, return "" when going forward from beginning
+- Test coverage: persistence (save/load), corruption (invalid JSON/structure), edge cases (empty, boundaries)
+
+---
 
