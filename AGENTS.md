@@ -513,3 +513,27 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Backward Compatibility**: Maintained exact same NewsItem interface so no changes needed to news panel widget
 - **Unified Data Source**: Now using yfinance for stocks, crypto, AND news - single dependency
 - **No Rate Limits**: yfinance news has same moderate rate limits as ticker data, avoids CoinGecko-style aggressive limits
+
+### VPR-029: Unify crypto data source using yfinance
+- **yfinance Crypto Format**: Use SYMBOL-USD format (BTC-USD, ETH-USD) for crypto pairs via yfinance
+- **Auto-conversion Pattern**: Accept both "BTC" and "BTC-USD"; auto-convert common symbols to -USD pairs
+- **Symbol Mapping Update**: Renamed SYMBOL_TO_ID to SYMBOL_TO_PAIR with values like "BTC-USD" instead of "bitcoin"
+- **Legacy Alias**: Keep `SYMBOL_TO_ID = SYMBOL_TO_PAIR` for backward compatibility with history_data.py
+- **Remove CoinGecko**: Completely replaced httpx/CoinGecko with yfinance - no HTTP mocking needed
+- **asyncio.to_thread**: Use `await asyncio.to_thread(sync_function)` to run synchronous yfinance calls without blocking
+- **yfinance fast_info**: Access via `.get()` method for quote data, returns dict-like object
+- **yfinance .info**: Full info dict with marketCap, volume24Hr, regularMarketVolume, longName, name
+- **24h Change Calculation**: Use `.history(period="2d")` to get 2 days of data, calculate percentage change
+- **Handle Empty History**: Check `hist.empty or len(hist) < 2` before calculating change; default to 0.0%
+- **Division by Zero**: Check `if previous_close > 0` before calculating percentage change
+- **Optional Fields**: Use `.get(key, default)` for optional fields; market_cap and volume may be None
+- **Name Extraction**: Try `longName` first, fallback to `name` from .info dict
+- **Mock yfinance.Ticker**: Patch "yfinance.Ticker" and return MagicMock with fast_info, info, history attrs
+- **Mock DataFrame**: Use `pd.DataFrame` with Close column and `pd.date_range` index for realistic mocks
+- **Test Both Formats**: Test both "BTC" (auto-convert) and "BTC-USD" (explicit) formats
+- **Test Edge Cases**: Empty history, single data point, zero previous close, missing optional fields
+- **Simpler Testing**: yfinance mocking is simpler than CoinGecko - no HTTP routes, just object mocking
+- **No Retry Logic**: yfinance doesn't have same rate limit issues as CoinGecko - removed retry/backoff
+- **Unified API**: Stock and crypto now use identical yfinance code path - single data source
+- **Test Coverage**: Achieved 93% coverage on crypto.py with 30 comprehensive tests
+- **Remove respx**: No longer need respx or httpx for crypto tests - pure object mocking sufficient
