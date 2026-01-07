@@ -132,3 +132,44 @@
 
 ---
 
+## 2026-01-07 - VPR-019
+- Implemented timeframe selection with number keys (1-7) for quick chart switching
+- Added visual timeframe selector bar showing all periods with active indicator
+- Number keys 1-7 map to: 1W, 1M, 3M, 6M, 1Y, 5Y, MAX respectively
+- Only active when chart panel is visible (conditional action handling)
+- Smooth loading transitions when changing timeframes
+- Timeframe persists in _current_period state until explicitly changed
+- Default timeframe is 1M for all new charts
+
+### Files Changed
+- `viper/widgets/chart_panel.py` (added timeframe dict, UI bar, change_timeframe method)
+- `viper/app.py` (added 7 key bindings and action methods for timeframes)
+- `tests/test_chart_panel.py` (added 8 new tests for timeframe functionality)
+- `AGENTS.md` (added VPR-019 learnings section)
+- `scripts/ralph/features/feature-2-prd.json` (marked VPR-019 as passing)
+
+### Learnings
+- **Timeframe Mapping Pattern**: Store key-to-period dict in widget for centralized management and easy lookup
+- **Multiple Action Methods**: Create individual `action_timeframe_N()` methods that delegate to shared `_change_chart_timeframe(key)` helper
+- **Conditional Actions**: Check panel visibility flag (`_chart_panel_visible`) before processing timeframe changes
+- **Widget Query Methods**: Add public `get_timeframe_for_key(key)` method for app to access widget's mappings
+- **Async Change Method**: `async change_timeframe(period)` checks if ticker exists and period differs before reloading
+- **Rich Markup Escaping**: Use `\\[` to escape literal brackets in markup (e.g., `\\[1]` for key indicator in UI)
+- **Markup Tag Nesting**: Must properly nest tags: `[b][cyan]...[/cyan][/b]` not `[b][cyan]...[/b][/cyan]` to avoid MarkupError
+- **Active/Inactive Styling**: Use `[b][cyan]` for active period, `[dim]` for inactive in timeframe bar
+- **Height Adjustment**: Update available height calculation when adding UI elements: `- 7` instead of `- 6` for new timeframe bar
+- **No Redundant Fetches**: Check `period != self._current_period` to avoid re-fetching when same period selected
+- **Natural Persistence**: Timeframe persists via `_current_period` state - no special persistence logic needed
+- **Test Comprehensiveness**: 8 tests cover: key mappings, invalid keys, conditional behavior, same period, no ticker, UI display, persistence
+- **AsyncMock for Services**: Use `AsyncMock` when mocking async functions like `fetch_historical_data` in tests
+- **All Tests Pass**: 22/22 chart_panel tests pass, mypy --strict passes, ready for production
+
+### Implementation Notes
+- Timeframe selector bar displays inline above stats, doesn't take focus
+- Active timeframe highlighted in cyan with bold brackets, inactive are dimmed
+- Smooth UX: shows loading state during fetch, updates immediately on success
+- Works seamlessly with existing chart panel toggle and ticker selection
+- Ready for volume overlay feature (VPR-020)
+
+---
+

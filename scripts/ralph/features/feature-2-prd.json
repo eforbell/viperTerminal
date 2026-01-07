@@ -99,7 +99,7 @@
         "Tests: each hotkey, visual indicator, persistence, default behavior"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-018"],
       "notes": "Quick timeframe switching is essential for usability."
