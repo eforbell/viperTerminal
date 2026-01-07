@@ -22,6 +22,14 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     | claude --model sonnet --dangerously-skip-permissions 2>&1 \
     | tee /dev/stderr) || true
   
+  # Check for rate limit
+  if echo "$OUTPUT" | grep -qi "You've hit your limit\|rate limit\|resets.*America"; then
+    echo ""
+    echo "⚠️  Rate limit hit. Stopping Ralph."
+    echo "💤 Resume later when limit resets."
+    exit 2
+  fi
+  
   # Check for the completion tag (case-insensitive just in case)
   if echo "$OUTPUT" | grep -qi "<promise>COMPLETE</promise>"; then
     echo ""
