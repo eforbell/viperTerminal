@@ -195,3 +195,83 @@ async def test_help_screen_shows_all_keybindings() -> None:
         assert "q" in combined_text or "Quit" in combined_text
         assert "/" in combined_text or "Focus input" in combined_text
         assert "Tab" in combined_text or "Cycle" in combined_text
+
+
+@pytest.mark.asyncio
+async def test_help_screen_shows_chart_section() -> None:
+    """Test that help screen shows chart section."""
+    help_screen = HelpScreen(is_welcome=False)
+    app = HelpScreenTestApp(help_screen)
+
+    async with app.run_test():
+        # Get all section titles
+        sections = app.screen.query(".help-section-title")
+        section_texts = [str(s.render()) for s in sections]
+        combined_text = " ".join(section_texts)
+
+        assert "CHARTS" in combined_text
+
+
+@pytest.mark.asyncio
+async def test_help_screen_shows_news_section() -> None:
+    """Test that help screen shows news section."""
+    help_screen = HelpScreen(is_welcome=False)
+    app = HelpScreenTestApp(help_screen)
+
+    async with app.run_test():
+        # Get all section titles
+        sections = app.screen.query(".help-section-title")
+        section_texts = [str(s.render()) for s in sections]
+        combined_text = " ".join(section_texts)
+
+        assert "NEWS" in combined_text
+
+
+@pytest.mark.asyncio
+async def test_help_screen_shows_chart_keybindings() -> None:
+    """Test that help screen shows chart-related keybindings."""
+    help_screen = HelpScreen(is_welcome=False)
+    app = HelpScreenTestApp(help_screen)
+
+    async with app.run_test():
+        items = app.screen.query(".help-item")
+        item_texts = [str(item.render()) for item in items]
+        combined_text = " ".join(item_texts)
+
+        # Chart keybindings
+        assert "c" in combined_text  # Toggle chart
+        assert "v" in combined_text  # Toggle volume
+        assert "1-7" in combined_text or "timeframe" in combined_text.lower()
+
+
+@pytest.mark.asyncio
+async def test_help_screen_shows_news_keybindings() -> None:
+    """Test that help screen shows news-related keybindings."""
+    help_screen = HelpScreen(is_welcome=False)
+    app = HelpScreenTestApp(help_screen)
+
+    async with app.run_test():
+        items = app.screen.query(".help-item")
+        item_texts = [str(item.render()) for item in items]
+        combined_text = " ".join(item_texts)
+
+        # News keybindings
+        assert "n" in combined_text  # Toggle news
+        assert "e" in combined_text  # Expand news item
+
+
+@pytest.mark.asyncio
+async def test_help_screen_shows_updated_features() -> None:
+    """Test that help screen shows updated features."""
+    help_screen = HelpScreen(is_welcome=False)
+    app = HelpScreenTestApp(help_screen)
+
+    async with app.run_test():
+        items = app.screen.query(".help-item")
+        item_texts = [str(item.render()) for item in items]
+        combined_text = " ".join(item_texts)
+
+        # New feature mentions
+        assert "chart" in combined_text.lower()
+        assert "news" in combined_text.lower()
+        assert "volume" in combined_text.lower()

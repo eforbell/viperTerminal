@@ -109,16 +109,75 @@ class HelpScreen(ModalScreen[None]):
                 yield Static("/                    Focus input bar", classes="help-item")
                 yield Static("Esc                  Clear input / Close overlays", classes="help-item")
                 yield Static("Tab                  Cycle between panels", classes="help-item")
-                yield Static("j / k                Navigate watchlist items", classes="help-item")
-                yield Static("Enter                View selected watchlist item", classes="help-item")
+                yield Static("j / k                Navigate list items", classes="help-item")
+                yield Static("Enter                View selected item / Open in browser", classes="help-item")
                 yield Static("i                    Toggle info panel", classes="help-item")
+                yield Static("c                    Toggle chart panel", classes="help-item")
+                yield Static("n                    Toggle news panel", classes="help-item")
+                yield Static("v                    Toggle volume bars (chart)", classes="help-item")
+                yield Static("e                    Expand news item (show summary)", classes="help-item")
+                yield Static("1-7                  Select timeframe (chart)", classes="help-item")
                 yield Static("? / F1               Show this help screen", classes="help-item")
                 yield Static("Up / Down            Cycle through command history", classes="help-item")
+
+                # Charts Section
+                yield Static("\n\nCHARTS", classes="help-section-title")
+                yield Static(
+                    "Press 'c' to toggle the historical price chart panel.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Use number keys 1-7 to select timeframe:",
+                    classes="help-item",
+                )
+                yield Static(
+                    "  1=1W  2=1M  3=3M  4=6M  5=1Y  6=5Y  7=MAX",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Press 'v' to toggle volume bars below the chart.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Charts support both stocks (yfinance) and crypto (CoinGecko).",
+                    classes="help-item",
+                )
+
+                # News Section
+                yield Static("\n\nNEWS", classes="help-section-title")
+                yield Static(
+                    "Press 'n' to toggle the news panel for the current ticker.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Use j/k to navigate news headlines, Enter to open in browser.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Press 'e' to expand a news item and view its summary.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "News is fetched from Yahoo Finance RSS feed.",
+                    classes="help-item",
+                )
 
                 # Features Section
                 yield Static("\n\nFEATURES", classes="help-section-title")
                 yield Static(
                     "• Real-time stock and crypto quotes with intraday charts",
+                    classes="help-item",
+                )
+                yield Static(
+                    "• Historical price charts with multiple timeframes",
+                    classes="help-item",
+                )
+                yield Static(
+                    "• Volume overlay for price/volume correlation",
+                    classes="help-item",
+                )
+                yield Static(
+                    "• News feed with headlines and browser integration",
                     classes="help-item",
                 )
                 yield Static(
