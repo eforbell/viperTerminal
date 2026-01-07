@@ -85,4 +85,50 @@
 - Ready for integration into ChartPanel widget (VPR-018)
 
 ---
+## 2026-01-07 - VPR-018
+- Implemented chart panel widget with full state management
+- Created chart_panel.py with ChartPanel widget class
+- Integrated into main app with 'c' key toggle functionality
+- Panel supports empty, loading, success, and error states
+- Loading state shows spinner with ticker and period context
+- Success state displays header, stats (high, low, % change), and rendered chart
+- Error state shows error message from historical data service
+- Responsive chart sizing: calculates available dimensions dynamically
+- Toggle behavior: mutually exclusive with info panel, replaces quote panel
+- Default period is 1M, uses ChartRenderer for visualization
+
+### Files Changed
+- `viper/widgets/chart_panel.py` (new, 267 lines, 97% test coverage)
+- `tests/test_chart_panel.py` (new, 14 comprehensive tests)
+- `viper/app.py` (added chart container, toggle action, keybinding)
+- `viper/widgets/__init__.py` (exported ChartPanel)
+- `AGENTS.md` (updated with VPR-018 learnings)
+- `scripts/ralph/features/feature-2-prd.json` (marked VPR-018 as passing)
+
+### Learnings
+- **Panel Toggle Pattern**: Use `styles.display = "none"/"block"` to toggle visibility without destroying widget state
+- **Mutual Exclusivity**: When multiple panels replace quote panel, hide others before showing new one
+- **State Tracking**: Use instance flags (`_info_panel_visible`, `_chart_panel_visible`) in app to track panel states
+- **Widget Init Configuration**: Pass rendering style (ChartStyle) to widget constructor, not after creation
+- **Responsive Sizing**: Calculate available chart dimensions dynamically: `size.height - header_lines`
+- **Minimum Dimensions**: Enforce minimum chart size (40x10) for readable output
+- **Loading Context**: Show what's loading in message: "Loading chart for AAPL (1M)..."
+- **Worker Pattern**: Use `self.run_worker(chart_panel.load_chart())` to run async tasks from action methods
+- **Stats Display**: Show period high, low, and percent change with color coding (green/red)
+- **Chart Rendering**: Use `markup=False` on chart line labels to preserve unicode characters
+- **Ticker Change Protection**: Check `_current_ticker` matches before applying fetched data to prevent stale updates
+- **Container Padding**: Use `padding: 0` for chart container to maximize chart rendering space
+- **Test Mocking**: Use `patch("viper.widgets.chart_panel.fetch_historical_data")` to mock the service
+- **Test Coverage**: 14 tests covering all states, periods, styles, responsive behavior, async handling
+- **Type Safety**: All code passes mypy --strict with proper type annotations
+- **Widget Export**: Always add new widgets to `viper/widgets/__init__.py` and `__all__` list
+
+### Implementation Notes
+- Chart panel follows same pattern as QuotePanel and InfoPanel for consistency
+- Uses ChartRenderer (VPR-017) for actual chart visualization
+- Uses HistoricalData service (VPR-016) for data fetching
+- Ready for timeframe selection feature (VPR-019)
+- All acceptance criteria met, tests pass, ready for next story
+
+---
 

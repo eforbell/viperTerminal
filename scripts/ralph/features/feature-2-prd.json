@@ -81,7 +81,7 @@
         "Tests: all display states, toggle behavior, responsive sizing"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-016", "VPR-017"],
       "notes": "Integrates chart renderer into the UI. Similar pattern to QuotePanel/InfoPanel."
