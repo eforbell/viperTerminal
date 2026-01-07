@@ -135,6 +135,13 @@ class ViperApp(App[None]):
         ("escape", "clear_or_close", "Clear/Close"),
         ("i", "toggle_info", "Toggle Info"),
         ("c", "toggle_chart", "Toggle Chart"),
+        ("1", "timeframe_1", "1W"),
+        ("2", "timeframe_2", "1M"),
+        ("3", "timeframe_3", "3M"),
+        ("4", "timeframe_4", "6M"),
+        ("5", "timeframe_5", "1Y"),
+        ("6", "timeframe_6", "5Y"),
+        ("7", "timeframe_7", "MAX"),
         ("question_mark,f1", "show_help", "Help"),
     ]
 
@@ -292,6 +299,47 @@ class ViperApp(App[None]):
             if self._current_ticker:
                 chart_panel = self.query_one(ChartPanel)
                 self.run_worker(chart_panel.load_chart(self._current_ticker, "1M"))
+
+    def _change_chart_timeframe(self, key: str) -> None:
+        """Change the chart timeframe if chart panel is visible.
+
+        Args:
+            key: The number key pressed (1-7)
+        """
+        # Only change timeframe if chart panel is visible
+        if self._chart_panel_visible:
+            chart_panel = self.query_one(ChartPanel)
+            period = chart_panel.get_timeframe_for_key(key)
+            if period:
+                self.run_worker(chart_panel.change_timeframe(period))
+
+    def action_timeframe_1(self) -> None:
+        """Change chart timeframe to 1W."""
+        self._change_chart_timeframe("1")
+
+    def action_timeframe_2(self) -> None:
+        """Change chart timeframe to 1M."""
+        self._change_chart_timeframe("2")
+
+    def action_timeframe_3(self) -> None:
+        """Change chart timeframe to 3M."""
+        self._change_chart_timeframe("3")
+
+    def action_timeframe_4(self) -> None:
+        """Change chart timeframe to 6M."""
+        self._change_chart_timeframe("4")
+
+    def action_timeframe_5(self) -> None:
+        """Change chart timeframe to 1Y."""
+        self._change_chart_timeframe("5")
+
+    def action_timeframe_6(self) -> None:
+        """Change chart timeframe to 5Y."""
+        self._change_chart_timeframe("6")
+
+    def action_timeframe_7(self) -> None:
+        """Change chart timeframe to MAX."""
+        self._change_chart_timeframe("7")
 
     async def on_watchlist_panel_ticker_selected(
         self, event: WatchlistPanel.TickerSelected

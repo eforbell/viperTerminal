@@ -352,3 +352,27 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Container CSS**: Use `padding: 0` for chart container to maximize chart space (unlike info panel with `padding: 1`)
 - **Action Keybinding**: Add new action to `BINDINGS` list with tuple: `("c", "toggle_chart", "Toggle Chart")`
 - **Widget Export**: Remember to add new widget to `viper/widgets/__init__.py` and `__all__` list
+
+### VPR-019: Timeframe Selection
+- **Timeframe Mapping Dict**: Store key-to-period mapping in widget (e.g., `{"1": "1W", "2": "1M"}`) for centralized access
+- **Number Key Bindings**: Add numeric keys (1-7) to BINDINGS with descriptive actions: `("1", "timeframe_1", "1W")`
+- **Action Method Pattern**: Create individual action methods (`action_timeframe_1`) that delegate to a shared helper
+- **Shared Helper Pattern**: Use helper method `_change_chart_timeframe(key)` that checks visibility before acting
+- **Conditional Actions**: Only process timeframe changes when chart panel is visible (check `_chart_panel_visible` flag)
+- **Get Method for Widget**: Add public method `get_timeframe_for_key(key)` to widget for app to query mappings
+- **Change Timeframe Method**: Add `async change_timeframe(period)` method to widget that calls `load_chart()` with new period
+- **Timeframe Bar UI**: Display timeframe selector as label with markup showing all options and highlighting active
+- **Markup Escaping**: Use `\\[` to escape literal brackets in Rich markup (e.g., `\\[1]` for key indicator)
+- **Active Indicator**: Use `[b][cyan]` for active timeframe, `[dim]` for inactive in markup
+- **Markup Nesting**: Ensure proper tag nesting: `[b][cyan]...[/cyan][/b]` not `[b][cyan]...[/b][/cyan]`
+- **Height Calculation Update**: When adding UI elements (timeframe bar), update available height calculation accordingly
+- **Persistence via State**: Timeframe persists naturally via `_current_period` state variable - no special handling needed
+- **Avoid Redundant Fetches**: Check if new period equals current period before fetching: `if period != self._current_period`
+- **Test All Keys**: Write tests for all 7 timeframe keys (1-7) to verify mapping and functionality
+- **Test Invalid Keys**: Test that invalid keys (0, 8, letters) return None from mapping
+- **Test Conditional Behavior**: Verify timeframe changes only work when chart panel is visible
+- **Test Same Period**: Verify that changing to the same period doesn't trigger a re-fetch
+- **Test No Ticker**: Verify that timeframe changes do nothing when no ticker is selected
+- **Test UI Display**: Verify timeframe bar displays all periods and highlights the active one correctly
+- **Mock Async Methods**: Use `AsyncMock` for mocking `fetch_historical_data` in tests
+- **Test Persistence**: Verify that timeframe persists across operations until explicitly changed

@@ -77,6 +77,20 @@ class ChartPanel(Widget):
     ChartPanel .chart-line {
         margin: 0;
     }
+
+    ChartPanel .timeframe-bar {
+        margin-top: 0;
+        margin-bottom: 1;
+    }
+
+    ChartPanel .timeframe-button {
+        color: #666666;
+    }
+
+    ChartPanel .timeframe-active {
+        color: $accent;
+        text-style: bold;
+    }
     """
 
     def __init__(self, style: ChartStyle = ChartStyle.BRAILLE) -> None:
@@ -92,6 +106,16 @@ class ChartPanel(Widget):
         self._current_ticker: str | None = None
         self._current_period: str = "1M"  # Default period
         self._renderer = ChartRenderer(style=style)
+        # Timeframe mappings
+        self._timeframes = {
+            "1": "1W",
+            "2": "1M",
+            "3": "3M",
+            "4": "6M",
+            "5": "1Y",
+            "6": "5Y",
+            "7": "MAX",
+        }
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -180,6 +204,19 @@ class ChartPanel(Widget):
         header_text = f"{data.ticker} - {data.period} Chart"
         container.mount(Label(header_text, classes="chart-header"))
 
+        # Timeframe selector bar with active indicator
+        timeframe_parts = []
+        for key, period in self._timeframes.items():
+            if period == self._current_period:
+                # Active timeframe - highlighted
+                timeframe_parts.append(f"[b][cyan]\\[{key}] {period}[/cyan][/b]")
+            else:
+                # Inactive timeframe
+                timeframe_parts.append(f"[dim] {key}  {period}[/dim]")
+
+        timeframe_markup = "  ".join(timeframe_parts)
+        container.mount(Label(timeframe_markup, classes="timeframe-bar"))
+
         # Stats row if available
         if stats:
             # Determine color based on change
@@ -205,8 +242,8 @@ class ChartPanel(Widget):
             container.mount(Label("", classes="stats-row"))
 
         # Calculate available dimensions for chart
-        # Reserve space for header (2 lines), stats (2 lines), and padding
-        available_height = self.size.height - 6
+        # Reserve space for header (2 lines), timeframe bar (1 line), stats (2 lines), and padding
+        available_height = self.size.height - 7
         available_width = self.size.width - 4  # Account for padding
 
         # Ensure minimum dimensions
@@ -271,3 +308,24 @@ class ChartPanel(Widget):
             self.show_chart(result, stats)
         elif isinstance(result, HistoricalDataError):
             self.show_error(result)
+
+    async def change_timeframe(self, period: str) -> None:
+        """Change the timeframe for the current chart.
+
+        Args:
+            period: Time period (1W, 1M, 3M, 6M, 1Y, 2Y, 5Y, MAX)
+        """
+        # Only change if we have a ticker and it's different from current
+        if self._current_ticker and period != self._current_period:
+            await self.load_chart(self._current_ticker, period)
+
+    def get_timeframe_for_key(self, key: str) -> str | None:
+        """Get the timeframe period for a given key.
+
+        Args:
+            key: The number key pressed (1-7)
+
+        Returns:
+            The timeframe period, or None if key is invalid
+        """
+        return self._timeframes.get(key)

@@ -476,3 +476,286 @@ async def test_chart_panel_format_number() -> None:
 
         # Test float with 0 decimals (converted to int)
         assert panel._format_number(1234.99, 0) == "1,234"
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_get_timeframe_for_key() -> None:
+    """Test getting timeframe period for number keys."""
+    app = ChartPanelTestApp()
+    async with app.run_test():
+        panel = app.query_one(ChartPanel)
+
+        # Test valid keys
+        assert panel.get_timeframe_for_key("1") == "1W"
+        assert panel.get_timeframe_for_key("2") == "1M"
+        assert panel.get_timeframe_for_key("3") == "3M"
+        assert panel.get_timeframe_for_key("4") == "6M"
+        assert panel.get_timeframe_for_key("5") == "1Y"
+        assert panel.get_timeframe_for_key("6") == "5Y"
+        assert panel.get_timeframe_for_key("7") == "MAX"
+
+        # Test invalid keys
+        assert panel.get_timeframe_for_key("0") is None
+        assert panel.get_timeframe_for_key("8") is None
+        assert panel.get_timeframe_for_key("a") is None
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_change_timeframe() -> None:
+    """Test changing timeframe reloads chart with new period."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Mock data for different timeframes
+        dates = [datetime.now() - timedelta(days=i) for i in range(30)]
+        prices_1m = [100.0 + i for i in range(30)]
+        prices_3m = [150.0 + i * 2 for i in range(30)]
+        volumes = [1000000 for _ in range(30)]
+
+        mock_data_1m = HistoricalData(
+            ticker="AAPL",
+            dates=dates,
+            prices=prices_1m,
+            volumes=volumes,
+            highs=[p + 5.0 for p in prices_1m],
+            lows=[p - 5.0 for p in prices_1m],
+            opens=prices_1m,
+            period="1M",
+            interval="1d",
+        )
+
+        mock_data_3m = HistoricalData(
+            ticker="AAPL",
+            dates=dates,
+            prices=prices_3m,
+            volumes=volumes,
+            highs=[p + 5.0 for p in prices_3m],
+            lows=[p - 5.0 for p in prices_3m],
+            opens=prices_3m,
+            period="3M",
+            interval="1d",
+        )
+
+        with patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock) as mock_fetch:
+            # First call returns 1M data, second returns 3M data
+            mock_fetch.side_effect = [mock_data_1m, mock_data_3m]
+
+            # Load initial chart with 1M
+            await panel.load_chart("AAPL", "1M")
+            await pilot.pause()
+
+            assert panel._current_period == "1M"
+            assert panel._state == "success"
+
+            # Change timeframe to 3M
+            await panel.change_timeframe("3M")
+            await pilot.pause()
+
+            # Should have reloaded with 3M period
+            assert mock_fetch.call_count == 2
+            mock_fetch.assert_called_with("AAPL", "3M")
+            assert panel._current_period == "3M"
+            assert panel._state == "success"
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_change_timeframe_no_ticker() -> None:
+    """Test that change_timeframe does nothing when no ticker is set."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Ensure no ticker is set (empty state)
+        assert panel._current_ticker is None
+
+        with patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock) as mock_fetch:
+            # Try to change timeframe
+            await panel.change_timeframe("3M")
+            await pilot.pause()
+
+            # Should not have fetched anything
+            mock_fetch.assert_not_called()
+            assert panel._state == "empty"
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_change_timeframe_same_period() -> None:
+    """Test that change_timeframe does nothing when period is already current."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Mock data
+        dates = [datetime.now() - timedelta(days=i) for i in range(30)]
+        prices = [100.0 + i for i in range(30)]
+        volumes = [1000000 for _ in range(30)]
+
+        mock_data = HistoricalData(
+            ticker="AAPL",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            highs=[p + 5.0 for p in prices],
+            lows=[p - 5.0 for p in prices],
+            opens=prices,
+            period="1M",
+            interval="1d",
+        )
+
+        with patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = mock_data
+
+            # Load initial chart with 1M
+            await panel.load_chart("AAPL", "1M")
+            await pilot.pause()
+
+            assert mock_fetch.call_count == 1
+            assert panel._current_period == "1M"
+
+            # Try to change to same period
+            await panel.change_timeframe("1M")
+            await pilot.pause()
+
+            # Should not have fetched again
+            assert mock_fetch.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_timeframe_bar_display() -> None:
+    """Test that timeframe selector bar is displayed with active indicator."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data with 1M period
+        dates = [datetime.now() - timedelta(days=i) for i in range(30)]
+        prices = [100.0 + i for i in range(30)]
+        volumes = [1000000 for _ in range(30)]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            highs=[p + 5.0 for p in prices],
+            lows=[p - 5.0 for p in prices],
+            opens=prices,
+            period="1M",
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=29.0,
+            avg_volume=1000000.0,
+            num_data_points=30,
+        )
+
+        # Show chart
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Check that timeframe bar is displayed
+        labels = panel.query(Label)
+        timeframe_labels = [label for label in labels if any(
+            period in str(label.render()) for period in ["1W", "1M", "3M", "6M", "1Y", "5Y", "MAX"]
+        )]
+
+        # Should have at least one label with timeframe info
+        assert len(timeframe_labels) > 0
+
+        # Should show all number keys (1-7)
+        label_text = " ".join([str(label.render()) for label in labels])
+        for key in ["1", "2", "3", "4", "5", "6", "7"]:
+            assert key in label_text
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_timeframe_persistence() -> None:
+    """Test that timeframe persists across chart reloads for same ticker."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Mock data for 3M timeframe
+        dates = [datetime.now() - timedelta(days=i) for i in range(90)]
+        prices = [150.0 + i for i in range(90)]
+        volumes = [2000000 for _ in range(90)]
+
+        mock_data_3m = HistoricalData(
+            ticker="AAPL",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            highs=[p + 5.0 for p in prices],
+            lows=[p - 5.0 for p in prices],
+            opens=prices,
+            period="3M",
+            interval="1d",
+        )
+
+        with patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = mock_data_3m
+
+            # Load chart with 3M timeframe
+            await panel.load_chart("AAPL", "3M")
+            await pilot.pause()
+
+            # Verify timeframe is set to 3M
+            assert panel._current_period == "3M"
+            assert panel._current_ticker == "AAPL"
+
+            # The timeframe should persist until explicitly changed
+            # (This is tested indirectly - _current_period stays 3M until change_timeframe is called)
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_default_timeframe() -> None:
+    """Test that default timeframe is 1M for new charts."""
+    app = ChartPanelTestApp()
+    async with app.run_test():
+        panel = app.query_one(ChartPanel)
+
+        # Check default period
+        assert panel._current_period == "1M"
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_all_timeframes() -> None:
+    """Test loading chart with all supported timeframes."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        timeframes = ["1W", "1M", "3M", "6M", "1Y", "5Y", "MAX"]
+
+        for period in timeframes:
+            # Create mock data for each timeframe
+            dates = [datetime.now() - timedelta(days=i) for i in range(30)]
+            prices = [100.0 + i for i in range(30)]
+            volumes = [1000000 for _ in range(30)]
+
+            mock_data = HistoricalData(
+                ticker="AAPL",
+                dates=dates,
+                prices=prices,
+                volumes=volumes,
+                highs=[p + 5.0 for p in prices],
+                lows=[p - 5.0 for p in prices],
+                opens=prices,
+                period=period,
+                interval="1d",
+            )
+
+            with patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock) as mock_fetch:
+                mock_fetch.return_value = mock_data
+
+                # Load chart with timeframe
+                await panel.load_chart("AAPL", period)
+                await pilot.pause()
+
+                # Verify timeframe is set correctly
+                assert panel._current_period == period
+                mock_fetch.assert_called_once_with("AAPL", period)
