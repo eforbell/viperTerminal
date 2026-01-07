@@ -75,3 +75,23 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Widget Queries**: Use `query()` to get all matching widgets, `query_one()` for a single required widget
 - **Integration Testing**: Mock async functions with `AsyncMock` and verify both success and error paths
 - **Event Handler Testing**: Use `await pilot.pause()` after triggering events to let async handlers complete
+
+### VPR-005: Crypto Quote Fetching with CoinGecko
+- **httpx for Async HTTP**: Use `httpx.AsyncClient()` for async HTTP requests; more modern than aiohttp
+- **respx for HTTP Mocking**: Use `@respx.mock` decorator with `respx.get().mock()` to mock HTTP responses in tests
+- **Symbol Mapping**: Maintain dict of common crypto symbols to API IDs (e.g., "BTC" -> "bitcoin")
+- **Rate Limit Handling**: Detect 429 status codes and implement exponential backoff with retries
+- **Exponential Backoff**: Use `2**attempt` for wait times (1s, 2s, 4s...)
+- **Retry Loop Pattern**: Track last error through retry attempts; return specific error after exhausting retries
+- **HTTP Status Codes**: Check response.status_code explicitly; 200 = success, 429 = rate limit, 404/500 = errors
+- **JSON Response Handling**: Use `response.json()` to parse; wrap in try/except for malformed JSON
+- **Defensive Parsing**: Use isinstance() checks on API response structure before accessing nested fields
+- **Type Conversions**: Explicitly convert API values with float() and int() for type safety
+- **Default Values**: Provide sensible defaults for optional fields (0 for volumes, None for names)
+- **Multiple Exception Types**: Catch specific httpx exceptions (ConnectError, RequestError, TimeoutError) separately
+- **HTTP Error Messages**: Include status code and reason phrase in error messages for debugging
+- **Test Coverage Goals**: Aim for >95% coverage; use `pragma: no cover` for truly unreachable defensive code
+- **Async Timeout Pattern**: Use `asyncio.wait_for()` to wrap async operations with timeout
+- **Mock Side Effects**: Use route.side_effect with list to simulate retry success (first fails, second succeeds)
+- **Test API Parameters**: Verify correct query params are sent using respx route matching
+- **Unused Imports**: Remove unused imports to satisfy ruff linter (F401)
