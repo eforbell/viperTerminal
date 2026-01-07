@@ -247,6 +247,21 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Test Coverage Goals**: Achieved 95.86% coverage with comprehensive sparkline and intraday tests
 - **Dataclass Imports**: Add new dataclasses to service __init__ exports for clean imports
 
+### VPR-016: Historical Price Data Service
+- **File Naming**: Avoid name collisions with existing modules (history_data.py vs history.py)
+- **OHLCV Data**: Store full Open-High-Low-Close-Volume data for flexibility in charting
+- **Period Mapping**: Map user-friendly periods (1W, 1M, etc.) to yfinance periods (5d, 1mo, etc.)
+- **Interval Selection**: Match interval to period (1d for short periods, 1wk for 2Y+, 1mo for MAX)
+- **yfinance history()**: Use `stock.history(period=str, interval=str)` for historical data
+- **Volume Integer Conversion**: Convert volume to int in list comprehension: `[int(v) for v in hist["Volume"].tolist()]`
+- **Stats Calculation**: Create separate function for stats to keep service focused on data fetching
+- **Empty Data Handling**: Check both `df is None` and `df.empty` for robustness
+- **Period Validation**: Validate period early and return error for invalid periods
+- **Comprehensive Testing**: Test all periods, empty data, invalid ticker, network errors, timeout
+- **Mock DataFrame**: Use pandas DataFrame with date_range index for realistic test mocks
+- **Virtual Environment**: Use `python3 -m venv .venv` and `.venv/bin/pip install -e ".[dev]"` for isolated dev environment
+- **Dev Dependencies**: Install with `.[dev]` to get pytest, mypy, ruff, etc.
+
 ### VPR-014: Configuration File Support
 - **tomllib for TOML**: Use Python 3.11+ built-in `tomllib` for reading TOML files (`import tomllib`)
 - **Binary Mode**: TOML files must be opened in binary mode: `open(file, "rb")` for tomllib.load()
@@ -299,3 +314,174 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Test Dismiss Behavior**: Verify screen dismisses correctly on Enter and Escape key presses
 - **Mock in Context Manager**: Use `with patch()` context manager when mocking in tests for clean teardown
 - **Test First-Run Integration**: Test that welcome screen shows on first run and doesn't show on subsequent runs
+
+### VPR-017: Chart Rendering Engine
+- **Braille Unicode**: Range U+2800-U+28FF provides 256 patterns (2x4 dots per char) for high-resolution charts
+- **Braille Dot Mapping**: Dots 1-3 and 7 map to left column, dots 4-6 and 8 to right column
+- **Type Overloading Required**: Use `@overload` for methods that return different types based on input (e.g., list[float] vs list[datetime])
+- **Downsampling Min/Max**: When downsampling data, always use original data for min/max to preserve extremes
+- **Type Narrowing with Cast**: Use `cast()` and `isinstance()` checks when mypy can't infer types in generic functions
+- **Multi-Line String Returns**: When a function returns multi-line strings with `\n`, use `.split("\n")` and `.extend()` instead of `.append()`
+- **X-Axis Design**: Create X-axis with two lines: border line (└───) and label line (dates)
+- **Block Characters**: Fallback to block chars (▁▂▃▄▅▆▇█) provides 8 vertical levels vs braille's higher resolution
+- **Normalization Pattern**: Normalize data to 0-1 range: `(value - min) / (max - min)`, then scale to target resolution
+- **Even-Spaced Downsampling**: Use `step = len(data) / target` and `data[int(i * step)]` for simple downsampling
+- **Chart Dimensions**: Separate chart rendering area from axes (subtract axis widths from total dimensions)
+- **Y-Axis Labels**: Show 3-5 price labels distributed across chart height, right-aligned with │ separator
+- **Floating Point Tolerance**: Use epsilon (e.g., 0.011) instead of exact equality for floating point comparisons in tests
+- **Test Comprehensiveness**: Include edge cases: empty data, single point, flat line, negative prices, very large/small ranges
+- **Type Assertions**: When downcasting union types, add `assert isinstance()` checks to help mypy understand the narrowing
+- **Dataclass for Results**: Use dataclasses (RenderedChart) to return multiple related values (lines, width, height, min, max)
+
+### VPR-018: Chart Panel Widget
+- **Panel Toggle Pattern**: Use `styles.display = "none"/"block"` to show/hide panels without destroying state
+- **Mutual Exclusivity**: When multiple panels can replace quote panel, hide others before showing new one
+- **State Flags for Panels**: Track visibility with `_info_panel_visible`, `_chart_panel_visible` flags in app
+- **Panel States**: Implement same state pattern as QuotePanel: empty, loading, success, error
+- **Widget Initialization**: Pass configuration (e.g., ChartStyle) via widget `__init__`, not after creation
+- **Responsive Chart Sizing**: Calculate available dimensions dynamically: `available_height = self.size.height - header_space`
+- **Minimum Dimensions**: Always enforce minimum chart size (e.g., 40x10) for readable output
+- **Loading with Context**: Show ticker and period in loading message: "Loading chart for AAPL (1M)..."
+- **Worker Pattern**: Use `self.run_worker()` to run async tasks (e.g., `chart_panel.load_chart()`) from action methods
+- **Stats Display**: Show high, low, and percent change with appropriate color (positive=green, negative=red)
+- **Chart Lines**: Use `markup=False` on Labels when rendering chart to preserve unicode characters
+- **Ticker Change Handling**: Check if `_current_ticker` matches before rendering fetched data to prevent stale updates
+- **Test with Mock fetch**: Use `patch("viper.widgets.chart_panel.fetch_historical_data")` to mock data service
+- **Test Multiple Periods**: Verify panel handles all supported periods (1W, 1M, 3M, 6M, 1Y, 5Y, MAX)
+- **Test Responsive Behavior**: Test chart renders correctly at different terminal dimensions
+- **Container CSS**: Use `padding: 0` for chart container to maximize chart space (unlike info panel with `padding: 1`)
+- **Action Keybinding**: Add new action to `BINDINGS` list with tuple: `("c", "toggle_chart", "Toggle Chart")`
+- **Widget Export**: Remember to add new widget to `viper/widgets/__init__.py` and `__all__` list
+
+### VPR-019: Timeframe Selection
+- **Timeframe Mapping Dict**: Store key-to-period mapping in widget (e.g., `{"1": "1W", "2": "1M"}`) for centralized access
+- **Number Key Bindings**: Add numeric keys (1-7) to BINDINGS with descriptive actions: `("1", "timeframe_1", "1W")`
+- **Action Method Pattern**: Create individual action methods (`action_timeframe_1`) that delegate to a shared helper
+- **Shared Helper Pattern**: Use helper method `_change_chart_timeframe(key)` that checks visibility before acting
+- **Conditional Actions**: Only process timeframe changes when chart panel is visible (check `_chart_panel_visible` flag)
+- **Get Method for Widget**: Add public method `get_timeframe_for_key(key)` to widget for app to query mappings
+- **Change Timeframe Method**: Add `async change_timeframe(period)` method to widget that calls `load_chart()` with new period
+- **Timeframe Bar UI**: Display timeframe selector as label with markup showing all options and highlighting active
+- **Markup Escaping**: Use `\\[` to escape literal brackets in Rich markup (e.g., `\\[1]` for key indicator)
+- **Active Indicator**: Use `[b][cyan]` for active timeframe, `[dim]` for inactive in markup
+- **Markup Nesting**: Ensure proper tag nesting: `[b][cyan]...[/cyan][/b]` not `[b][cyan]...[/b][/cyan]`
+- **Height Calculation Update**: When adding UI elements (timeframe bar), update available height calculation accordingly
+- **Persistence via State**: Timeframe persists naturally via `_current_period` state variable - no special handling needed
+- **Avoid Redundant Fetches**: Check if new period equals current period before fetching: `if period != self._current_period`
+- **Test All Keys**: Write tests for all 7 timeframe keys (1-7) to verify mapping and functionality
+- **Test Invalid Keys**: Test that invalid keys (0, 8, letters) return None from mapping
+- **Test Conditional Behavior**: Verify timeframe changes only work when chart panel is visible
+- **Test Same Period**: Verify that changing to the same period doesn't trigger a re-fetch
+- **Test No Ticker**: Verify that timeframe changes do nothing when no ticker is selected
+- **Test UI Display**: Verify timeframe bar displays all periods and highlights the active one correctly
+- **Mock Async Methods**: Use `AsyncMock` for mocking `fetch_historical_data` in tests
+- **Test Persistence**: Verify that timeframe persists across operations until explicitly changed
+
+### VPR-020: Volume Chart Overlay
+- **ANSI Color Codes**: Use raw ANSI codes for colored volume bars: `\033[32m` (green), `\033[31m` (red), `\033[0m` (reset)
+- **Block Character Levels**: Use 9-level block character array including space: `[" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]`
+- **Volume Normalization**: Normalize volumes to 0-1 range using max volume: `normalized = vol / max_volume`
+- **Volume Color Logic**: Green if `close > open`, red otherwise (matches candlestick convention)
+- **Separate Render Method**: Create `render_volume_bars()` method that returns list of strings (like chart rendering)
+- **Y-Axis Alignment**: Prepend Y-axis padding (e.g., 12 spaces) to volume bars to align with price chart
+- **Height Management**: Reserve 3 lines for volume bars, adjust main chart height accordingly: `height - volume_height`
+- **Conditional Rendering**: Only render volume bars when `_volume_enabled` flag is True
+- **Volume Toggle Method**: Simple toggle method that flips bool flag and calls `_render_content()` to re-render
+- **Volume Stats Display**: Add avg volume and last volume (with % of avg) to stats line when volume enabled
+- **Volume Ratio Calculation**: `volume_ratio = (last_volume / avg_volume * 100)` for "today vs avg" metric
+- **Format Large Numbers**: Use `_format_number(value, 0)` for volumes (no decimals, with commas)
+- **Type Overloading for int**: Add `@overload` for `list[int]` to `_downsample` method alongside float/datetime overloads
+- **Type Narrowing with isinstance**: Use `isinstance(data[0], int)` to narrow return type in generic downsample function
+- **Multiple Overload Pattern**: When adding new types to generic methods, add overload AND update implementation signature
+- **Volume Empty Check**: Check `len(data.volumes) > 0` before attempting to render volume bars
+- **Conditional Key Bindings**: Volume toggle ('v' key) only works when chart panel is visible (check `_chart_panel_visible`)
+- **Test Color Codes**: Test for presence of ANSI codes (`\033[32m` or `\033[31m`) in volume output
+- **Test Block Characters**: Verify volume line contains at least one block character from the set
+- **Test Empty Volumes**: Handle edge case of empty volumes list gracefully (return empty list)
+- **Test Zero Volumes**: Handle all-zero volumes without division by zero (set `max_volume = 1` if zero)
+- **Test Volume Toggle State**: Test both `is_volume_enabled()` method and `_volume_enabled` flag
+- **Test Volume Downsampling**: Verify that volume bars downsample correctly when data points exceed width
+- **Test Volume with Stats**: Verify volume stats (avg, last, ratio) appear in stats line when enabled
+- **Test Volume Persistence**: Volume toggle state persists across chart reloads until explicitly changed
+### VPR-021: Crypto Historical Charts
+- **Auto-Detection Pattern**: Use simple lookup in SYMBOL_TO_ID mapping to determine crypto vs stock ticker
+- **Multi-Source Architecture**: Route to different data sources based on asset type detection (yfinance for stocks, CoinGecko for crypto)
+- **CoinGecko market_chart Endpoint**: Use `/coins/{id}/market_chart?vs_currency=usd&days=N` for historical data
+- **CoinGecko Days Mapping**: Map user periods to days parameter: 1W=7, 1M=30, 3M=90, 6M=180, 1Y=365, 2Y=730, 5Y=1825, MAX=max
+- **CoinGecko Response Format**: Returns `{"prices": [[timestamp_ms, price], ...], "total_volumes": [[timestamp_ms, volume], ...]}`
+- **Timestamp Conversion**: CoinGecko uses millisecond timestamps, convert with `datetime.fromtimestamp(ms / 1000)`
+- **OHLC for Crypto**: CoinGecko market_chart doesn't provide OHLC, use price for all fields (acceptable for charting)
+- **Volume Padding**: If fewer volume points than price points, pad with zeros: `while len(volumes) < len(prices): volumes.append(0)`
+- **Interval Heuristic**: Calculate interval label from average time between points: <1h="5m", <24h="1h", else="1d"
+- **Rate Limit Retry Pattern**: Reuse exponential backoff pattern from crypto.py: check for 429, wait 2^attempt seconds
+- **Rate Limit Error Detection**: Check for "rate limit" in error message (case-insensitive) to trigger retry logic
+- **Retry Loop Exit**: Return immediately on success, only retry on rate limit errors, exhaust retries before returning error
+- **httpx AsyncClient**: Use `async with httpx.AsyncClient() as client:` for async HTTP requests
+- **httpx Error Handling**: Catch TimeoutError, ConnectError, RequestError separately for specific error messages
+- **API Error Codes**: Handle 429 (rate limit), 404 (not found), and other status codes with descriptive messages
+- **respx Mocking**: Use `@respx.mock` decorator and `respx.get().mock(return_value=Response())` for HTTP mocking
+- **respx Side Effects**: Use `route.side_effect = [Response1, Response2, ...]` to simulate retry scenarios
+- **respx Call Counting**: Use `route.call_count` to verify number of HTTP calls made during retries
+- **Mock Response Helper**: Create `create_mock_coingecko_response()` helper that generates realistic timestamp/price/volume arrays
+- **Test All Periods**: Test all 7 periods (1W-MAX) with parameterized mapping to verify correct days parameter
+- **Test Rate Limit Success**: Mock 2 failures (429) then success to verify retry logic works correctly
+- **Test Rate Limit Exhaustion**: Mock all attempts as 429 to verify max_retries is respected and error returned
+- **Test Empty Data**: Mock response with empty prices array to verify graceful error handling
+- **Test Malformed Response**: Mock response with invalid JSON structure to verify parsing error handling
+- **Test Volume Padding**: Mock response with fewer volumes than prices to verify padding logic works
+- **Test Timestamp Conversion**: Verify millisecond timestamps are correctly converted to datetime objects
+- **Test Timezone Awareness**: Use flexible assertions for dates (year in [2023, 2024]) to handle timezone differences
+- **Test Auto-Routing**: Verify BTC/ETH route to CoinGecko while AAPL routes to yfinance automatically
+- **Test Case Insensitivity**: Verify lowercase crypto symbols ("btc") are properly normalized and work correctly
+- **Test Coverage**: Added 20 new tests for crypto functionality, total 38 tests, all passing
+- **Module Coverage**: Achieved 91% coverage on history_data.py (exceeds 90% threshold)
+- **Import Pattern**: Import SYMBOL_TO_ID from crypto.py to reuse existing crypto symbol mapping
+- **Function Signature Extension**: Add `max_retries` parameter to `fetch_historical_data()` for crypto retry logic
+- **Private Helper Functions**: Name internal functions with leading underscore: `_is_crypto_ticker()`, `_fetch_crypto_historical()`
+- **Result Type Consistency**: All fetch functions return `HistoricalResult = HistoricalData | HistoricalDataError` for consistency
+- **Error Message Clarity**: Include ticker symbol and descriptive message in all error results for debugging
+
+### VPR-022: News Data Service
+- **feedparser Library**: Use feedparser for RSS parsing - mature, well-tested library that handles edge cases
+- **Type Ignore for Untyped Imports**: Add `# type: ignore[import-untyped]` comment to feedparser import (no type stubs)
+- **Yahoo Finance RSS Feed**: Use `https://feeds.finance.yahoo.com/rss/2.0/headline?s={TICKER}` endpoint
+- **RSS Feed Structure**: Standard RSS 2.0 with items containing title, link, description (summary), and pubDate
+- **In-Memory Caching**: Use module-level dict for caching: `_cache: dict[str, tuple[datetime, NewsResult]]`
+- **Cache TTL Pattern**: Store (timestamp, result) tuples, check `datetime.now() - cached_time < timedelta(seconds=TTL)`
+- **Cache Both Successes and Errors**: Cache error results to avoid repeated failing requests
+- **Executor Pattern**: Use `loop.run_in_executor(None, sync_func, args)` for blocking feedparser operations
+- **Two-Tier Architecture**: Async wrapper (`fetch_news`) calls sync helper (`_fetch_news_sync`) in executor
+- **httpx Sync Client**: Use `with httpx.Client(timeout=timeout) as client:` for synchronous RSS fetch
+- **raise_for_status()**: Call after HTTP request to convert 4xx/5xx responses to HTTPStatusError exceptions
+- **feedparser.parse()**: Parse response.content (bytes), returns dict with .entries list and .bozo flag
+- **Bozo Detection**: Check `feed.bozo and isinstance(feed.get("bozo_exception"), Exception)` for parsing errors
+- **Entry Attributes**: Use `hasattr(entry, "field")` checks since RSS fields are optional
+- **Published Date Parsing**: Use `time.mktime(entry.published_parsed)` to convert time.struct_time to timestamp
+- **Date Parse Fallbacks**: Wrap in try/except, fall back to `datetime.now()` if parsing fails
+- **Source Extraction**: Parse source from title using `title.rsplit(" - ", 1)` pattern (Yahoo uses "Title - Source" format)
+- **Summary Field**: Map RSS description to summary field (optional, may be None)
+- **Empty Feed Handling**: Return NewsError when `len(items) == 0` after parsing
+- **httpx Exception Hierarchy**: TimeoutException, ConnectError, HTTPStatusError, RequestError - handle each separately
+- **404 Special Handling**: Check `e.response.status_code == 404` for "No news feed available" message
+- **Generic Exception Catch**: Final `except Exception` for unexpected errors with "Unexpected error" message
+- **Clear Cache Function**: Provide `clear_news_cache(ticker)` function to clear specific ticker or all cache
+- **Global Keyword**: Use `global _cache` when reassigning module-level cache dict
+- **Ticker Normalization**: Always `.upper().strip()` ticker symbols for consistency
+- **URL in NewsItem**: Store as empty string if not available rather than None for consistency
+- **Test RSS Helpers**: Create `create_mock_rss_feed()`, `create_empty_rss_feed()` helpers for realistic test data
+- **Mock HTTP with respx**: Use `@respx.mock` decorator and `respx.get(url).mock(return_value=Response(...))` pattern
+- **Mock Date Handling**: Use fixed dates in mock RSS (Mon, 01 Jan 2024) to make assertions predictable
+- **Test All Error Paths**: Timeout, connection error, 404, 500, request error, parse error, empty feed, etc.
+- **Test Cache Lifecycle**: Test cache hit, cache miss, cache expiration, cache clearing (all and specific)
+- **Test Edge Cases**: Missing fields (summary, pubDate, source), invalid date strings, malformed RSS
+- **Test Generic Exception**: Mock executor or feedparser to raise RuntimeError to test exception handling
+- **Test Time.mktime Exception**: Mock `time.mktime` to raise ValueError to test date parsing exception path
+- **Coverage Goal**: Achieved 100% coverage with 27 comprehensive tests
+- **Test Organization**: Group tests by class: NewsItem, NewsError, FetchNews, ClearCache, ParsingEdgeCases
+- **Mock Internal Functions**: Use `patch("asyncio.get_event_loop")` or `patch("feedparser.parse")` to trigger edge cases
+- **Test Error Caching**: Verify that error results are also cached to prevent repeated failed requests
+- **Test Ticker Normalization**: Verify "  aapl  " normalizes to "AAPL" and works correctly
+- **Result Type Pattern**: Use `list[NewsItem] | NewsError` union type for fetch_news return value
+- **Optional Fields**: Use `Optional[str]` for summary field in NewsItem dataclass
+- **Time-Based Tests**: Use tolerance for time comparisons: `(datetime.now() - result).total_seconds() < 60`
+- **Multiple Source Support**: Architecture supports easy addition of other news sources (Google News, etc.)

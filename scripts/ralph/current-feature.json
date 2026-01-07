@@ -1,10 +1,10 @@
 {
-  "currentFeature": "feature-2",
-  "featureName": "Historical Charts & News Feed",
-  "prdPath": "features/feature-2-prd.json",
-  "branch": "viper/feature-2-charts-news",
-  "status": "in-progress",
-  "startedAt": "2026-01-07",
+  "currentFeature": null,
+  "featureName": null,
+  "prdPath": null,
+  "branch": null,
+  "status": "ready-for-next",
+  "startedAt": null,
   "completedFeatures": [
     {
       "feature": "feature-1",
@@ -14,6 +14,127 @@
       "status": "complete",
       "completedAt": "2026-01-07",
       "stories": 15
+    },
+    {
+      "feature": "feature-2",
+      "name": "Historical Charts & News Feed",
+      "prdPath": "features/feature-2-prd.json",
+      "branch": "viper/feature-2-charts-news",
+      "status": "complete",
+      "completedAt": "2026-01-07",
+      "stories": 12,
+      "testsPassing": 573,
+      "coverage": "90.07%"
+    }
+  ],
+  "futureEnhancements": [
+    {
+      "id": "FE-001",
+      "title": "Fix volume bar overlay",
+      "description": "Volume bars currently marked as experimental and disabled by default. Need to fix alignment and visual rendering issues.",
+      "priority": "High",
+      "relatedFeature": "feature-2",
+      "effort": "Medium",
+      "notes": "Braille chart uses 2 data points per character causing alignment issues with volume bars"
+    },
+    {
+      "id": "FE-002",
+      "title": "Additional news sources",
+      "description": "Add support for Finnhub API and Google News RSS as alternative news sources",
+      "priority": "Medium",
+      "relatedFeature": "feature-2",
+      "effort": "Small",
+      "notes": "Yahoo Finance RSS is primary, additional sources provide redundancy and broader coverage"
+    },
+    {
+      "id": "FE-003",
+      "title": "Technical indicators",
+      "description": "Add moving averages (SMA, EMA), RSI, MACD, Bollinger Bands overlays on charts",
+      "priority": "Medium",
+      "relatedFeature": "feature-2",
+      "effort": "Large",
+      "notes": "Would require new rendering layer and configuration for indicator parameters"
+    },
+    {
+      "id": "FE-004",
+      "title": "Chart export",
+      "description": "Export chart data to CSV or JSON format for external analysis",
+      "priority": "Low",
+      "relatedFeature": "feature-2",
+      "effort": "Small",
+      "notes": "Simple file write operation with date/price/volume columns"
+    },
+    {
+      "id": "FE-005",
+      "title": "Terminal capability detection",
+      "description": "Detect terminal braille support and fall back to block characters if needed",
+      "priority": "Low",
+      "relatedFeature": "feature-2",
+      "effort": "Small",
+      "notes": "Most modern terminals support braille, but some older ones may not"
+    },
+    {
+      "id": "FE-006",
+      "title": "Multiple chart comparison",
+      "description": "Display multiple tickers side-by-side or overlaid for comparison",
+      "priority": "Low",
+      "relatedFeature": "feature-2",
+      "effort": "Large",
+      "notes": "Would require significant UI redesign and normalization logic"
+    },
+    {
+      "id": "FE-007",
+      "title": "Options chain display",
+      "description": "Show options chains with strike prices, expiration dates, greeks, and bid/ask spreads",
+      "priority": "Medium",
+      "relatedFeature": "feature-1",
+      "effort": "Large",
+      "notes": "Would require new data source (yfinance supports this) and dedicated panel UI"
+    },
+    {
+      "id": "FE-008",
+      "title": "Portfolio tracking with P&L",
+      "description": "Track owned positions with cost basis, current value, realized/unrealized gains",
+      "priority": "High",
+      "relatedFeature": "feature-1",
+      "effort": "Large",
+      "notes": "Requires local persistence (SQLite or JSON), transaction history, and P&L calculations"
+    },
+    {
+      "id": "FE-009",
+      "title": "Alerts and notifications",
+      "description": "Set price alerts, volume alerts, or news alerts with notification system",
+      "priority": "Medium",
+      "relatedFeature": "feature-1",
+      "effort": "Medium",
+      "notes": "Background monitoring thread + system notifications (desktop/sound)"
+    },
+    {
+      "id": "FE-010",
+      "title": "Multiple color themes",
+      "description": "Support multiple terminal themes: dark green (default), amber, blue, high-contrast",
+      "priority": "Low",
+      "relatedFeature": "feature-1",
+      "effort": "Small",
+      "notes": "Theme switcher in config file, apply to all UI elements"
+    },
+    {
+      "id": "FE-011",
+      "title": "Split-screen multi-quote view",
+      "description": "Display multiple tickers simultaneously in split-screen layout with independent panels",
+      "priority": "Medium",
+      "relatedFeature": "feature-1",
+      "effort": "Large",
+      "notes": "Complex layout management, focus handling, and state synchronization"
+    },
+    {
+      "id": "FE-012",
+      "title": "WebSocket real-time streaming",
+      "description": "Replace polling with WebSocket connections for sub-second quote updates",
+      "priority": "Low",
+      "relatedFeature": "feature-1",
+      "effort": "Large",
+      "notes": "Requires paid API (Alpaca, Polygon.io) or complex websocket setup with free sources"
     }
   ]
 }

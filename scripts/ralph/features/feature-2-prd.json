@@ -39,7 +39,7 @@
         "Tests: valid fetch (mocked), all periods, empty data, invalid ticker, timeout"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": [],
       "notes": "Foundation for all chart features. yfinance already supports this via history() method."
@@ -60,7 +60,7 @@
         "Tests: rendering with various data sizes, edge cases (flat line, single point)"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Large",
       "dependencies": ["VPR-016"],
       "notes": "Core rendering logic. Braille gives ~8x resolution vs standard characters. This is the most complex story."
@@ -81,7 +81,7 @@
         "Tests: all display states, toggle behavior, responsive sizing"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-016", "VPR-017"],
       "notes": "Integrates chart renderer into the UI. Similar pattern to QuotePanel/InfoPanel."
@@ -99,7 +99,7 @@
         "Tests: each hotkey, visual indicator, persistence, default behavior"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-018"],
       "notes": "Quick timeframe switching is essential for usability."
@@ -117,7 +117,7 @@
         "Tests: volume rendering, color logic, toggle behavior"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-018"],
       "notes": "Volume context helps understand price movements."
@@ -134,7 +134,7 @@
         "Tests: crypto fetch (mocked), rate limit handling, auto-detection"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-016", "VPR-018"],
       "notes": "yfinance has limited crypto history. CoinGecko provides better data for crypto."
@@ -155,7 +155,7 @@
         "Tests: valid fetch (mocked), empty feed, invalid ticker, network errors, caching"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": [],
       "notes": "Yahoo RSS is free, no API key needed. feedparser is well-maintained and handles edge cases."
@@ -176,7 +176,7 @@
         "Tests: all display states, navigation, toggle, auto-refresh"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-022"],
       "notes": "Similar pattern to WatchlistPanel for navigation."
@@ -194,7 +194,7 @@
         "Tests: browser open (mocked), expansion toggle, keyboard handling"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-023"],
       "notes": "Essential for actually reading the news articles."
@@ -214,7 +214,7 @@
         "Tests: cache hit/miss, TTL expiration, clearing, thread safety"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": [],
       "notes": "Reduces API calls and improves responsiveness. Can be implemented early and used by all services."
@@ -230,7 +230,7 @@
         "Tests: help screen content includes new sections"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-018", "VPR-023"],
       "notes": "Documentation is part of the feature."
@@ -246,7 +246,7 @@
         "Tests: new config options load correctly, validation, defaults"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-018", "VPR-023"],
       "notes": "User customization for new features."

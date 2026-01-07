@@ -153,3 +153,77 @@ async def test_status_bar_state_transitions() -> None:
         status_bar.set_offline()
         await pilot.pause()
         assert str(connection_label.render()) == "Status: Offline"
+
+
+@pytest.mark.asyncio
+async def test_status_bar_set_message() -> None:
+    """Test StatusBar can display a message."""
+    app = StatusBarTestApp()
+    async with app.run_test() as pilot:
+        status_bar = app.query_one(StatusBar)
+        await pilot.pause()
+
+        # Set a message
+        status_bar.set_message("Opening in browser...")
+        await pilot.pause()
+
+        message_label = status_bar.query_one("#status-message", Label)
+        assert str(message_label.render()) == "Opening in browser..."
+
+
+@pytest.mark.asyncio
+async def test_status_bar_clear_message() -> None:
+    """Test StatusBar can clear a message."""
+    app = StatusBarTestApp()
+    async with app.run_test() as pilot:
+        status_bar = app.query_one(StatusBar)
+        await pilot.pause()
+
+        # Set then clear message
+        status_bar.set_message("Test message")
+        await pilot.pause()
+        status_bar.clear_message()
+        await pilot.pause()
+
+        message_label = status_bar.query_one("#status-message", Label)
+        assert str(message_label.render()) == ""
+
+
+@pytest.mark.asyncio
+async def test_status_bar_message_cleared_on_state_change() -> None:
+    """Test StatusBar message is cleared when state changes."""
+    app = StatusBarTestApp()
+    async with app.run_test() as pilot:
+        status_bar = app.query_one(StatusBar)
+        await pilot.pause()
+
+        # Set message
+        status_bar.set_message("Test message")
+        await pilot.pause()
+
+        # Online should clear message
+        status_bar.set_online()
+        await pilot.pause()
+
+        message_label = status_bar.query_one("#status-message", Label)
+        assert str(message_label.render()) == ""
+
+
+@pytest.mark.asyncio
+async def test_status_bar_message_cleared_on_refresh() -> None:
+    """Test StatusBar message is cleared when refresh is updated."""
+    app = StatusBarTestApp()
+    async with app.run_test() as pilot:
+        status_bar = app.query_one(StatusBar)
+        await pilot.pause()
+
+        # Set message
+        status_bar.set_message("Test message")
+        await pilot.pause()
+
+        # Update refresh should clear message
+        status_bar.update_last_refresh()
+        await pilot.pause()
+
+        message_label = status_bar.query_one("#status-message", Label)
+        assert str(message_label.render()) == ""
