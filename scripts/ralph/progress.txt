@@ -519,3 +519,48 @@
 
 ---
 
+
+## 2026-01-07 - VPR-014
+- Implemented comprehensive configuration file support using tomllib
+- Created Config dataclass with defaults for refresh_interval, theme_colors, and default_watchlist
+- Added load_config() function to read from ~/.config/viper/config.toml
+- Implemented __post_init__ validation with graceful fallback to defaults for invalid values
+- Integrated config into main app (ViperApp.__init__) to control watchlist refresh and load default watchlist
+- Config is fully optional - app works perfectly with defaults if no config file exists
+- Graceful error handling for missing files, invalid TOML syntax, and read errors
+- Wrote 19 comprehensive tests covering all acceptance criteria
+- All tests pass with 100% coverage on config module, mypy --strict passes
+
+**Files changed:**
+- `viper/config.py` - New Config dataclass and load_config() function with validation
+- `tests/test_config.py` - 19 comprehensive tests for config loading and validation
+- `viper/app.py` - Load config in __init__, pass refresh_interval to WatchlistPanel, load default_watchlist
+- `AGENTS.md` - Added VPR-014 learnings section
+- `scripts/ralph/prd.json` - Marked VPR-014 as passing
+
+**Learnings:**
+- **tomllib for TOML**: Python 3.11+ stdlib module for reading TOML files; use `import tomllib`
+- **Binary Mode Required**: TOML files must be opened in binary mode: `open(file, "rb")` for tomllib.load()
+- **TOML Structure**: Top-level keys must come before or after [tables]; `default_watchlist` inside `[theme_colors]` becomes part of theme_colors dict
+- **Table Syntax**: Use `[section_name]` for nested dicts/tables in TOML files
+- **Dataclass Mutable Defaults**: Use `field(default_factory=lambda: {...})` for dict defaults, `field(default_factory=list)` for list defaults
+- **Post-Init Validation**: Use `__post_init__()` method to validate and correct config values after initialization
+- **Validation Pattern**: Check isinstance() for types, check ranges for numbers; log warnings and replace with defaults
+- **Graceful Fallback**: Catch TOMLDecodeError, OSError, and generic Exception; return default Config() on any error
+- **Config File Path**: Use `Path.home() / ".config" / "viper" / "config.toml"` for XDG-compliant user config
+- **Partial Config Support**: Extract only keys present in TOML file, use defaults for missing keys
+- **Conditional Extraction**: Use `if "key" in data: config_dict["key"] = data["key"]` to build kwargs dict
+- **Config Integration**: Load config early in app.__init__() before creating managers to use config values
+- **Default Watchlist Loading**: Iterate over config.default_watchlist and call watchlist_manager.add() for each ticker
+- **Refresh Interval**: Pass config.refresh_interval to WatchlistPanel constructor instead of hardcoded 60
+- **Config Logging**: Log loaded config values for debugging and transparency
+- **Test with tmp_path**: Use pytest's tmp_path fixture to create temporary config files in isolated test directories
+- **Mock Config Path**: Use `@patch("viper.config.get_config_path")` to control where config is loaded from in tests
+- **Test Coverage**: Test missing file, valid full config, partial config, invalid TOML, read errors, validation, invalid types
+- **Invalid Type Testing**: Pass wrong types (string instead of dict) to test validation; ensure it logs and falls back
+- **Empty Config Test**: Empty TOML file should parse successfully and return all default values
+- **Type Safety**: All config code passes mypy --strict with explicit type annotations
+- **Logger No Arguments**: get_logger() takes no arguments; use get_logger() not get_logger(__name__)
+- **Non-Breaking**: Config is 100% optional; existing functionality unchanged if no config file present
+---
+

@@ -252,7 +252,7 @@
         "Tests: config loading, missing file, invalid values, validation"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "Use tomllib (stdlib in 3.11+). Pydantic optional for validation."
     },
     {
