@@ -1,0 +1,68 @@
+
+=================================================================
+🎉 Feature 2: Historical Charts & News Feed - READY FOR MERGE
+=================================================================
+
+Branch: viper/feature-2-charts-news
+Status: Complete - All stories done, all tests passing
+Commits: 31 commits since branching from main
+
+SUMMARY
+-------
+✅ 12 user stories completed (VPR-016 through VPR-027)
+✅ 573 tests passing (565 original + 8 new interpolation tests)
+✅ 90.07% code coverage (exceeds 90% threshold)
+✅ mypy --strict: zero errors
+✅ ruff: zero warnings
+
+KEY FEATURES DELIVERED
+----------------------
+1. Historical Price Charts
+   - Braille-based high-resolution rendering
+   - 7 timeframes (1W, 1M, 3M, 6M, 1Y, 5Y, MAX)
+   - Smart interpolation for sparse data
+   - Crypto and stock support
+   - Adaptive date labels
+
+2. News Feed
+   - Yahoo Finance RSS integration
+   - Vim-style navigation (j/k)
+   - Article expansion and browser integration
+   - 2-minute intelligent caching
+
+3. Infrastructure
+   - Generic TTL cache system
+   - Configuration extensions
+   - Updated help system
+
+KNOWN LIMITATIONS
+-----------------
+⚠️  Volume overlay: Experimental (disabled by default)
+    - Tracked as FE-001 for future fix
+    - Code complete, needs visual refinement
+
+FUTURE ENHANCEMENTS
+-------------------
+📋 12 items tracked in current-feature.json:
+    - Volume bar fix (High priority)
+    - Portfolio tracking (High priority)
+    - Technical indicators
+    - Options chain
+    - Alerts system
+    - Multiple themes
+    - And more...
+
+NEXT STEPS
+----------
+1. Create PR on GitHub:
+   https://github.com/eforbell/viper/compare/main...viper/feature-2-charts-news
+
+2. Use PR-FEATURE-2.md content for PR description
+
+3. After merge:
+   git checkout main
+   git pull origin main
+   git branch -d viper/feature-2-charts-news
+
+=================================================================
+

@@ -1,4 +1,18 @@
-"""News fetching service using Yahoo Finance RSS feeds."""
+"""News fetching service using Yahoo Finance RSS feeds.
+
+⚠️  WARNING: Yahoo Finance RSS feeds have been DISCONTINUED as of 2024-2025.
+The endpoint https://feeds.finance.yahoo.com/rss/2.0/headline returns 404.
+
+This module is currently NON-FUNCTIONAL and serves as a reference implementation.
+
+To restore news functionality, replace with one of these alternatives:
+1. Finnhub API (https://finnhub.io/docs/api/company-news) - 60 calls/min free
+2. News API (https://newsapi.org/) - 100 requests/day free  
+3. Alpha Vantage (https://www.alphavantage.co/documentation/#news-sentiment) - 5 calls/min free
+4. Yahoo Finance web scraping (fragile, no API key needed)
+
+See FE-002 in future enhancements tracker for implementation details.
+"""
 
 import asyncio
 from dataclasses import dataclass

@@ -39,12 +39,19 @@
     },
     {
       "id": "FE-002",
-      "title": "Additional news sources",
-      "description": "Add support for Finnhub API and Google News RSS as alternative news sources",
-      "priority": "Medium",
+      "title": "Replace Yahoo RSS news feed (BROKEN)",
+      "description": "Yahoo Finance RSS feeds have been discontinued (returns 404). Need to implement alternative news source: Finnhub API (60 calls/min free), News API (100/day free), or Alpha Vantage (5/min free)",
+      "priority": "Critical",
       "relatedFeature": "feature-2",
       "effort": "Small",
-      "notes": "Yahoo Finance RSS is primary, additional sources provide redundancy and broader coverage"
+      "notes": "Yahoo RSS endpoint (feeds.finance.yahoo.com/rss/2.0/headline) returns 404 as of Jan 2026. News feature is non-functional and needs replacement. Infrastructure is complete, just need to swap data source. Finnhub recommended: free tier with API key, good docs, 60 calls/min.",
+      "blockedFeature": "News Panel (VPR-022 to VPR-024)",
+      "alternativeSources": [
+        "Finnhub API - https://finnhub.io/docs/api/company-news (60 calls/min, API key required)",
+        "News API - https://newsapi.org/ (100 requests/day, API key required)",
+        "Alpha Vantage - https://www.alphavantage.co/documentation/#news-sentiment (5 calls/min, API key required)",
+        "Yahoo Finance scraping - fragile but no API key needed"
+      ]
     },
     {
       "id": "FE-003",

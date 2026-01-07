@@ -158,7 +158,11 @@ class HelpScreen(ModalScreen[None]):
                     classes="help-item",
                 )
                 yield Static(
-                    "News is fetched from Yahoo Finance RSS feed.",
+                    "⚠️  News currently unavailable (Yahoo RSS feed discontinued).",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Alternative news sources in development (see future enhancements).",
                     classes="help-item",
                 )
 
