@@ -191,7 +191,7 @@
         "Tests: each keybinding triggers correct action"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "Use Textual's Bindings system. Test with Pilot.press()."
     },
     {
