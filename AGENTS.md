@@ -247,6 +247,21 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Test Coverage Goals**: Achieved 95.86% coverage with comprehensive sparkline and intraday tests
 - **Dataclass Imports**: Add new dataclasses to service __init__ exports for clean imports
 
+### VPR-016: Historical Price Data Service
+- **File Naming**: Avoid name collisions with existing modules (history_data.py vs history.py)
+- **OHLCV Data**: Store full Open-High-Low-Close-Volume data for flexibility in charting
+- **Period Mapping**: Map user-friendly periods (1W, 1M, etc.) to yfinance periods (5d, 1mo, etc.)
+- **Interval Selection**: Match interval to period (1d for short periods, 1wk for 2Y+, 1mo for MAX)
+- **yfinance history()**: Use `stock.history(period=str, interval=str)` for historical data
+- **Volume Integer Conversion**: Convert volume to int in list comprehension: `[int(v) for v in hist["Volume"].tolist()]`
+- **Stats Calculation**: Create separate function for stats to keep service focused on data fetching
+- **Empty Data Handling**: Check both `df is None` and `df.empty` for robustness
+- **Period Validation**: Validate period early and return error for invalid periods
+- **Comprehensive Testing**: Test all periods, empty data, invalid ticker, network errors, timeout
+- **Mock DataFrame**: Use pandas DataFrame with date_range index for realistic test mocks
+- **Virtual Environment**: Use `python3 -m venv .venv` and `.venv/bin/pip install -e ".[dev]"` for isolated dev environment
+- **Dev Dependencies**: Install with `.[dev]` to get pytest, mypy, ruff, etc.
+
 ### VPR-014: Configuration File Support
 - **tomllib for TOML**: Use Python 3.11+ built-in `tomllib` for reading TOML files (`import tomllib`)
 - **Binary Mode**: TOML files must be opened in binary mode: `open(file, "rb")` for tomllib.load()
