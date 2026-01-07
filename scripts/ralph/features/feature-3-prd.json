@@ -1,0 +1,330 @@
+{
+  "branchName": "viper/feature-3-data-reliability",
+  "projectName": "Viper Terminal - Feature 3",
+  "description": "Data reliability & chart improvements: Fix news feed, volume alignment, unified crypto source, and technical indicator foundations",
+  "principles": [
+    "Rock-solid quality over speed - every feature must be bulletproof before moving on",
+    "Comprehensive test coverage - unit tests, integration tests, edge cases",
+    "All tests must pass before a story is marked complete",
+    "No story is done until it's documented and tested",
+    "Fail fast, fail loudly - errors should be obvious and actionable",
+    "Reuse existing patterns from MVP - consistent architecture",
+    "Performance matters - data fetching should not block the UI"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "tui": "Textual (built on Rich)",
+    "stockData": "yfinance (already integrated)",
+    "cryptoData": "yfinance with SYMBOL-USD format (replacing CoinGecko)",
+    "newsData": "yfinance .news attribute (replacing broken RSS)",
+    "charting": "Custom Unicode/Braille renderer",
+    "testing": "pytest + pytest-asyncio + pytest-cov",
+    "mocking": "pytest-mock, respx (for HTTP mocking)",
+    "typecheck": "mypy --strict",
+    "linting": "ruff"
+  },
+  "userStories": [
+    {
+      "id": "VPR-028",
+      "title": "Fix news service with yfinance built-in news",
+      "acceptanceCriteria": [
+        "Replace RSS-based news fetching with yfinance ticker.news attribute",
+        "Parse yfinance news structure: content.title, content.summary, content.pubDate, content.provider.displayName, content.previewUrl",
+        "Maintain existing NewsItem dataclass interface for backward compatibility",
+        "Handle edge cases: no news available, malformed data, network errors",
+        "Keep 2-minute cache behavior to avoid rate limits",
+        "Remove feedparser dependency from requirements (no longer needed)",
+        "Update docstrings to reflect new data source",
+        "Tests: valid fetch (mocked), empty news, malformed data, caching behavior"
+      ],
+      "priority": 1,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": [],
+      "notes": "Critical fix - news panel currently non-functional. yfinance .news attribute returns list of dicts with content.title, content.summary, etc. No API key required!"
+    },
+    {
+      "id": "VPR-029",
+      "title": "Unify crypto data source using yfinance",
+      "acceptanceCriteria": [
+        "Replace CoinGecko API with yfinance for crypto quotes (BTC-USD format)",
+        "Update crypto.py to use yfinance Ticker instead of CoinGecko API",
+        "Maintain existing CryptoQuote dataclass interface",
+        "Auto-convert common symbols: BTC→BTC-USD, ETH→ETH-USD, etc.",
+        "Support explicit -USD suffix for direct usage",
+        "Remove httpx/CoinGecko code from crypto.py",
+        "Update SYMBOL_TO_ID mapping to SYMBOL_TO_PAIR format",
+        "Tests: all major crypto pairs (BTC, ETH, ADA, SOL, DOGE), auto-conversion"
+      ],
+      "priority": 2,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": [],
+      "notes": "Eliminates rate limit issues and simplifies codebase to single data source. yfinance supports all major crypto via SYMBOL-USD format."
+    },
+    {
+      "id": "VPR-030",
+      "title": "Unify crypto historical data with yfinance",
+      "acceptanceCriteria": [
+        "Update history_data.py to use yfinance for crypto historical data",
+        "Remove CoinGecko historical fetch code (_fetch_crypto_historical)",
+        "Update _is_crypto_ticker to use new SYMBOL_TO_PAIR mapping",
+        "All crypto historical fetches use same code path as stocks",
+        "Verify volume data is available for crypto via yfinance",
+        "Tests: crypto historical data fetch, all timeframes, volume data verification"
+      ],
+      "priority": 3,
+      "passes": false,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-029"],
+      "notes": "Natural follow-on from VPR-029. Once crypto.py uses yfinance, historical data should use same source."
+    },
+    {
+      "id": "VPR-031",
+      "title": "Fix volume bar alignment with price chart",
+      "acceptanceCriteria": [
+        "Diagnose why volume bars misalign with price chart (interpolation mismatch)",
+        "When price chart upsamples (data < 60% of chart width), apply same upsampling to volume",
+        "Pass interpolated data dimensions from price chart to volume bar renderer",
+        "Ensure volume bars span exact same width as price chart",
+        "Handle edge cases: very sparse data, single data point, flat volumes",
+        "Add debug option to verify alignment during development",
+        "Tests: alignment verification with various data sizes (5, 20, 50, 100, 200 points)"
+      ],
+      "priority": 4,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": [],
+      "notes": "Root cause identified: braille chart interpolates/upsamples prices when data < 60% of max_data_points, but volume bars don't follow same logic. Need to pass interpolation info to volume renderer."
+    },
+    {
+      "id": "VPR-032",
+      "title": "Enable volume bars by default",
+      "acceptanceCriteria": [
+        "Change default value of _volume_enabled to True in ChartPanel",
+        "Update config.py to support volume_enabled with default True",
+        "Update help screen to reflect volume is on by default",
+        "Add status indicator showing volume toggle state",
+        "Tests: verify default state, config override, toggle behavior"
+      ],
+      "priority": 5,
+      "passes": false,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-031"],
+      "notes": "Only enable after VPR-031 fixes alignment issues. Volume adds important context to price movements."
+    },
+    {
+      "id": "VPR-033",
+      "title": "Simple Moving Average (SMA) indicator service",
+      "acceptanceCriteria": [
+        "Create viper/services/indicators.py",
+        "Implement calculate_sma(prices: list[float], period: int) -> list[float | None]",
+        "Return None for first (period-1) values where SMA can't be calculated",
+        "Support common periods: 20, 50, 100, 200 day",
+        "Pure function - no external dependencies, just math",
+        "Comprehensive tests: various periods, edge cases (empty, single value, exactly period size)"
+      ],
+      "priority": 6,
+      "passes": false,
+      "estimatedEffort": "Small",
+      "dependencies": [],
+      "notes": "Foundation for technical indicators. SMA is the simplest: sum of last N prices / N."
+    },
+    {
+      "id": "VPR-034",
+      "title": "Exponential Moving Average (EMA) indicator service",
+      "acceptanceCriteria": [
+        "Add calculate_ema(prices: list[float], period: int) -> list[float | None]",
+        "EMA formula: EMA_today = (Price_today * k) + (EMA_yesterday * (1-k)) where k = 2/(period+1)",
+        "First EMA value = SMA of first 'period' prices",
+        "Return None for first (period-1) values",
+        "Support common periods: 12, 26, 50 day",
+        "Tests: verify against known EMA calculations, edge cases"
+      ],
+      "priority": 7,
+      "passes": false,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-033"],
+      "notes": "EMA reacts faster to recent prices than SMA. Used in many other indicators (MACD)."
+    },
+    {
+      "id": "VPR-035",
+      "title": "Chart renderer support for overlay lines",
+      "acceptanceCriteria": [
+        "Add render_overlay() method to ChartRenderer",
+        "Accept overlay data (list of values, same length as prices) and style (color, line pattern)",
+        "Overlay must align perfectly with main price chart",
+        "Support multiple overlays (e.g., SMA20 + SMA50)",
+        "Handle None values in overlay (don't render those points)",
+        "Colors: cyan for SMA20, magenta for SMA50, yellow for EMA",
+        "Tests: overlay rendering, multiple overlays, None handling, alignment verification"
+      ],
+      "priority": 8,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-033"],
+      "notes": "Enables displaying moving averages and other indicators on the price chart. Must reuse same interpolation/downsampling logic as main chart."
+    },
+    {
+      "id": "VPR-036",
+      "title": "Moving average display on chart",
+      "acceptanceCriteria": [
+        "Add 'm' key binding to cycle through MA display modes: Off -> SMA20 -> SMA50 -> SMA20+50 -> Off",
+        "Calculate MA when chart loads (not on every toggle)",
+        "Store calculated MAs with chart data to avoid recalculation",
+        "Display MA legend in chart header (e.g., 'SMA20: $191.23')",
+        "Handle charts with fewer data points than MA period gracefully",
+        "Update help screen with new keybinding",
+        "Tests: toggle behavior, MA calculation, legend display, insufficient data handling"
+      ],
+      "priority": 9,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-033", "VPR-035"],
+      "notes": "Integrates MA indicators into the UI. Cycle pattern keeps single key for multiple options."
+    },
+    {
+      "id": "VPR-037",
+      "title": "Relative Strength Index (RSI) indicator service",
+      "acceptanceCriteria": [
+        "Add calculate_rsi(prices: list[float], period: int = 14) -> list[float | None]",
+        "RSI formula: 100 - (100 / (1 + RS)) where RS = avg_gain / avg_loss",
+        "Use Wilder's smoothing method for avg gain/loss",
+        "Return None for first 'period' values",
+        "RSI ranges 0-100 (oversold < 30, overbought > 70)",
+        "Tests: verify against known RSI calculations, edge cases (no losses, no gains)"
+      ],
+      "priority": 10,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": [],
+      "notes": "RSI is a momentum oscillator. Displayed separately from price chart (needs sub-panel)."
+    },
+    {
+      "id": "VPR-038",
+      "title": "Sub-panel framework for indicators",
+      "acceptanceCriteria": [
+        "Create viper/widgets/indicator_panel.py",
+        "IndicatorPanel base class with show/hide toggle",
+        "Panel appears below price chart, above volume bars",
+        "Takes 3-5 lines of vertical space (configurable)",
+        "Support horizontal line markers (e.g., RSI 30/70 levels)",
+        "Panel header shows indicator name and current value",
+        "Generic enough to support RSI, MACD, Stochastic, etc.",
+        "Tests: panel visibility, sizing, header display"
+      ],
+      "priority": 11,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": [],
+      "notes": "Framework for oscillator-type indicators that don't overlay on price. RSI will be first implementation."
+    },
+    {
+      "id": "VPR-039",
+      "title": "RSI indicator panel implementation",
+      "acceptanceCriteria": [
+        "Create RSI indicator panel using IndicatorPanel base",
+        "Toggle with 'r' key when chart panel is visible",
+        "Display RSI line with 0-100 scale",
+        "Mark oversold (30) and overbought (70) levels with dashed lines",
+        "Color: green when < 30 (oversold), red when > 70 (overbought), neutral otherwise",
+        "Show current RSI value in header",
+        "Update help screen with new keybinding",
+        "Tests: RSI display, level markers, color logic, toggle behavior"
+      ],
+      "priority": 12,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-037", "VPR-038"],
+      "notes": "First concrete implementation of sub-panel framework. RSI is widely used and relatively simple to visualize."
+    }
+  ],
+  "technicalNotes": {
+    "yfinanceNews": {
+      "description": "yfinance .news attribute returns news directly, no RSS parsing needed",
+      "structure": {
+        "title": "content.title",
+        "summary": "content.summary",
+        "url": "content.previewUrl or content.canonicalUrl.url",
+        "provider": "content.provider.displayName",
+        "pubDate": "content.pubDate (ISO format string)"
+      },
+      "rateLimit": "Moderate - same as ticker data, avoid rapid repeated calls"
+    },
+    "yfinanceCrypto": {
+      "description": "yfinance supports crypto via SYMBOL-USD format",
+      "examples": ["BTC-USD", "ETH-USD", "ADA-USD", "SOL-USD", "DOGE-USD"],
+      "features": "Full OHLCV history, fast_info for quotes, news support",
+      "limitation": "market_cap may be unavailable for some crypto"
+    },
+    "volumeAlignmentFix": {
+      "description": "Root cause of volume bar misalignment",
+      "problem": "Price chart upsamples when data < 60% of chart width, volume bars don't",
+      "solution": "Share interpolation parameters between price and volume renderers",
+      "implementation": [
+        "1. Track whether interpolation was applied in render() return value",
+        "2. Pass actual rendered data length to render_volume_bars()",
+        "3. Apply same interpolation logic in volume renderer"
+      ]
+    },
+    "technicalIndicators": {
+      "sma": "sum(prices[-period:]) / period",
+      "ema": "EMA = Price * k + EMA_prev * (1-k) where k = 2/(period+1)",
+      "rsi": "100 - (100 / (1 + avg_gain / avg_loss))"
+    }
+  },
+  "dependencies": {
+    "removed": [
+      "feedparser (no longer needed - using yfinance for news)"
+    ],
+    "existing": [
+      "yfinance (already installed - now sole data source)",
+      "textual (already installed)"
+    ],
+    "notNeeded": [
+      "httpx (can remove CoinGecko-related imports from crypto.py)"
+    ]
+  },
+  "milestones": [
+    {
+      "name": "M1: Data Source Reliability",
+      "stories": ["VPR-028", "VPR-029", "VPR-030"],
+      "description": "Fix news feed and unify on yfinance for all data"
+    },
+    {
+      "name": "M2: Volume Fix",
+      "stories": ["VPR-031", "VPR-032"],
+      "description": "Fix volume bar alignment and enable by default"
+    },
+    {
+      "name": "M3: Moving Averages",
+      "stories": ["VPR-033", "VPR-034", "VPR-035", "VPR-036"],
+      "description": "Add SMA/EMA indicators with chart overlay support"
+    },
+    {
+      "name": "M4: RSI Indicator",
+      "stories": ["VPR-037", "VPR-038", "VPR-039"],
+      "description": "Add RSI with sub-panel framework"
+    }
+  ],
+  "riskAnalysis": [
+    {
+      "risk": "yfinance API changes or rate limits",
+      "mitigation": "Already using yfinance successfully; add caching, respect rate limits",
+      "likelihood": "Low",
+      "impact": "High"
+    },
+    {
+      "risk": "Volume alignment fix more complex than estimated",
+      "mitigation": "Root cause identified; can add interpolation progressively",
+      "likelihood": "Medium",
+      "impact": "Medium"
+    },
+    {
+      "risk": "Technical indicator calculations off by small amounts",
+      "mitigation": "Test against verified external sources (TradingView, Yahoo Finance)",
+      "likelihood": "Medium",
+      "impact": "Low"
+    }
+  ]
+}

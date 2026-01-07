@@ -1,10 +1,10 @@
 {
-  "currentFeature": null,
-  "featureName": null,
-  "prdPath": null,
-  "branch": null,
-  "status": "ready-for-next",
-  "startedAt": null,
+  "currentFeature": "feature-3",
+  "featureName": "Data Reliability & Chart Improvements",
+  "prdPath": "features/feature-3-prd.json",
+  "branch": "viper/feature-3-data-reliability",
+  "status": "in-progress",
+  "startedAt": "2026-01-07",
   "completedFeatures": [
     {
       "feature": "feature-1",
@@ -35,23 +35,21 @@
       "priority": "High",
       "relatedFeature": "feature-2",
       "effort": "Medium",
-      "notes": "Braille chart uses 2 data points per character causing alignment issues with volume bars"
+      "notes": "Braille chart uses 2 data points per character causing alignment issues with volume bars",
+      "status": "IN_PROGRESS_FEATURE_3",
+      "assignedStories": ["VPR-031", "VPR-032"]
     },
     {
       "id": "FE-002",
       "title": "Replace Yahoo RSS news feed (BROKEN)",
-      "description": "Yahoo Finance RSS feeds have been discontinued (returns 404). Need to implement alternative news source: Finnhub API (60 calls/min free), News API (100/day free), or Alpha Vantage (5/min free)",
+      "description": "Yahoo Finance RSS feeds have been discontinued (returns 404). SOLUTION FOUND: yfinance has built-in .news attribute!",
       "priority": "Critical",
       "relatedFeature": "feature-2",
       "effort": "Small",
-      "notes": "Yahoo RSS endpoint (feeds.finance.yahoo.com/rss/2.0/headline) returns 404 as of Jan 2026. News feature is non-functional and needs replacement. Infrastructure is complete, just need to swap data source. Finnhub recommended: free tier with API key, good docs, 60 calls/min.",
-      "blockedFeature": "News Panel (VPR-022 to VPR-024)",
-      "alternativeSources": [
-        "Finnhub API - https://finnhub.io/docs/api/company-news (60 calls/min, API key required)",
-        "News API - https://newsapi.org/ (100 requests/day, API key required)",
-        "Alpha Vantage - https://www.alphavantage.co/documentation/#news-sentiment (5 calls/min, API key required)",
-        "Yahoo Finance scraping - fragile but no API key needed"
-      ]
+      "notes": "yfinance ticker.news returns rich news data - title, summary, source, URL. No API key needed!",
+      "status": "IN_PROGRESS_FEATURE_3",
+      "assignedStories": ["VPR-028"],
+      "solution": "yfinance .news attribute"
     },
     {
       "id": "FE-003",
@@ -60,7 +58,9 @@
       "priority": "Medium",
       "relatedFeature": "feature-2",
       "effort": "Large",
-      "notes": "Would require new rendering layer and configuration for indicator parameters"
+      "notes": "Feature 3 implements SMA, EMA, RSI with overlay and sub-panel framework. MACD and Bollinger Bands deferred to Feature 4.",
+      "status": "PARTIAL_IN_PROGRESS_FEATURE_3",
+      "assignedStories": ["VPR-033", "VPR-034", "VPR-035", "VPR-036", "VPR-037", "VPR-038", "VPR-039"]
     },
     {
       "id": "FE-004",
@@ -145,22 +145,14 @@
     },
     {
       "id": "FE-013",
-      "title": "Replace CoinGecko with yfinance for crypto (Feature 3)",
+      "title": "Replace CoinGecko with yfinance for crypto",
       "description": "Switch crypto data from CoinGecko to yfinance using USD pair format (e.g., BTC-USD, ETH-USD). Eliminates rate limit issues and simplifies codebase to single data source.",
       "priority": "High",
       "relatedFeature": "feature-2",
       "effort": "Medium",
-      "notes": "yfinance supports crypto with format SYMBOL-USD. Benefits: (1) No rate limits, (2) Single unified API, (3) Consistent data format. Changes needed: crypto.py, history_data.py, quote.py. Add user guidance for crypto format (BTC-USD) or auto-convert BTC → BTC-USD. Consider :CRYPTO prefix to force USD pair (e.g., :CRYPTO BTC → BTC-USD).",
-      "implementation": {
-        "affected_files": [
-          "viper/services/crypto.py - replace CoinGecko with yfinance",
-          "viper/services/history_data.py - remove CoinGecko historical, use yfinance",
-          "viper/services/quote.py - update crypto detection logic",
-          "viper/widgets/help_screen.py - add crypto format guidance (BTC-USD)"
-        ],
-        "crypto_symbols": "Map common symbols: BTC→BTC-USD, ETH→ETH-USD, etc.",
-        "testing": "Test major crypto pairs: BTC-USD, ETH-USD, ADA-USD, SOL-USD"
-      }
+      "notes": "yfinance supports crypto with format SYMBOL-USD. Benefits: (1) No rate limits, (2) Single unified API, (3) Consistent data format.",
+      "status": "IN_PROGRESS_FEATURE_3",
+      "assignedStories": ["VPR-029", "VPR-030"]
     }
   ]
 }
