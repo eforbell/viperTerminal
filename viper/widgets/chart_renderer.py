@@ -476,6 +476,7 @@ class ChartRenderer:
         width: int,
         height: int = 3,
         y_axis_width: int = 12,
+        style: ChartStyle | None = None,
     ) -> list[str]:
         """Render volume bars below the price chart.
 
@@ -483,9 +484,10 @@ class ChartRenderer:
             volumes: List of volume values
             opens: List of open prices (for color determination)
             closes: List of close prices (for color determination)
-            width: Width of chart area (should match price chart)
+            width: Width of chart area in characters
             height: Height in characters for volume bars (default: 3)
             y_axis_width: Width of Y-axis for alignment
+            style: Chart style (BRAILLE or BLOCK) - if BRAILLE, each char represents 2 data points
 
         Returns:
             List of strings representing volume bar lines with ANSI color codes
@@ -493,10 +495,17 @@ class ChartRenderer:
         if not volumes or not opens or not closes:
             return []
 
-        # Downsample to fit width
-        downsampled_volumes_raw = self._downsample(volumes, width)
-        downsampled_opens_raw = self._downsample(opens, width)
-        downsampled_closes_raw = self._downsample(closes, width)
+        # For braille charts, each character represents 2 data points
+        # So we need to downsample to width * 2 points, then compress to width chars
+        if style == ChartStyle.BRAILLE:
+            target_data_points = width * 2
+        else:
+            target_data_points = width
+
+        # Downsample to target data points
+        downsampled_volumes_raw = self._downsample(volumes, target_data_points)
+        downsampled_opens_raw = self._downsample(opens, target_data_points)
+        downsampled_closes_raw = self._downsample(closes, target_data_points)
 
         # Type narrowing
         assert isinstance(downsampled_volumes_raw, list) and (
@@ -512,6 +521,28 @@ class ChartRenderer:
         downsampled_volumes: list[int] = [int(v) for v in downsampled_volumes_raw]
         downsampled_opens: list[float] = downsampled_opens_raw
         downsampled_closes: list[float] = downsampled_closes_raw
+
+        # If braille style, compress pairs of data points into single characters
+        if style == ChartStyle.BRAILLE:
+            # Average pairs of volumes for each displayed character
+            compressed_volumes = []
+            compressed_opens = []
+            compressed_closes = []
+            for i in range(0, len(downsampled_volumes), 2):
+                if i + 1 < len(downsampled_volumes):
+                    # Average two consecutive volumes
+                    compressed_volumes.append((downsampled_volumes[i] + downsampled_volumes[i + 1]) // 2)
+                    compressed_opens.append((downsampled_opens[i] + downsampled_opens[i + 1]) / 2)
+                    compressed_closes.append((downsampled_closes[i] + downsampled_closes[i + 1]) / 2)
+                else:
+                    # Odd number - use last value as-is
+                    compressed_volumes.append(downsampled_volumes[i])
+                    compressed_opens.append(downsampled_opens[i])
+                    compressed_closes.append(downsampled_closes[i])
+            
+            downsampled_volumes = compressed_volumes
+            downsampled_opens = compressed_opens
+            downsampled_closes = compressed_closes
 
         # Normalize volumes to 0-1 range
         max_volume = max(downsampled_volumes) if downsampled_volumes else 1
