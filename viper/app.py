@@ -4,7 +4,9 @@ from textual.app import App, ComposeResult
 from textual.containers import Container
 from textual.widgets import Footer, Header
 
-from viper.services.stock import StockError, StockQuote, fetch_stock_quote
+from viper.services.crypto import CryptoError, CryptoQuote
+from viper.services.quote import fetch_quote
+from viper.services.stock import StockError, StockQuote
 from viper.widgets import QuotePanel, TickerInput
 
 
@@ -76,11 +78,11 @@ class ViperApp(App[None]):
         # Show loading state
         quote_panel.show_loading()
 
-        # Fetch the quote
-        result = await fetch_stock_quote(event.ticker)
+        # Fetch the quote using unified service (auto-detects stock vs crypto)
+        result = await fetch_quote(event.ticker)
 
         # Display result based on type
-        if isinstance(result, StockQuote):
+        if isinstance(result, (StockQuote, CryptoQuote)):
             quote_panel.show_quote(result)
-        elif isinstance(result, StockError):
+        elif isinstance(result, (StockError, CryptoError)):
             quote_panel.show_error(result)

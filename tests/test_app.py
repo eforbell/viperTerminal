@@ -6,6 +6,7 @@ import pytest
 from textual.widgets import Footer, Header
 
 from viper.app import ViperApp
+from viper.services.crypto import CryptoQuote
 from viper.services.stock import StockError, StockQuote
 from viper.widgets import QuotePanel, TickerInput
 
@@ -99,7 +100,7 @@ async def test_ticker_lookup_triggers_quote_fetch() -> None:
         name="Apple Inc.",
     )
 
-    with patch("viper.app.fetch_stock_quote", new_callable=AsyncMock) as mock_fetch:
+    with patch("viper.app.fetch_quote", new_callable=AsyncMock) as mock_fetch:
         mock_fetch.return_value = mock_quote
 
         async with app.run_test() as pilot:
@@ -131,10 +132,10 @@ async def test_ticker_lookup_handles_error() -> None:
     """Test that errors from quote fetching are displayed correctly."""
     app = ViperApp()
 
-    # Mock the fetch_stock_quote function to return an error
+    # Mock the fetch_quote function to return an error
     mock_error = StockError(ticker="INVALID", error_message="Invalid ticker symbol")
 
-    with patch("viper.app.fetch_stock_quote", new_callable=AsyncMock) as mock_fetch:
+    with patch("viper.app.fetch_quote", new_callable=AsyncMock) as mock_fetch:
         mock_fetch.return_value = mock_error
 
         async with app.run_test() as pilot:
@@ -156,3 +157,42 @@ async def test_ticker_lookup_handles_error() -> None:
             assert quote_panel._state == "error"
             assert isinstance(quote_panel._quote, StockError)
             assert quote_panel._quote.error_message == "Invalid ticker symbol"
+
+
+@pytest.mark.asyncio
+async def test_ticker_lookup_crypto_quote() -> None:
+    """Test that crypto quotes are fetched and displayed correctly."""
+    app = ViperApp()
+
+    # Mock the fetch_quote function to return a crypto quote
+    mock_quote = CryptoQuote(
+        symbol="BTC",
+        price_usd=50000.00,
+        change_24h_percent=5.25,
+        market_cap_usd=1000000000000,
+        volume_24h_usd=50000000000,
+        name="Bitcoin",
+    )
+
+    with patch("viper.app.fetch_quote", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = mock_quote
+
+        async with app.run_test() as pilot:
+            ticker_input = app.query_one(TickerInput)
+            quote_panel = app.query_one(QuotePanel)
+
+            # Submit a crypto ticker
+            ticker_input.focus()
+            ticker_input.value = "BTC"
+            await pilot.press("enter")
+
+            # Wait for async event handling
+            await pilot.pause()
+
+            # The fetch should have been called
+            mock_fetch.assert_called_once_with("BTC")
+
+            # Quote panel should now be in success state with crypto quote
+            assert quote_panel._state == "success"
+            assert isinstance(quote_panel._quote, CryptoQuote)
+            assert quote_panel._quote.symbol == "BTC"

@@ -4,6 +4,7 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import Label, LoadingIndicator
 
+from viper.services.crypto import CryptoError, CryptoQuote
 from viper.services.stock import StockError, StockQuote
 from viper.widgets import QuotePanel
 
@@ -360,3 +361,144 @@ async def test_quote_panel_displays_all_data_fields() -> None:
         assert any("52W Range" in text for text in label_texts)
         assert any("180.00" in text for text in label_texts)
         assert any("120.00" in text for text in label_texts)
+
+
+# Crypto quote tests
+@pytest.mark.asyncio
+async def test_quote_panel_crypto_quote_positive_change() -> None:
+    """Test displaying a crypto quote with positive 24h change."""
+    app = QuotePanelTestApp()
+    async with app.run_test():
+        panel = app.query_one(QuotePanel)
+
+        # Create a crypto quote with positive change
+        quote = CryptoQuote(
+            symbol="BTC",
+            price_usd=50000.00,
+            change_24h_percent=5.25,
+            market_cap_usd=1000000000000,
+            volume_24h_usd=50000000000,
+            name="Bitcoin",
+        )
+
+        # Show the quote
+        panel.show_quote(quote)
+
+        # Should update state
+        assert panel._state == "success"
+        assert panel._quote == quote
+
+        # Check that symbol and name are displayed
+        labels = panel.query(Label)
+        symbol_labels = [label for label in labels if "BTC" in str(label.render())]
+        assert len(symbol_labels) > 0
+        assert any("Bitcoin" in str(label.render()) for label in symbol_labels)
+
+        # Check that price is displayed with positive styling
+        price_labels = [label for label in labels if "50,000.00" in str(label.render())]
+        assert len(price_labels) > 0
+        price_label = price_labels[0]
+        assert "positive" in price_label.classes
+
+        # Check that 24h change is displayed with + sign
+        assert any("24h" in str(label.render()) for label in labels)
+        assert any("(+5.25%)" in str(label.render()) for label in labels)
+
+
+@pytest.mark.asyncio
+async def test_quote_panel_crypto_quote_negative_change() -> None:
+    """Test displaying a crypto quote with negative 24h change."""
+    app = QuotePanelTestApp()
+    async with app.run_test():
+        panel = app.query_one(QuotePanel)
+
+        # Create a crypto quote with negative change
+        quote = CryptoQuote(
+            symbol="ETH",
+            price_usd=3000.00,
+            change_24h_percent=-3.75,
+            market_cap_usd=400000000000,
+            volume_24h_usd=20000000000,
+            name="Ethereum",
+        )
+
+        # Show the quote
+        panel.show_quote(quote)
+
+        # Should update state
+        assert panel._state == "success"
+
+        # Check that price is displayed with negative styling
+        labels = panel.query(Label)
+        price_labels = [label for label in labels if "3,000.00" in str(label.render())]
+        assert len(price_labels) > 0
+        price_label = price_labels[0]
+        assert "negative" in price_label.classes
+
+        # Check that 24h change percentage is displayed
+        assert any("3.75%" in str(label.render()) for label in labels)
+
+
+@pytest.mark.asyncio
+async def test_quote_panel_crypto_quote_all_fields() -> None:
+    """Test that all crypto data fields are displayed."""
+    app = QuotePanelTestApp()
+    async with app.run_test():
+        panel = app.query_one(QuotePanel)
+
+        quote = CryptoQuote(
+            symbol="BTC",
+            price_usd=50000.00,
+            change_24h_percent=2.5,
+            market_cap_usd=1000000000000,
+            volume_24h_usd=50000000000,
+            name="Bitcoin",
+        )
+
+        panel.show_quote(quote)
+
+        labels = panel.query(Label)
+        label_texts = [str(label.render()) for label in labels]
+
+        # Check all required fields are present
+        # Symbol
+        assert any("BTC" in text for text in label_texts)
+
+        # Name
+        assert any("Bitcoin" in text for text in label_texts)
+
+        # Price
+        assert any("50,000.00" in text for text in label_texts)
+
+        # 24h change%
+        assert any("2.5%" in text or "2.50%" in text for text in label_texts)
+
+        # 24h Volume
+        assert any("24h Volume" in text and "50,000,000,000" in text for text in label_texts)
+
+        # Market cap
+        assert any("Market Cap" in text and "1,000,000,000,000" in text for text in label_texts)
+
+
+@pytest.mark.asyncio
+async def test_quote_panel_crypto_error() -> None:
+    """Test displaying a crypto error state."""
+    app = QuotePanelTestApp()
+    async with app.run_test():
+        panel = app.query_one(QuotePanel)
+
+        # Create a crypto error
+        error = CryptoError(symbol="UNKNOWN", error_message="Unknown crypto symbol: UNKNOWN")
+
+        # Show the error
+        panel.show_error(error)
+
+        # Should update state
+        assert panel._state == "error"
+        assert panel._quote == error
+
+        # Should display error message
+        labels = panel.query(Label)
+        error_labels = [label for label in labels if "Error:" in str(label.render())]
+        assert len(error_labels) > 0
+        assert any("Unknown crypto symbol" in str(label.render()) for label in error_labels)

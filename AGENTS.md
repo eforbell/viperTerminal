@@ -95,3 +95,20 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Mock Side Effects**: Use route.side_effect with list to simulate retry success (first fails, second succeeds)
 - **Test API Parameters**: Verify correct query params are sent using respx route matching
 - **Unused Imports**: Remove unused imports to satisfy ruff linter (F401)
+
+### VPR-006: Unified Quote Lookup with Asset Type Detection
+- **Union Types for Services**: Create union types to combine stock and crypto results: `Quote = StockQuote | CryptoQuote`
+- **Type Discrimination**: Use isinstance() checks to distinguish between quote types at runtime
+- **Prefix Parsing**: Implement explicit type prefixes (`:CRYPTO`, `:STOCK`) for user control
+- **Auto-Detection Logic**: Check known symbol lists first (crypto symbols), then fall back to alternative service (stock)
+- **Symbol Normalization**: Always normalize input (uppercase, strip whitespace) before processing
+- **Delegation Pattern**: Unified service delegates to specialized services based on detected type
+- **Helper Functions**: Provide type-checking helpers (is_crypto_quote, is_stock_quote) for cleaner code
+- **Widget Adaptation**: Single display widget can handle multiple types by checking instance type
+- **Conditional Rendering**: Use isinstance() checks to route to different rendering methods (_render_stock_quote vs _render_crypto_quote)
+- **Display Differences**: Adapt field labels for asset type (e.g., "52W Range" for stocks vs "24h Volume" for crypto)
+- **Error Type Handling**: Handle both StockError and CryptoError in error states with union types
+- **Test Both Paths**: Test both explicit prefix usage and auto-detection in separate test cases
+- **Integration Testing**: Mock unified service in app tests rather than individual services
+- **Line Length**: Split long mock patch statements across multiple lines to satisfy 100-char limit
+- **Type Consistency**: Ensure all related functions accept and return consistent union types throughout the stack

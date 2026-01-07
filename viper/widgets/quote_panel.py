@@ -1,11 +1,16 @@
-"""Quote panel widget for displaying stock quote information."""
+"""Quote panel widget for displaying stock and crypto quote information."""
 
 from textual.app import ComposeResult
 from textual.containers import Container
 from textual.widget import Widget
 from textual.widgets import Label, LoadingIndicator
 
+from viper.services.crypto import CryptoError, CryptoQuote
 from viper.services.stock import StockError, StockQuote
+
+# Union types for all possible quotes
+Quote = StockQuote | CryptoQuote
+QuoteError = StockError | CryptoError
 
 
 class QuotePanel(Widget):
@@ -72,7 +77,7 @@ class QuotePanel(Widget):
         """Initialize the quote panel."""
         super().__init__()
         self._state: str = "empty"
-        self._quote: StockQuote | StockError | None = None
+        self._quote: Quote | QuoteError | None = None
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -83,21 +88,21 @@ class QuotePanel(Widget):
         self._state = "loading"
         self._render_content()
 
-    def show_quote(self, quote: StockQuote) -> None:
-        """Display a successful stock quote.
+    def show_quote(self, quote: Quote) -> None:
+        """Display a successful quote (stock or crypto).
 
         Args:
-            quote: The stock quote data to display.
+            quote: The quote data to display (StockQuote or CryptoQuote).
         """
         self._state = "success"
         self._quote = quote
         self._render_content()
 
-    def show_error(self, error: StockError) -> None:
+    def show_error(self, error: QuoteError) -> None:
         """Display an error state.
 
         Args:
-            error: The error information to display.
+            error: The error information to display (StockError or CryptoError).
         """
         self._state = "error"
         self._quote = error
@@ -124,15 +129,18 @@ class QuotePanel(Widget):
                 loading_indicator, loading_label, classes="loading-container"
             )
             container.mount(loading_container)
-        elif self._state == "error" and isinstance(self._quote, StockError):
+        elif self._state == "error" and isinstance(self._quote, (StockError, CryptoError)):
             container.mount(
                 Label(f"Error: {self._quote.error_message}", classes="error-state")
             )
-        elif self._state == "success" and isinstance(self._quote, StockQuote):
-            self._render_quote(container, self._quote)
+        elif self._state == "success":
+            if isinstance(self._quote, StockQuote):
+                self._render_stock_quote(container, self._quote)
+            elif isinstance(self._quote, CryptoQuote):
+                self._render_crypto_quote(container, self._quote)
 
-    def _render_quote(self, container: Container, quote: StockQuote) -> None:
-        """Render a successful quote display.
+    def _render_stock_quote(self, container: Container, quote: StockQuote) -> None:
+        """Render a successful stock quote display.
 
         Args:
             container: The container to mount widgets into.
@@ -180,6 +188,50 @@ class QuotePanel(Widget):
         container.mount(
             Label(f"52W Range: {low_52w_str} - {high_52w_str}", classes="data-row")
         )
+
+    def _render_crypto_quote(self, container: Container, quote: CryptoQuote) -> None:
+        """Render a successful crypto quote display.
+
+        Args:
+            container: The container to mount widgets into.
+            quote: The crypto quote to display.
+        """
+        # Determine color based on 24h change
+        if quote.change_24h_percent > 0:
+            price_class = "price positive"
+            change_sign = "+"
+        elif quote.change_24h_percent < 0:
+            price_class = "price negative"
+            change_sign = ""  # Negative sign is already in the number
+        else:
+            price_class = "price neutral"
+            change_sign = ""
+
+        # Format price and change percentage
+        price_str = f"${self._format_number(quote.price_usd, 2)}"
+        change_pct_str = (
+            f"({change_sign}{self._format_number(abs(quote.change_24h_percent), 2)}%)"
+        )
+
+        # Header with name if available
+        header_text = f"{quote.symbol} - {quote.name}" if quote.name else quote.symbol
+        container.mount(Label(header_text, classes="ticker-header"))
+
+        # Price with 24h change
+        price_line = f"{price_str}  24h {change_pct_str}"
+        price_label = Label(price_line, classes=price_class)
+        container.mount(price_label)
+
+        # Additional data rows
+        container.mount(Label("", classes="data-row"))  # Spacing
+
+        # 24h Volume
+        volume_str = self._format_number(quote.volume_24h_usd, 0)
+        container.mount(Label(f"24h Volume: ${volume_str}", classes="data-row"))
+
+        # Market cap
+        market_cap_str = self._format_number(quote.market_cap_usd, 0)
+        container.mount(Label(f"Market Cap: ${market_cap_str}", classes="data-row"))
 
     def _format_number(self, value: float, decimals: int) -> str:
         """Format a number with commas and specified decimal places.
