@@ -29,6 +29,11 @@ viper = "viper.__main__:main"
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["viper*"]
+exclude = ["bugs*", "tests*", "scripts*", "htmlcov*"]
+
 [tool.pytest.ini_options]
 minversion = "7.0"
 addopts = "-ra -q --cov=viper --cov-report=term-missing --cov-report=html --cov-fail-under=90"
