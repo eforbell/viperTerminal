@@ -564,3 +564,46 @@
 - **Non-Breaking**: Config is 100% optional; existing functionality unchanged if no config file present
 ---
 
+## 2026-01-07 - VPR-015
+- Implemented HelpScreen modal widget with organized sections for commands, keybindings, and features
+- Created first-run detection using flag file pattern (~/.config/viper/first_run.json)
+- Integrated help screen with F1 and ? key bindings using action_show_help()
+- Added automatic welcome screen on first app launch using on_mount() lifecycle method
+- Used VerticalScroll container for scrollable help content in modal
+- Wrote 27 comprehensive tests (14 help screen unit tests, 7 first-run tests, 4 app integration tests, 2 modified existing)
+- All tests pass with 94% coverage (excluding pre-existing info_panel failures), mypy --strict passes
+
+**Files changed:**
+- `viper/widgets/help_screen.py` - HelpScreen modal with conditional welcome/help content
+- `viper/utils/first_run.py` - First-run detection utilities (is_first_run, mark_first_run_complete)
+- `viper/app.py` - Integrated help screen with on_mount first-run check
+- `viper/widgets/__init__.py` - Exported HelpScreen
+- `viper/utils/__init__.py` - Exported first_run utilities
+- `tests/test_help_screen.py` - 14 comprehensive tests for help screen widget
+- `tests/test_first_run.py` - 7 tests for first-run detection logic
+- `tests/test_app.py` - 4 integration tests for help and welcome screens
+- `AGENTS.md` - Added VPR-015 learnings section
+- `scripts/ralph/prd.json` - Marked VPR-015 as passing
+
+**Learnings:**
+- **ModalScreen Pattern**: Use `ModalScreen[None]` from `textual.screen` for modal dialogs that overlay the app
+- **push_screen**: Call `self.push_screen(screen)` to show modal; modal handles its own dismiss with `self.dismiss()`
+- **on_key for Modal**: Override `on_key()` to handle Enter/Escape dismissal; check `isinstance(event, Key)`
+- **Screen Parameters**: Pass state via `__init__()` (e.g., `is_welcome: bool`) for conditional rendering
+- **First-Run Flag File**: Use `~/.config/viper/first_run.json` with `.exists()` check for first-run detection
+- **Graceful Flag Persistence**: Wrap flag file write in try/except; fail silently if can't persist (not critical)
+- **on_mount Lifecycle**: Use `on_mount()` to check first-run and show welcome screen after app is fully initialized
+- **Test Modal Widgets**: Create test app that takes modal screen as init param and pushes it in on_mount()
+- **Test Helper Pattern**: `class HelpScreenTestApp(App): __init__(self, help_screen: HelpScreen)` for isolated modal testing
+- **Screen Property**: Access current screen with `app.screen`; use `isinstance(app.screen, ModalScreen)` to verify
+- **Action Method Testing**: Call `app.action_show_help()` directly instead of `pilot.press()` for more reliable tests
+- **Mock First-Run**: Mock `is_first_run` and `mark_first_run_complete` with `@patch()` for deterministic tests
+- **Help Content Structure**: Organize into sections (COMMANDS, KEYBINDINGS, FEATURES) with `.help-section-title` class
+- **VerticalScroll in Modal**: Use VerticalScroll for scrollable content; modal can contain complex layouts
+- **Conditional Footer Text**: Change footer message based on context (welcome: "continue", help: "close")
+- **Test Modal Dismiss**: Verify screen dismisses correctly on both Enter and Escape; check `not isinstance(app.screen, Modal)`
+- **Integration Tests**: Test first-run shows welcome, subsequent runs don't show welcome, F1/? open help
+- **Test File Operations**: Use `tmp_path` fixture and mock `get_first_run_flag_path()` for isolated file tests
+
+---
+

@@ -267,7 +267,7 @@
         "Tests: help screen content, dismiss behavior, first-run logic"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "Use Textual's ModalScreen. Store first-run flag in config."
     }
   ],
