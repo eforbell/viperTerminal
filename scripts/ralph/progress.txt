@@ -145,3 +145,40 @@
 - Use `await pilot.pause()` after triggering events to let async handlers complete
 
 ---
+
+## 2026-01-06 - VPR-005
+- Implemented crypto quote fetching service using CoinGecko API
+- Created CryptoQuote and CryptoError dataclasses with Result type pattern
+- Added httpx for async HTTP requests (more modern than aiohttp)
+- Maintained symbol-to-ID mapping for 20+ popular cryptocurrencies
+- Implemented rate limit (429) handling with exponential backoff retry logic
+- Added timeout handling with asyncio.wait_for
+- Graceful error handling for unknown symbols, network errors, timeouts, malformed JSON
+- Wrote 31 comprehensive tests using respx for HTTP mocking (98% coverage)
+- All tests pass, mypy --strict passes, ruff passes
+
+**Files changed:**
+- `pyproject.toml` - Added httpx and respx dependencies
+- `viper/services/crypto.py` - Crypto quote service with CoinGecko integration
+- `tests/test_crypto.py` - 31 comprehensive test cases
+- `AGENTS.md` - Added VPR-005 learnings
+
+**Learnings:**
+- Use `httpx.AsyncClient()` for async HTTP; cleaner API than aiohttp
+- Use `@respx.mock` decorator for HTTP mocking in tests; much simpler than responses library
+- Mock HTTP responses with `respx.get(url).mock(return_value=httpx.Response(...))`
+- Use `route.side_effect = [response1, response2]` to simulate retry scenarios
+- Detect rate limits by checking `response.status_code == 429`
+- Implement exponential backoff with `2**attempt` for wait times (1s, 2s, 4s...)
+- Track last error through retry loop to provide specific error messages
+- Use `isinstance(obj, dict)` to defensively check API response structure
+- Explicitly convert API values with `float()` and `int()` for type safety
+- Catch specific httpx exceptions: `ConnectError`, `RequestError`, `TimeoutError`
+- Use `asyncio.wait_for()` to add timeout to async operations
+- Mark unreachable defensive code with `# pragma: no cover` for coverage
+- Always remove unused imports to satisfy ruff linter (F401)
+- Test retry logic by mocking multiple responses with different status codes
+- Verify API parameters are correct using respx route matching with params dict
+- Use clear error messages that include HTTP status codes for debugging
+
+---

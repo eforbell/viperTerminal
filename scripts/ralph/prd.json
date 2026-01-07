@@ -111,7 +111,7 @@
         "100% test coverage on crypto service module"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "Use httpx or aiohttp for async requests. Mock all HTTP in tests."
     },
     {
