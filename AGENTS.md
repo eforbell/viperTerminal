@@ -485,3 +485,31 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Optional Fields**: Use `Optional[str]` for summary field in NewsItem dataclass
 - **Time-Based Tests**: Use tolerance for time comparisons: `(datetime.now() - result).total_seconds() < 60`
 - **Multiple Source Support**: Architecture supports easy addition of other news sources (Google News, etc.)
+
+### VPR-028: Fix News Service with yfinance Built-in News
+- **yfinance .news Attribute**: Use `ticker.news` property to get news directly from yfinance (no external API needed)
+- **No RSS Parsing Needed**: yfinance returns structured JSON, eliminating need for feedparser library
+- **Nested Dict Structure**: News data is nested: `item["content"]["title"]`, `item["content"]["summary"]`, etc.
+- **Safe Nested Access Helper**: Create `_safe_get_nested(data, keys, default)` helper for navigating nested dicts safely
+- **URL Fallback Pattern**: Try `content.previewUrl` first, fall back to `content.canonicalUrl.url` if not available
+- **Provider Display Name**: Extract source from `content.provider.displayName`, default to "Yahoo Finance"
+- **ISO Date Format**: yfinance uses ISO format strings like "2024-01-15T10:30:00Z", parse with `datetime.fromisoformat()`
+- **Z Suffix Handling**: Replace 'Z' with '+00:00' for proper timezone parsing: `pub_date_str.replace("Z", "+00:00")`
+- **Malformed Item Skipping**: Validate `"content"` key exists and is dict; skip items without valid title
+- **Type Validation**: Check `isinstance(value, expected_type)` for all extracted values to handle malformed data
+- **Continue Pattern**: Use `continue` in loop to skip malformed items rather than creating default items
+- **Empty Check After Parsing**: Return error if `len(items) == 0` after filtering malformed items (not just empty input)
+- **Remove Unused Dependency**: Remove feedparser from pyproject.toml dependencies list
+- **Keep httpx**: httpx is still used by crypto.py, don't remove it
+- **Mock yfinance Ticker**: Use `patch("yfinance.Ticker")` with `MagicMock()` that has `.news` attribute
+- **Mock News Structure**: Create helpers like `create_mock_yfinance_news()` that return list of content dicts
+- **Test Malformed Items**: Verify that items without "content" key or without valid title are skipped
+- **Test All-Malformed**: Verify that if all items are malformed, returns NewsError (not empty list)
+- **Test canonicalUrl Fallback**: Test URL extraction when previewUrl missing but canonicalUrl.url present
+- **Remove respx Tests**: Since no HTTP requests anymore, remove `@respx.mock` decorators from news tests
+- **Simpler Mocking**: yfinance mocking is simpler than RSS mocking - just set `.news` attribute to list
+- **Coverage Improvement**: Improved news.py from 83% to 93% coverage with comprehensive edge case tests
+- **Test Helper Functions**: Add dedicated test class for `_safe_get_nested()` helper function
+- **Backward Compatibility**: Maintained exact same NewsItem interface so no changes needed to news panel widget
+- **Unified Data Source**: Now using yfinance for stocks, crypto, AND news - single dependency
+- **No Rate Limits**: yfinance news has same moderate rate limits as ticker data, avoids CoinGecko-style aggressive limits

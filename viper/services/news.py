@@ -1,26 +1,18 @@
-"""News fetching service using Yahoo Finance RSS feeds.
+"""News fetching service using yfinance built-in news attribute.
 
-⚠️  WARNING: Yahoo Finance RSS feeds have been DISCONTINUED as of 2024-2025.
-The endpoint https://feeds.finance.yahoo.com/rss/2.0/headline returns 404.
+This module fetches news using the yfinance Ticker.news attribute, which provides
+rich news data directly without requiring RSS parsing or external API keys.
 
-This module is currently NON-FUNCTIONAL and serves as a reference implementation.
-
-To restore news functionality, replace with one of these alternatives:
-1. Finnhub API (https://finnhub.io/docs/api/company-news) - 60 calls/min free
-2. News API (https://newsapi.org/) - 100 requests/day free  
-3. Alpha Vantage (https://www.alphavantage.co/documentation/#news-sentiment) - 5 calls/min free
-4. Yahoo Finance web scraping (fragile, no API key needed)
-
-See FE-002 in future enhancements tracker for implementation details.
+Data source: yfinance Ticker.news (Yahoo Finance news API)
+Structure: List of dicts with content.title, content.summary, content.pubDate, etc.
 """
 
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Any, Optional
 
-import feedparser  # type: ignore[import-untyped]
-import httpx
+import yfinance as yf  # type: ignore[import-untyped]
 
 
 @dataclass
@@ -57,11 +49,11 @@ async def fetch_news(
     use_cache: bool = True,
 ) -> NewsResult:
     """
-    Fetch news for the given ticker from Yahoo Finance RSS.
+    Fetch news for the given ticker using yfinance.
 
     Args:
-        ticker: Stock/crypto ticker symbol (e.g., 'AAPL', 'BTC')
-        timeout: Maximum time to wait for response in seconds
+        ticker: Stock/crypto ticker symbol (e.g., 'AAPL', 'BTC-USD')
+        timeout: Maximum time to wait for response in seconds (unused, for compatibility)
         max_items: Maximum number of news items to return
         use_cache: Whether to use cached results if available
 
@@ -80,14 +72,13 @@ async def fetch_news(
         if datetime.now() - cached_time < timedelta(seconds=_CACHE_TTL_SECONDS):
             return cached_result
 
-    # Fetch news in executor (feedparser is blocking)
+    # Fetch news in executor (yfinance is blocking)
     loop = asyncio.get_event_loop()
     try:
         result = await loop.run_in_executor(
             None,
             _fetch_news_sync,
             ticker,
-            timeout,
             max_items,
         )
         # Cache result
@@ -101,98 +92,124 @@ async def fetch_news(
         return error_result
 
 
-def _fetch_news_sync(ticker: str, timeout: float, max_items: int) -> NewsResult:
+def _fetch_news_sync(ticker: str, max_items: int) -> NewsResult:
     """
-    Synchronous news fetch using feedparser and httpx.
+    Synchronous news fetch using yfinance Ticker.news attribute.
 
     Args:
         ticker: Stock/crypto ticker symbol
-        timeout: Maximum time to wait for response in seconds
         max_items: Maximum number of news items to return
 
     Returns:
         List of NewsItem on success, NewsError on failure
     """
-    url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}"
-
     try:
-        # Fetch RSS feed
-        with httpx.Client(timeout=timeout) as client:
-            response = client.get(url)
-            response.raise_for_status()
+        # Create yfinance Ticker object
+        ticker_obj = yf.Ticker(ticker)
 
-        # Parse RSS feed
-        feed = feedparser.parse(response.content)
+        # Fetch news using .news attribute
+        news_data: list[dict[str, Any]] = ticker_obj.news
 
-        # Check for parsing errors
-        if feed.bozo and isinstance(feed.get("bozo_exception"), Exception):
-            return NewsError(
-                ticker=ticker,
-                error_message=f"Failed to parse RSS feed: {feed.bozo_exception}",
-            )
+        # If no news available
+        if not news_data:
+            return NewsError(ticker=ticker, error_message="No news available")
 
         # Extract news items
         items: list[NewsItem] = []
-        for entry in feed.entries[:max_items]:
-            # Parse published date
-            published_at = None
-            if hasattr(entry, "published_parsed") and entry.published_parsed:
-                try:
-                    # Convert time.struct_time to datetime
-                    import time
+        for news_item in news_data[:max_items]:
+            try:
+                # Validate that we have a "content" key - skip if not
+                if "content" not in news_item or not isinstance(news_item["content"], dict):
+                    continue
 
-                    published_at = datetime.fromtimestamp(
-                        time.mktime(entry.published_parsed)
+                content = news_item["content"]
+
+                # Extract title from content.title - require it to be valid
+                title = content.get("title")
+                if not title or not isinstance(title, str):
+                    continue
+
+                # Extract summary from content.summary
+                summary = content.get("summary")
+                if summary is not None and not isinstance(summary, str):
+                    summary = None
+
+                # Extract URL from content.previewUrl or content.canonicalUrl.url
+                url = content.get("previewUrl")
+                if not url:
+                    canonical_url = content.get("canonicalUrl")
+                    if isinstance(canonical_url, dict):
+                        url = canonical_url.get("url", "")
+                    else:
+                        url = ""
+                if not isinstance(url, str):
+                    url = ""
+
+                # Extract source from content.provider.displayName
+                source = "Yahoo Finance"  # Default
+                provider = content.get("provider")
+                if isinstance(provider, dict):
+                    display_name = provider.get("displayName")
+                    if isinstance(display_name, str):
+                        source = display_name
+
+                # Extract and parse published date from content.pubDate
+                pub_date_str = content.get("pubDate")
+                published_at = datetime.now()  # Default to now
+                if pub_date_str and isinstance(pub_date_str, str):
+                    try:
+                        # Parse ISO format string (e.g., "2024-01-15T10:30:00Z")
+                        published_at = datetime.fromisoformat(
+                            pub_date_str.replace("Z", "+00:00")
+                        )
+                    except Exception:
+                        # If parsing fails, use current time
+                        published_at = datetime.now()
+
+                items.append(
+                    NewsItem(
+                        title=title,
+                        source=source,
+                        url=url,
+                        published_at=published_at,
+                        summary=summary,
                     )
-                except Exception:
-                    published_at = datetime.now()
-            else:
-                published_at = datetime.now()
-
-            # Extract summary
-            summary = None
-            if hasattr(entry, "summary") and entry.summary:
-                summary = entry.summary
-
-            # Extract source (usually in title after '-')
-            source = "Yahoo Finance"
-            title = entry.title if hasattr(entry, "title") else "No title"
-            if " - " in title:
-                parts = title.rsplit(" - ", 1)
-                if len(parts) == 2:
-                    title = parts[0].strip()
-                    source = parts[1].strip()
-
-            items.append(
-                NewsItem(
-                    title=title,
-                    source=source,
-                    url=entry.link if hasattr(entry, "link") else "",
-                    published_at=published_at,
-                    summary=summary,
                 )
-            )
+            except Exception:
+                # Skip malformed news items
+                continue
 
-        # If no items, return error
+        # If no valid items after parsing
         if not items:
             return NewsError(ticker=ticker, error_message="No news available")
 
         return items
 
-    except httpx.TimeoutException:
-        return NewsError(ticker=ticker, error_message="Request timed out")
-    except httpx.ConnectError:
-        return NewsError(ticker=ticker, error_message="Failed to connect to news server")
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
-            return NewsError(ticker=ticker, error_message="No news feed available")
-        return NewsError(
-            ticker=ticker, error_message=f"HTTP error: {e.response.status_code}"
-        )
-    except httpx.RequestError as e:
-        return NewsError(ticker=ticker, error_message=f"Network error: {str(e)}")
     except Exception as e:
         return NewsError(ticker=ticker, error_message=f"Unexpected error: {str(e)}")
+
+
+def _safe_get_nested(
+    data: dict[str, Any], keys: list[str], default: Any = None
+) -> Any:
+    """
+    Safely navigate nested dictionary structure.
+
+    Args:
+        data: Dictionary to navigate
+        keys: List of keys to traverse
+        default: Default value if key path doesn't exist
+
+    Returns:
+        Value at key path or default
+    """
+    current = data
+    for key in keys:
+        if isinstance(current, dict) and key in current:
+            current = current[key]
+        else:
+            return default
+    return current
 
 
 def clear_news_cache(ticker: Optional[str] = None) -> None:
