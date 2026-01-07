@@ -10,8 +10,15 @@ from viper.services.history import HistoryManager
 from viper.services.quote import fetch_quote, is_crypto_quote
 from viper.services.stock import StockError, StockInfo, StockInfoError, StockQuote, fetch_stock_info
 from viper.services.watchlist import WatchlistManager
-from viper.utils import format_error_message, get_logger, is_network_error, setup_logging
-from viper.widgets import InfoPanel, QuotePanel, StatusBar, TickerInput, WatchlistPanel
+from viper.utils import (
+    format_error_message,
+    get_logger,
+    is_first_run,
+    is_network_error,
+    mark_first_run_complete,
+    setup_logging,
+)
+from viper.widgets import HelpScreen, InfoPanel, QuotePanel, StatusBar, TickerInput, WatchlistPanel
 
 
 class ViperApp(App[None]):
@@ -185,6 +192,13 @@ class ViperApp(App[None]):
         yield StatusBar()
         yield Footer()
 
+    def on_mount(self) -> None:
+        """Called when app is first mounted."""
+        # Check if this is the first run and show welcome screen
+        if is_first_run():
+            self.push_screen(HelpScreen(is_welcome=True))
+            mark_first_run_complete()
+
     def action_focus_input(self) -> None:
         """Focus the ticker input bar."""
         ticker_input = self.query_one(TickerInput)
@@ -202,10 +216,8 @@ class ViperApp(App[None]):
         # Otherwise, could close overlays in the future (for VPR-015)
 
     def action_show_help(self) -> None:
-        """Show the help screen (placeholder for VPR-015)."""
-        # Placeholder - will be implemented in VPR-015
-        # For now, do nothing
-        pass
+        """Show the help screen."""
+        self.push_screen(HelpScreen(is_welcome=False))
 
     def action_toggle_info(self) -> None:
         """Toggle the info panel visibility."""

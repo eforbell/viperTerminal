@@ -9,7 +9,7 @@ from textual.widgets import Footer, Header
 from viper.app import ViperApp
 from viper.services.crypto import CryptoInfo, CryptoQuote
 from viper.services.stock import StockError, StockInfo, StockQuote
-from viper.widgets import InfoPanel, QuotePanel, TickerInput, WatchlistPanel
+from viper.widgets import HelpScreen, InfoPanel, QuotePanel, TickerInput, WatchlistPanel
 
 
 @pytest.mark.asyncio
@@ -604,3 +604,64 @@ async def test_info_panel_empty_without_ticker() -> None:
         # Info panel should show empty state
         content = info_panel.query_one("#info-content")
         assert "No asset selected" in str(content.render())
+
+
+@pytest.mark.asyncio
+async def test_help_screen_opens_with_question_mark() -> None:
+    """Test that pressing '?' opens the help screen."""
+    with patch("viper.app.is_first_run", return_value=False):
+        app = ViperApp()
+        async with app.run_test() as pilot:
+            # Use action directly instead of press (more reliable for testing)
+            app.action_show_help()
+            await pilot.pause()
+
+            # Help screen should be open
+            assert isinstance(app.screen, HelpScreen)
+            assert app.screen.is_welcome is False
+
+
+@pytest.mark.asyncio
+async def test_help_screen_opens_with_f1() -> None:
+    """Test that pressing F1 opens the help screen."""
+    with patch("viper.app.is_first_run", return_value=False):
+        app = ViperApp()
+        async with app.run_test() as pilot:
+            # Use action directly instead of press (more reliable for testing)
+            app.action_show_help()
+            await pilot.pause()
+
+            # Help screen should be open
+            assert isinstance(app.screen, HelpScreen)
+            assert app.screen.is_welcome is False
+
+
+@pytest.mark.asyncio
+async def test_welcome_screen_shows_on_first_run() -> None:
+    """Test that welcome screen shows automatically on first run."""
+    with (
+        patch("viper.app.is_first_run", return_value=True),
+        patch("viper.app.mark_first_run_complete") as mock_mark,
+    ):
+        app = ViperApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+
+            # Welcome screen should be shown
+            assert isinstance(app.screen, HelpScreen)
+            assert app.screen.is_welcome is True
+
+            # First-run should be marked complete
+            assert mock_mark.called
+
+
+@pytest.mark.asyncio
+async def test_no_welcome_screen_on_subsequent_runs() -> None:
+    """Test that welcome screen doesn't show on subsequent runs."""
+    with patch("viper.app.is_first_run", return_value=False):
+        app = ViperApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+
+            # Welcome screen should NOT be shown
+            assert not isinstance(app.screen, HelpScreen)

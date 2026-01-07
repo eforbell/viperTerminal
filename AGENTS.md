@@ -270,3 +270,32 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Empty Config File**: Empty TOML file should load successfully and use all defaults
 - **Type Safety**: All config loading code passes mypy --strict with no issues
 - **No Breaking Changes**: Config is optional - app works perfectly with default values if no config file exists
+
+### VPR-015: Help Screen and Onboarding
+- **ModalScreen**: Use `ModalScreen[None]` from `textual.screen` for modal dialogs that overlay the main app
+- **push_screen Pattern**: Call `self.push_screen(screen)` to show a modal screen over current app
+- **ModalScreen Dismiss**: Call `self.dismiss()` from within modal screen to close it and return to previous screen
+- **on_key Handler**: Override `on_key()` in modal screen to handle key presses (Enter, Escape for dismiss)
+- **Key Event Type**: Import `Key` from `textual.events` and use `isinstance(event, Key)` to check event type
+- **Screen State Param**: Pass parameters to screen via `__init__()` (e.g., `is_welcome: bool` for different modes)
+- **Conditional Content**: Use init params to render different content based on context (welcome vs help)
+- **First-Run Detection**: Use flag file pattern (`~/.config/viper/first_run.json`) to detect first app launch
+- **Flag File Path**: Helper function `get_first_run_flag_path()` returns path for easy mocking in tests
+- **File Existence Check**: `path.exists()` returns False for missing files (indicates first run)
+- **Mark Complete**: Create flag file with JSON content to mark first run complete
+- **Graceful Failure**: Wrap file operations in try/except and fail silently if can't persist flag
+- **on_mount for First Run**: Use `on_mount()` lifecycle method to check first-run and show welcome screen
+- **Test with Mock**: Mock `is_first_run` and `mark_first_run_complete` functions in app tests
+- **Test Helper Class**: Create test app class that takes modal screen as init param to test modals in isolation
+- **Screen Property**: Access current screen with `app.screen` to check if modal is showing
+- **isinstance for Screen Type**: Use `isinstance(app.screen, HelpScreen)` to verify correct screen is shown
+- **Action Method Testing**: Call action methods directly (`app.action_show_help()`) instead of `pilot.press()` for more reliable tests
+- **Modal Screen Testing**: Create minimal test app that pushes screen in on_mount for testing modal widgets
+- **Help Content Organization**: Organize help into sections (COMMANDS, KEYBINDINGS, FEATURES) with clear visual hierarchy
+- **CSS Sections**: Use classes for styling: `.help-section-title` for headers, `.help-item` for content
+- **VerticalScroll in Modal**: Nest VerticalScroll inside modal for scrollable long content
+- **Conditional Footer**: Change footer text based on context (welcome: "continue", help: "close")
+- **Test Modal Content**: Query widgets by ID in modal screen to verify content is rendered
+- **Test Dismiss Behavior**: Verify screen dismisses correctly on Enter and Escape key presses
+- **Mock in Context Manager**: Use `with patch()` context manager when mocking in tests for clean teardown
+- **Test First-Run Integration**: Test that welcome screen shows on first run and doesn't show on subsequent runs
