@@ -307,3 +307,98 @@ class TestNewsPanelIndexClamping:
             panel._selected_index = 0
         
         assert panel._selected_index == 0
+
+
+class TestNewsPanelLoadNews:
+    """Test the load_news async method."""
+
+    @pytest.mark.asyncio
+    async def test_load_news_sets_loading_state(self) -> None:
+        """Test that load_news sets initial loading state."""
+        from unittest.mock import AsyncMock, patch
+        
+        panel = NewsPanel()
+        
+        # Mock fetch_news to return empty list
+        with patch("viper.widgets.news_panel.fetch_news", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = []
+            
+            # We need to mock _render_content since panel isn't mounted
+            with patch.object(panel, "_render_content"):
+                await panel.load_news("AAPL")
+        
+        assert panel._current_ticker == "AAPL"
+
+    @pytest.mark.asyncio
+    async def test_load_news_success(self) -> None:
+        """Test successful news loading."""
+        from unittest.mock import AsyncMock, patch
+        
+        panel = NewsPanel()
+        items = [create_news_item(title=f"News {i}") for i in range(3)]
+        
+        with patch("viper.widgets.news_panel.fetch_news", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = items
+            
+            with patch.object(panel, "_render_content"):
+                await panel.load_news("AAPL")
+        
+        assert panel._state == "success"
+        assert panel._news_items == items
+        assert panel._current_ticker == "AAPL"
+
+    @pytest.mark.asyncio
+    async def test_load_news_error(self) -> None:
+        """Test error handling in load_news."""
+        from unittest.mock import AsyncMock, patch
+        from viper.services.news import NewsError
+        
+        panel = NewsPanel()
+        error = NewsError("AAPL", "Network error")
+        
+        with patch("viper.widgets.news_panel.fetch_news", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = error
+            
+            with patch.object(panel, "_render_content"):
+                await panel.load_news("AAPL")
+        
+        assert panel._state == "error"
+        assert panel._news_items == []
+
+    @pytest.mark.asyncio
+    async def test_load_news_ticker_change_during_fetch(self) -> None:
+        """Test that stale results are ignored if ticker changes."""
+        from unittest.mock import AsyncMock, patch
+        
+        panel = NewsPanel()
+        items = [create_news_item()]
+        
+        async def slow_fetch(ticker: str, **kwargs: object) -> list[NewsItem]:
+            # Simulate ticker change during fetch
+            panel._current_ticker = "MSFT"  # Changed!
+            return items
+        
+        with patch("viper.widgets.news_panel.fetch_news", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.side_effect = slow_fetch
+            
+            with patch.object(panel, "_render_content"):
+                await panel.load_news("AAPL")
+        
+        # Results should be ignored since ticker changed
+        assert panel._news_items == []
+
+
+class TestNewsPanelBindings:
+    """Test keyboard bindings."""
+
+    def test_has_j_binding(self) -> None:
+        """Test panel has j key binding for navigation."""
+        panel = NewsPanel()
+        binding_keys = [b.key for b in panel.BINDINGS]
+        assert "j" in binding_keys
+
+    def test_has_k_binding(self) -> None:
+        """Test panel has k key binding for navigation."""
+        panel = NewsPanel()
+        binding_keys = [b.key for b in panel.BINDINGS]
+        assert "k" in binding_keys

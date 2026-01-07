@@ -176,7 +176,7 @@
         "Tests: all display states, navigation, toggle, auto-refresh"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-022"],
       "notes": "Similar pattern to WatchlistPanel for navigation."

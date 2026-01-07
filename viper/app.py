@@ -18,7 +18,7 @@ from viper.utils import (
     mark_first_run_complete,
     setup_logging,
 )
-from viper.widgets import ChartPanel, HelpScreen, InfoPanel, QuotePanel, StatusBar, TickerInput, WatchlistPanel
+from viper.widgets import ChartPanel, HelpScreen, InfoPanel, NewsPanel, QuotePanel, StatusBar, TickerInput, WatchlistPanel
 
 
 class ViperApp(App[None]):
@@ -119,6 +119,17 @@ class ViperApp(App[None]):
     #chart-container:focus-within {
         border: double $accent;
     }
+
+    #news-container {
+        width: 70%;
+        border: solid $accent;
+        padding: 0;
+        display: none;
+    }
+
+    #news-container:focus-within {
+        border: double $accent;
+    }
     """
 
     # Green on black color theme
@@ -135,6 +146,7 @@ class ViperApp(App[None]):
         ("escape", "clear_or_close", "Clear/Close"),
         ("i", "toggle_info", "Toggle Info"),
         ("c", "toggle_chart", "Toggle Chart"),
+        ("n", "toggle_news", "Toggle News"),
         ("v", "toggle_volume", "Toggle Volume"),
         ("1", "timeframe_1", "1W"),
         ("2", "timeframe_2", "1M"),
@@ -169,6 +181,7 @@ class ViperApp(App[None]):
 
         self._info_panel_visible = False
         self._chart_panel_visible = False
+        self._news_panel_visible = False
         self._current_ticker: str | None = None
 
     def on_resize(self, event: object) -> None:
@@ -212,6 +225,8 @@ class ViperApp(App[None]):
                     yield InfoPanel()
                 with Container(id="chart-container"):
                     yield ChartPanel()
+                with Container(id="news-container"):
+                    yield NewsPanel()
         yield TickerInput(history_manager=self.history_manager)
         yield StatusBar()
         yield Footer()
@@ -251,6 +266,7 @@ class ViperApp(App[None]):
         info_container = self.query_one("#info-container")
         quote_container = self.query_one("#quote-container")
         chart_container = self.query_one("#chart-container")
+        news_container = self.query_one("#news-container")
 
         # Toggle visibility
         if self._info_panel_visible:
@@ -259,10 +275,13 @@ class ViperApp(App[None]):
             quote_container.styles.display = "block"
             self._info_panel_visible = False
         else:
-            # Hide chart panel if visible
+            # Hide other panels if visible
             if self._chart_panel_visible:
                 chart_container.styles.display = "none"
                 self._chart_panel_visible = False
+            if self._news_panel_visible:
+                news_container.styles.display = "none"
+                self._news_panel_visible = False
 
             # Show info panel, hide quote panel
             quote_container.styles.display = "none"
@@ -278,6 +297,7 @@ class ViperApp(App[None]):
         chart_container = self.query_one("#chart-container")
         quote_container = self.query_one("#quote-container")
         info_container = self.query_one("#info-container")
+        news_container = self.query_one("#news-container")
 
         # Toggle visibility
         if self._chart_panel_visible:
@@ -286,10 +306,13 @@ class ViperApp(App[None]):
             quote_container.styles.display = "block"
             self._chart_panel_visible = False
         else:
-            # Hide info panel if visible
+            # Hide other panels if visible
             if self._info_panel_visible:
                 info_container.styles.display = "none"
                 self._info_panel_visible = False
+            if self._news_panel_visible:
+                news_container.styles.display = "none"
+                self._news_panel_visible = False
 
             # Show chart panel, hide quote panel
             quote_container.styles.display = "none"
@@ -300,6 +323,38 @@ class ViperApp(App[None]):
             if self._current_ticker:
                 chart_panel = self.query_one(ChartPanel)
                 self.run_worker(chart_panel.load_chart(self._current_ticker, "1M"))
+
+    def action_toggle_news(self) -> None:
+        """Toggle the news panel visibility."""
+        news_container = self.query_one("#news-container")
+        quote_container = self.query_one("#quote-container")
+        info_container = self.query_one("#info-container")
+        chart_container = self.query_one("#chart-container")
+
+        # Toggle visibility
+        if self._news_panel_visible:
+            # Hide news panel, show quote panel
+            news_container.styles.display = "none"
+            quote_container.styles.display = "block"
+            self._news_panel_visible = False
+        else:
+            # Hide other panels if visible
+            if self._info_panel_visible:
+                info_container.styles.display = "none"
+                self._info_panel_visible = False
+            if self._chart_panel_visible:
+                chart_container.styles.display = "none"
+                self._chart_panel_visible = False
+
+            # Show news panel, hide quote panel
+            quote_container.styles.display = "none"
+            news_container.styles.display = "block"
+            self._news_panel_visible = True
+
+            # If we have a current ticker, fetch and display news
+            if self._current_ticker:
+                news_panel = self.query_one(NewsPanel)
+                self.run_worker(news_panel.load_news(self._current_ticker))
 
     def _change_chart_timeframe(self, key: str) -> None:
         """Change the chart timeframe if chart panel is visible.
