@@ -430,3 +430,46 @@
 - **Test Coverage**: Achieved 95.86% with comprehensive unit and integration tests covering all acceptance criteria
 
 ---
+
+## 2026-01-07 - VPR-012
+- Implemented InfoPanel widget with VerticalScroll container for scrollable content
+- Created fetch_stock_info() and fetch_crypto_info() async services for extended metadata
+- Added 'i' key binding to toggle between quote panel and info panel display
+- Type-specific rendering: show_stock_info() and show_crypto_info() methods
+- Safe dict navigation with isinstance() checks for nested API responses
+- Stocks show: sector, industry, description, website, employee count (formatted with commas)
+- Crypto shows: description, website, genesis date
+- Wrote 46 comprehensive tests (9 info panel, 8 stock info, 10 crypto info, 19 integration)
+- All tests pass, mypy --strict passes, type-safe throughout
+
+**Files changed:**
+- `viper/widgets/info_panel.py` - New InfoPanel widget with VerticalScroll, type-specific rendering
+- `viper/services/stock.py` - Added fetch_stock_info(), StockInfo/StockInfoError dataclasses
+- `viper/services/crypto.py` - Added fetch_crypto_info(), CryptoInfo/CryptoInfoError dataclasses
+- `viper/app.py` - Added 'i' key binding, action_toggle_info(), _fetch_and_display_info(), CSS for info-container
+- `viper/widgets/__init__.py` - Exported InfoPanel
+- `tests/test_info_panel.py` - 9 tests for InfoPanel states and rendering
+- `tests/test_stock_info.py` - 8 tests for stock info fetching
+- `tests/test_crypto_info.py` - 10 tests for crypto info fetching
+- `tests/test_app.py` - 7 integration tests for info panel toggle and display
+- `AGENTS.md` - Added VPR-012 learnings section
+- `scripts/ralph/prd.json` - Marked VPR-012 as passing
+
+**Learnings:**
+- **VerticalScroll**: Use for scrollable long content; nest Label inside with id for updates
+- **styles.display Toggle**: Use `widget.styles.display = "block"/"none"` not `widget.display` property
+- **CSS display**: Can set initial via TCSS (`display: none;`) and override dynamically
+- **info vs fast_info**: `stock.info` returns full dict with extended metadata (slow); `fast_info` is object with only basic fields (fast)
+- **Empty Dict is Valid**: Check `is None`, not `not dict`, since `{}` is valid response
+- **Nested Dict Access**: Always check `isinstance(value, dict)` before accessing nested keys
+- **List Access**: Check `isinstance(value, list) and len(value) > 0` before indexing
+- **Variable Name Collision**: Use distinct names for similar types to help mypy (crypto_info_result vs stock_info_result)
+- **ComposeResult Import**: Must import from `textual.app` for compose() return type
+- **Test Class Naming**: Avoid "Test" prefix for helper classes (pytest collects them); use "InfoPanelTestApp" not "TestApp"
+- **Executor Timeout Tests**: Use `time.sleep()` in mock functions (not `asyncio.sleep()`); executors run in threads
+- **Type-Specific Rendering**: Create separate methods for different data types in same widget
+- **Worker Pattern**: Use `run_worker(async_method())` to launch async operations without blocking
+- **Display Property Gotcha**: Textual has both `display` property and `styles.display`; use styles for CSS control
+
+---
+

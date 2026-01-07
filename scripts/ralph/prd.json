@@ -221,7 +221,7 @@
         "Tests: panel toggle, content rendering for each asset type, scrolling"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "Use Textual's ScrollableContainer."
     },
     {
