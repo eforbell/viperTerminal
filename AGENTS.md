@@ -112,3 +112,23 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Integration Testing**: Mock unified service in app tests rather than individual services
 - **Line Length**: Split long mock patch statements across multiple lines to satisfy 100-char limit
 - **Type Consistency**: Ensure all related functions accept and return consistent union types throughout the stack
+
+### VPR-007: Quote History and Quick Recall
+- **Persistence Pattern**: Store data in `~/.config/viper/` directory using JSON files
+- **Config Directory Creation**: Use `Path.mkdir(parents=True, exist_ok=True)` to create nested directories
+- **JSON Persistence**: Store list data in structured JSON with version key: `{"history": [...]}`
+- **Graceful Loading**: Handle missing files, corrupt JSON, and invalid structure with try/except; start fresh on error
+- **Data Validation**: Filter non-string items from loaded data using list comprehension with isinstance()
+- **Deduplication**: Remove existing item before re-adding to front; moves duplicates to top of history
+- **Size Limits**: Trim history to max_size after adding and when loading from disk
+- **Navigation State**: Track current position with internal index; -1 means not navigating
+- **Key Event Handling**: Use `on_key()` method to intercept keyboard events before default handling
+- **Event Prevention**: Call `event.prevent_default()` when handling Up/Down arrows to avoid default Input behavior
+- **Cursor Management**: Set `self.cursor_position` to position cursor at end after filling value from history
+- **State Reset**: Reset navigation index when user types (any key except up/down) or adds to history
+- **Input Integration**: Pass history_manager as optional parameter to widget; check for None before using
+- **File Recovery**: Handle OSError on save by failing silently; history just won't persist in that session
+- **Testing Persistence**: Use pytest's `tmp_path` fixture for isolated file system testing
+- **Copy Pattern**: Return copies from getter methods to prevent external modification of internal state
+- **Boundary Behavior**: At history end, stay on last item; at beginning, return empty string to clear input
+- **Test Coverage**: Test all paths: add, navigate, reset, persist, load, corrupt data, missing files, empty history

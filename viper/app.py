@@ -5,6 +5,7 @@ from textual.containers import Container
 from textual.widgets import Footer, Header
 
 from viper.services.crypto import CryptoError, CryptoQuote
+from viper.services.history import HistoryManager
 from viper.services.quote import fetch_quote
 from viper.services.stock import StockError, StockQuote
 from viper.widgets import QuotePanel, TickerInput
@@ -57,13 +58,14 @@ class ViperApp(App[None]):
         """Initialize the Viper Terminal app."""
         super().__init__()
         self.title = "VIPER TERMINAL"
+        self.history_manager = HistoryManager()
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header(show_clock=False)
         with Container(id="main-container"):
             yield QuotePanel()
-        yield TickerInput()
+        yield TickerInput(history_manager=self.history_manager)
         yield Footer()
 
     async def on_ticker_input_ticker_lookup(self, event: TickerInput.TickerLookup) -> None:
