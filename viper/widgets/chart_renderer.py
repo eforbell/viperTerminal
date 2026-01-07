@@ -116,23 +116,49 @@ class ChartRenderer:
 
         # Downsample data to fit chart width
         # Each braille char represents 2 horizontal data points
-        # Force exactly chart_width * 2 points to ensure consistent width
         max_data_points = chart_width * 2
-        downsampled_prices_raw = self._downsample(prices, max_data_points)
-        # Type narrowing: we know prices is list[float], so result is list[float]
-        assert isinstance(downsampled_prices_raw, list) and (
-            not downsampled_prices_raw or isinstance(downsampled_prices_raw[0], (int, float))
-        )
-        downsampled_prices: list[float] = downsampled_prices_raw
         
-        # Ensure we have exactly chart_width * 2 points
-        # If we have fewer, pad with the last value; if more, truncate
-        while len(downsampled_prices) < max_data_points:
-            downsampled_prices.append(downsampled_prices[-1] if downsampled_prices else 0.0)
-        downsampled_prices = downsampled_prices[:max_data_points]
+        # If we have significantly fewer data points, we need to upsample
+        # to distribute them across the full chart width
+        if len(prices) < max_data_points * 0.6:  # Less than 60% of target
+            # Upsample by linearly interpolating between existing points
+            upsampled_prices = []
+            for i in range(max_data_points):
+                # Map this output index to input space
+                input_idx = (i / max_data_points) * len(prices)
+                # Find the two surrounding data points
+                idx_low = int(input_idx)
+                idx_high = min(idx_low + 1, len(prices) - 1)
+                # Linear interpolation weight
+                weight = input_idx - idx_low
+                # Interpolate
+                value = prices[idx_low] * (1 - weight) + prices[idx_high] * weight
+                upsampled_prices.append(value)
+            downsampled_prices = upsampled_prices
+            
+            # Also upsample dates if present
+            if dates:
+                upsampled_dates = []
+                for i in range(max_data_points):
+                    input_idx = (i / max_data_points) * len(dates)
+                    idx_low = int(input_idx)
+                    idx_high = min(idx_low + 1, len(dates) - 1)
+                    # For dates, just use the lower index (no interpolation)
+                    upsampled_dates.append(dates[idx_low])
+                downsampled_dates = upsampled_dates
+            else:
+                downsampled_dates = None
+        else:
+            # Normal downsampling for sufficient data
+            downsampled_prices_raw = self._downsample(prices, max_data_points)
+            # Type narrowing
+            assert isinstance(downsampled_prices_raw, list) and (
+                not downsampled_prices_raw or isinstance(downsampled_prices_raw[0], (int, float))
+            )
+            downsampled_prices = downsampled_prices_raw
 
-        downsampled_dates_raw = self._downsample(dates, max_data_points) if dates else None
-        downsampled_dates: list[datetime] | None = downsampled_dates_raw if downsampled_dates_raw else None
+            downsampled_dates_raw = self._downsample(dates, max_data_points) if dates else None
+            downsampled_dates = downsampled_dates_raw if downsampled_dates_raw else None
 
         # Normalize prices to fit chart height (using original min/max)
         price_range = max_price - min_price
@@ -182,67 +208,38 @@ class ChartRenderer:
         if not scaled_values:
             return [" " * target_width for _ in range(height)]
 
-        # Use exactly target_width characters
+        # Now we always have chart_width * 2 data points (either downsampled or upsampled)
+        # So always render to target_width
         num_chars = target_width
+        actual_data_points = len(scaled_values)
+        
+        # Initialize grid
         lines = [[" " for _ in range(num_chars)] for _ in range(height)]
 
-        # Calculate how many data points we have vs. how many we need (target_width * 2)
-        target_data_points = target_width * 2
-        actual_data_points = len(scaled_values)
+        # Process data points sequentially
+        for i in range(0, min(actual_data_points, num_chars * 2), 2):
+            char_idx = i // 2
+            if char_idx >= num_chars:
+                break
+                
+            left_val = scaled_values[i]
+            right_val = scaled_values[i + 1] if i + 1 < actual_data_points else left_val
 
-        # If we have fewer data points than needed, space them out across the full width
-        if actual_data_points < target_data_points:
-            # Map each data point to its position in the full width
-            for i in range(0, actual_data_points, 2):
-                # Calculate which character position this pair should go to
-                # Spread points evenly across the full width
-                char_idx = int((i / actual_data_points) * num_chars)
-                if char_idx >= num_chars:
-                    char_idx = num_chars - 1
-                    
-                left_val = scaled_values[i]
-                right_val = scaled_values[i + 1] if i + 1 < actual_data_points else left_val
+            # Determine which row this belongs to (from bottom)
+            left_row = height - 1 - (left_val // 4)
+            right_row = height - 1 - (right_val // 4)
 
-                # Determine which row this belongs to (from bottom)
-                left_row = height - 1 - (left_val // 4)
-                right_row = height - 1 - (right_val // 4)
+            # Determine dot positions within the row (0-3)
+            left_dot = left_val % 4
+            right_dot = right_val % 4
 
-                # Determine dot positions within the row (0-3)
-                left_dot = left_val % 4
-                right_dot = right_val % 4
+            # Calculate braille pattern
+            braille_char = self._get_braille_char(left_row, left_dot, right_row, right_dot, height)
 
-                # Calculate braille pattern
-                braille_char = self._get_braille_char(left_row, left_dot, right_row, right_dot, height)
-
-                # Place character in the correct row
-                target_row = min(left_row, right_row)
-                if 0 <= target_row < height:
-                    lines[target_row][char_idx] = braille_char
-        else:
-            # Normal case: we have enough data points, process sequentially
-            for i in range(0, min(actual_data_points, target_data_points), 2):
-                char_idx = i // 2
-                if char_idx >= num_chars:
-                    break
-                    
-                left_val = scaled_values[i]
-                right_val = scaled_values[i + 1] if i + 1 < actual_data_points else left_val
-
-                # Determine which row this belongs to (from bottom)
-                left_row = height - 1 - (left_val // 4)
-                right_row = height - 1 - (right_val // 4)
-
-                # Determine dot positions within the row (0-3)
-                left_dot = left_val % 4
-                right_dot = right_val % 4
-
-                # Calculate braille pattern
-                braille_char = self._get_braille_char(left_row, left_dot, right_row, right_dot, height)
-
-                # Place character in the correct row
-                target_row = min(left_row, right_row)
-                if 0 <= target_row < height:
-                    lines[target_row][char_idx] = braille_char
+            # Place character in the correct row
+            target_row = min(left_row, right_row)
+            if 0 <= target_row < height:
+                lines[target_row][char_idx] = braille_char
 
         # Convert grid to strings
         return ["".join(line) for line in lines]
