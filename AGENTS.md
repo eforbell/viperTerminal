@@ -314,3 +314,21 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Test Dismiss Behavior**: Verify screen dismisses correctly on Enter and Escape key presses
 - **Mock in Context Manager**: Use `with patch()` context manager when mocking in tests for clean teardown
 - **Test First-Run Integration**: Test that welcome screen shows on first run and doesn't show on subsequent runs
+
+### VPR-017: Chart Rendering Engine
+- **Braille Unicode**: Range U+2800-U+28FF provides 256 patterns (2x4 dots per char) for high-resolution charts
+- **Braille Dot Mapping**: Dots 1-3 and 7 map to left column, dots 4-6 and 8 to right column
+- **Type Overloading Required**: Use `@overload` for methods that return different types based on input (e.g., list[float] vs list[datetime])
+- **Downsampling Min/Max**: When downsampling data, always use original data for min/max to preserve extremes
+- **Type Narrowing with Cast**: Use `cast()` and `isinstance()` checks when mypy can't infer types in generic functions
+- **Multi-Line String Returns**: When a function returns multi-line strings with `\n`, use `.split("\n")` and `.extend()` instead of `.append()`
+- **X-Axis Design**: Create X-axis with two lines: border line (└───) and label line (dates)
+- **Block Characters**: Fallback to block chars (▁▂▃▄▅▆▇█) provides 8 vertical levels vs braille's higher resolution
+- **Normalization Pattern**: Normalize data to 0-1 range: `(value - min) / (max - min)`, then scale to target resolution
+- **Even-Spaced Downsampling**: Use `step = len(data) / target` and `data[int(i * step)]` for simple downsampling
+- **Chart Dimensions**: Separate chart rendering area from axes (subtract axis widths from total dimensions)
+- **Y-Axis Labels**: Show 3-5 price labels distributed across chart height, right-aligned with │ separator
+- **Floating Point Tolerance**: Use epsilon (e.g., 0.011) instead of exact equality for floating point comparisons in tests
+- **Test Comprehensiveness**: Include edge cases: empty data, single point, flat line, negative prices, very large/small ranges
+- **Type Assertions**: When downcasting union types, add `assert isinstance()` checks to help mypy understand the narrowing
+- **Dataclass for Results**: Use dataclasses (RenderedChart) to return multiple related values (lines, width, height, min, max)
