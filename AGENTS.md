@@ -132,3 +132,25 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Copy Pattern**: Return copies from getter methods to prevent external modification of internal state
 - **Boundary Behavior**: At history end, stay on last item; at beginning, return empty string to clear input
 - **Test Coverage**: Test all paths: add, navigate, reset, persist, load, corrupt data, missing files, empty history
+
+### VPR-008: Watchlist Panel
+- **Command Parsing**: Implement command prefix pattern (`W TICKER`, `D TICKER`) in event handler
+- **Manager Pattern**: Separate data management (WatchlistManager) from UI widget (WatchlistPanel)
+- **Reuse Persistence**: Same pattern as history - JSON file in `~/.config/viper/`, graceful error handling
+- **Auto-refresh Timer**: Use `set_interval()` to schedule periodic async refreshes (60s default)
+- **run_worker Pattern**: Use `self.run_worker(async_method())` to execute async operations from sync context (on_mount)
+- **Async Refresh**: Make refresh_quotes async to fetch all ticker quotes in parallel using await
+- **Quote Caching**: Store fetched quotes in dict to display while new data loads
+- **Loading State**: Show "Loading..." when quote not in cache yet
+- **Error Display**: Show "Error" when quote fetch fails, don't crash the widget
+- **Type Narrowing**: Use isinstance() checks (not hasattr) for mypy type narrowing with union types
+- **VerticalScroll**: Use VerticalScroll container for scrollable lists of items
+- **Dynamic Rendering**: Update display with _render_items() method that clears and remounts labels
+- **Format Strings**: Use f-string alignment (`:8s`, `:>12s`, `:>8s`) for columnar display
+- **Color Classes**: Apply positive/negative/neutral classes based on change percentage
+- **Timer Control**: Use boolean flag (_refresh_timer_active) to control whether refresh runs
+- **on_mount/on_unmount**: Start timers in on_mount, stop in on_unmount for proper cleanup
+- **Worker Testing**: Use `await pilot.pause(delay)` to give workers time to complete in tests
+- **Mock Side Effect Functions**: Use async functions as side_effect to return different values per call
+- **Test Coverage**: Test empty state, loading state, error state, positive/negative colors, crypto quotes, timer
+- **Unused Imports**: Remove unused imports (Container, CryptoQuote) - ruff will auto-fix

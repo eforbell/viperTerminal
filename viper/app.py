@@ -8,7 +8,8 @@ from viper.services.crypto import CryptoError, CryptoQuote
 from viper.services.history import HistoryManager
 from viper.services.quote import fetch_quote
 from viper.services.stock import StockError, StockQuote
-from viper.widgets import QuotePanel, TickerInput
+from viper.services.watchlist import WatchlistManager
+from viper.widgets import QuotePanel, TickerInput, WatchlistPanel
 
 
 class ViperApp(App[None]):
@@ -59,6 +60,7 @@ class ViperApp(App[None]):
         super().__init__()
         self.title = "VIPER TERMINAL"
         self.history_manager = HistoryManager()
+        self.watchlist_manager = WatchlistManager()
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -74,6 +76,30 @@ class ViperApp(App[None]):
         Args:
             event: The ticker lookup event containing the normalized ticker symbol.
         """
+        ticker = event.ticker
+
+        # Check for watchlist commands: 'w TICKER' to add, 'd TICKER' to remove
+        if ticker.startswith("W "):
+            # Add to watchlist
+            ticker_to_add = ticker[2:].strip()
+            if ticker_to_add:
+                self.watchlist_manager.add(ticker_to_add)
+                # Notify watchlist panel to refresh
+                watchlist_panel = self.query_one(WatchlistPanel)
+                watchlist_panel.on_ticker_added(ticker_to_add)
+            return
+
+        if ticker.startswith("D "):
+            # Remove from watchlist
+            ticker_to_remove = ticker[2:].strip()
+            if ticker_to_remove:
+                self.watchlist_manager.remove(ticker_to_remove)
+                # Notify watchlist panel to refresh
+                watchlist_panel = self.query_one(WatchlistPanel)
+                watchlist_panel.on_ticker_removed(ticker_to_remove)
+            return
+
+        # Regular quote lookup
         # Get the quote panel
         quote_panel = self.query_one(QuotePanel)
 
@@ -81,7 +107,7 @@ class ViperApp(App[None]):
         quote_panel.show_loading()
 
         # Fetch the quote using unified service (auto-detects stock vs crypto)
-        result = await fetch_quote(event.ticker)
+        result = await fetch_quote(ticker)
 
         # Display result based on type
         if isinstance(result, (StockQuote, CryptoQuote)):

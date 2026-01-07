@@ -1,7 +1,8 @@
 """Tests for the TickerInput widget."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 from textual.app import App, ComposeResult
 
 from viper.services.history import HistoryManager

@@ -2,5 +2,6 @@
 
 from viper.widgets.quote_panel import QuotePanel
 from viper.widgets.ticker_input import TickerInput
+from viper.widgets.watchlist_panel import WatchlistPanel
 
-__all__ = ["QuotePanel", "TickerInput"]
+__all__ = ["QuotePanel", "TickerInput", "WatchlistPanel"]
