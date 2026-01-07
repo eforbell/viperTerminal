@@ -134,7 +134,7 @@
         "Tests: crypto fetch (mocked), rate limit handling, auto-detection"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-016", "VPR-018"],
       "notes": "yfinance has limited crypto history. CoinGecko provides better data for crypto."
