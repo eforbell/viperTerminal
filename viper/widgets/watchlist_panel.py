@@ -18,11 +18,11 @@ class WatchlistPanel(Widget):
     # Make the panel focusable
     can_focus = True
 
-    # Keyboard bindings for navigation
+    # Keyboard bindings for navigation - use priority=True so they work when focused
     BINDINGS = [
-        Binding("j", "navigate_down", "Next", show=False),
-        Binding("k", "navigate_up", "Previous", show=False),
-        Binding("enter", "select_item", "Select", show=False),
+        Binding("j", "navigate_down", "Next", show=False, priority=True),
+        Binding("k", "navigate_up", "Previous", show=False, priority=True),
+        Binding("enter", "select_item", "Select", show=False, priority=True),
     ]
 
     DEFAULT_CSS = """

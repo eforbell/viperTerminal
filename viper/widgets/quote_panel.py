@@ -88,6 +88,7 @@ class QuotePanel(Widget):
         super().__init__()
         self._state: str = "empty"
         self._quote: Quote | QuoteError | None = None
+        self._sparkline_ticker: str | None = None  # Track which ticker's sparkline is loading
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -203,7 +204,8 @@ class QuotePanel(Widget):
         container.mount(Label("", classes="data-row"))
 
         # Fetch and display intraday sparkline chart
-        # Use run_worker to fetch intraday data asynchronously
+        # Track which ticker we're fetching to prevent duplicate sparklines
+        self._sparkline_ticker = quote.ticker
         self.run_worker(self._fetch_and_show_sparkline(quote.ticker, container))
 
     async def _fetch_and_show_sparkline(
@@ -215,8 +217,21 @@ class QuotePanel(Widget):
             ticker: Stock ticker symbol.
             container: Container to mount the sparkline widget into.
         """
+        # Check if this is still the current ticker (user may have changed)
+        if self._sparkline_ticker != ticker:
+            return
+
         # Fetch intraday data (1 day, 5 minute intervals)
         result = await fetch_intraday_data(ticker, period="1d", interval="5m")
+
+        # Check again after async fetch - user may have changed ticker
+        if self._sparkline_ticker != ticker:
+            return
+
+        # Check if sparkline already exists in container (prevent duplicates)
+        existing_sparklines = container.query(SparklineWidget)
+        if existing_sparklines:
+            return
 
         if isinstance(result, IntradayData):
             # Success - create sparkline with data
@@ -231,8 +246,9 @@ class QuotePanel(Widget):
                 prices=None, label="Intraday (1d, 5m)", width=60
             )
 
-        # Mount the sparkline widget
-        container.mount(sparkline)
+        # Final check before mounting
+        if self._sparkline_ticker == ticker and not container.query(SparklineWidget):
+            container.mount(sparkline)
 
     def _render_crypto_quote(self, container: Container, quote: CryptoQuote) -> None:
         """Render a successful crypto quote display.

@@ -120,7 +120,7 @@ class ViperApp(App[None]):
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("tab", "focus_next", "Next Panel"),
-        ("/", "focus_input", "Focus Input"),
+        ("slash", "focus_input", "Focus Input"),
         ("escape", "clear_or_close", "Clear/Close"),
         ("i", "toggle_info", "Toggle Info"),
         ("question_mark,f1", "show_help", "Help"),
@@ -178,22 +178,26 @@ class ViperApp(App[None]):
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header(show_clock=False)
-        with Container(id="main-container"), Horizontal(id="main-layout"):
-            with Container(id="watchlist-container"):
-                yield WatchlistPanel(
-                    watchlist_manager=self.watchlist_manager,
-                    refresh_interval=self.config.refresh_interval,
-                )
-            with Container(id="quote-container"):
-                yield QuotePanel()
-            with Container(id="info-container"):
-                yield InfoPanel()
+        with Container(id="main-container"):
+            with Horizontal(id="main-layout"):
+                with Container(id="watchlist-container"):
+                    yield WatchlistPanel(
+                        watchlist_manager=self.watchlist_manager,
+                        refresh_interval=self.config.refresh_interval,
+                    )
+                with Container(id="quote-container"):
+                    yield QuotePanel()
+                with Container(id="info-container"):
+                    yield InfoPanel()
         yield TickerInput(history_manager=self.history_manager)
         yield StatusBar()
         yield Footer()
 
     def on_mount(self) -> None:
         """Called when app is first mounted."""
+        # Set initial focus to the ticker input
+        self.query_one(TickerInput).focus()
+        
         # Check if this is the first run and show welcome screen
         if is_first_run():
             self.push_screen(HelpScreen(is_welcome=True))
