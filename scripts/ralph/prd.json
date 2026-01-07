@@ -206,7 +206,7 @@
         "Tests: sparkline rendering, empty data handling, time label formatting"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "Keep chart simple - ASCII art, not full graphics."
     },
     {

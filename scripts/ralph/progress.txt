@@ -393,3 +393,40 @@
 - **Already Complete**: Don't assume story needs work - verify what's already implemented first!
 
 ---
+
+## 2026-01-07 - VPR-011
+- Implemented intraday price chart (sparkline) feature for stock quotes
+- Created SparklineWidget that renders ASCII line charts using Unicode block characters (▁▂▃▄▅▆▇█)
+- Added fetch_intraday_data() async function to stock service using yfinance history() API
+- Integrated sparkline into QuotePanel - displays below stock data, fetched asynchronously with run_worker
+- Sparkline only shown for stock quotes (not crypto) as crypto doesn't have intraday data
+- Graceful fallback: shows "No data" label when intraday fetch fails instead of error
+- Wrote 36 comprehensive tests (11 intraday, 16 sparkline rendering, 3 QuotePanel integration, 6 unit tests)
+- All 221 tests pass with 95.86% coverage, mypy --strict passes, ruff passes
+
+**Files changed:**
+- `viper/services/stock.py` - Added IntradayData/IntradayError dataclasses and fetch_intraday_data() function
+- `viper/widgets/sparkline.py` - New SparklineWidget for ASCII chart rendering with downsampling
+- `viper/widgets/quote_panel.py` - Integrated sparkline into stock quote display with async fetch
+- `viper/widgets/__init__.py` - Exported SparklineWidget
+- `tests/test_intraday.py` - 11 tests for intraday data fetching (success, errors, timeouts, validation)
+- `tests/test_sparkline.py` - 16 tests for sparkline rendering (data, no data, update, algorithm tests)
+- `tests/test_quote_panel.py` - 3 integration tests for sparkline in QuotePanel (success, error, crypto)
+- `AGENTS.md` - Added VPR-011 learnings section with sparkline and testing patterns
+- `scripts/ralph/prd.json` - Marked VPR-011 as passing
+
+**Learnings:**
+- **yfinance DataFrame**: `history()` returns pandas DataFrame; access columns with `df["Close"]`, check `df.empty`
+- **Pandas Timestamp Conversion**: Use `.to_pydatetime()` method on each pandas timestamp to convert to Python datetime
+- **Sparkline Algorithm**: Normalize prices to 0-1 range, multiply by 8 to get block index (0-7), map to Unicode chars
+- **Downsampling**: When prices > width, take evenly spaced points: `[prices[int(i * len(prices) / width)] for i in range(width)]`
+- **Flat Line Handling**: When price range is 0 (all same), render as `─` characters instead of blocks
+- **Worker Pattern for Async Mounting**: Use `run_worker(async_method())` to fetch data and mount widgets after initial render
+- **Async Container Mounting**: Can call `container.mount(widget)` from async worker to add widgets dynamically
+- **Test App Wrapper Required**: Widgets need app context; create minimal `TestApp(App)` that mounts widget in compose()
+- **Datetime Test Pitfall**: Use `timedelta(minutes=i*5)` instead of arithmetic to avoid invalid minute values (>59)
+- **Pilot Pause for DOM Updates**: After `update_data()` or `remove_children()`, call `await pilot.pause()` for DOM sync
+- **Mock AsyncMock Import**: Use `from unittest.mock import AsyncMock, patch` for mocking async functions
+- **Test Coverage**: Achieved 95.86% with comprehensive unit and integration tests covering all acceptance criteria
+
+---
