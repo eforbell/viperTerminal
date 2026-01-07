@@ -265,7 +265,13 @@ class NewsPanel(Widget):
         Returns:
             Formatted relative time string.
         """
-        now = datetime.now()
+        from datetime import timezone
+
+        # Handle timezone-aware datetimes from yfinance
+        if published_at.tzinfo is not None:
+            now = datetime.now(timezone.utc)
+        else:
+            now = datetime.now()
         delta = now - published_at
 
         # Calculate time units
