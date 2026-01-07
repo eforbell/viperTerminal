@@ -246,7 +246,7 @@
         "Tests: new config options load correctly, validation, defaults"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-018", "VPR-023"],
       "notes": "User customization for new features."

@@ -240,3 +240,157 @@ background = "#111111"
             "background": "#000000",
         }
         assert config.default_watchlist == []
+
+
+class TestConfigChartOptions:
+    """Test chart-related configuration options."""
+
+    def test_default_chart_timeframe(self) -> None:
+        """Test default chart timeframe value."""
+        config = Config()
+        assert config.default_chart_timeframe == "1M"
+
+    def test_custom_chart_timeframe(self) -> None:
+        """Test setting custom chart timeframe."""
+        config = Config(default_chart_timeframe="3M")
+        assert config.default_chart_timeframe == "3M"
+
+    def test_invalid_chart_timeframe_corrected(self) -> None:
+        """Test that invalid timeframe is corrected to default."""
+        config = Config(default_chart_timeframe="invalid")
+        assert config.default_chart_timeframe == "1M"
+
+    def test_default_chart_style(self) -> None:
+        """Test default chart style."""
+        config = Config()
+        assert config.chart_style == "braille"
+
+    def test_custom_chart_style_block(self) -> None:
+        """Test setting chart style to block."""
+        config = Config(chart_style="block")
+        assert config.chart_style == "block"
+
+    def test_invalid_chart_style_corrected(self) -> None:
+        """Test that invalid chart style is corrected."""
+        config = Config(chart_style="invalid")
+        assert config.chart_style == "braille"
+
+    def test_default_volume_enabled(self) -> None:
+        """Test default volume_enabled value."""
+        config = Config()
+        assert config.volume_enabled is False
+
+    def test_volume_enabled_true(self) -> None:
+        """Test setting volume_enabled to True."""
+        config = Config(volume_enabled=True)
+        assert config.volume_enabled is True
+
+    def test_invalid_volume_enabled_corrected(self) -> None:
+        """Test that invalid volume_enabled is corrected."""
+        config = Config(volume_enabled="not a bool")  # type: ignore[arg-type]
+        assert config.volume_enabled is False
+
+    def test_load_chart_options_from_file(self, tmp_path: Path) -> None:
+        """Test loading chart options from config file."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("""
+default_chart_timeframe = "6M"
+chart_style = "block"
+volume_enabled = true
+""")
+
+        with patch("viper.config.get_config_path", return_value=config_file):
+            config = load_config()
+
+        assert config.default_chart_timeframe == "6M"
+        assert config.chart_style == "block"
+        assert config.volume_enabled is True
+
+
+class TestConfigNewsOptions:
+    """Test news-related configuration options."""
+
+    def test_default_news_enabled(self) -> None:
+        """Test default news_enabled value."""
+        config = Config()
+        assert config.news_enabled is True
+
+    def test_news_enabled_false(self) -> None:
+        """Test setting news_enabled to False."""
+        config = Config(news_enabled=False)
+        assert config.news_enabled is False
+
+    def test_invalid_news_enabled_corrected(self) -> None:
+        """Test that invalid news_enabled is corrected."""
+        config = Config(news_enabled="not a bool")  # type: ignore[arg-type]
+        assert config.news_enabled is True
+
+    def test_default_news_max_items(self) -> None:
+        """Test default news_max_items value."""
+        config = Config()
+        assert config.news_max_items == 10
+
+    def test_custom_news_max_items(self) -> None:
+        """Test setting custom news_max_items."""
+        config = Config(news_max_items=20)
+        assert config.news_max_items == 20
+
+    def test_invalid_news_max_items_corrected(self) -> None:
+        """Test that invalid news_max_items is corrected."""
+        config = Config(news_max_items=-5)
+        assert config.news_max_items == 10
+
+    def test_invalid_news_max_items_type_corrected(self) -> None:
+        """Test that invalid news_max_items type is corrected."""
+        config = Config(news_max_items="not an int")  # type: ignore[arg-type]
+        assert config.news_max_items == 10
+
+    def test_load_news_options_from_file(self, tmp_path: Path) -> None:
+        """Test loading news options from config file."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("""
+news_enabled = false
+news_max_items = 15
+""")
+
+        with patch("viper.config.get_config_path", return_value=config_file):
+            config = load_config()
+
+        assert config.news_enabled is False
+        assert config.news_max_items == 15
+
+
+class TestConfigAllOptions:
+    """Test loading all options together."""
+
+    def test_load_all_options_from_file(self, tmp_path: Path) -> None:
+        """Test loading all config options from file."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("""
+# All top-level keys must come before any table sections
+refresh_interval = 120
+default_watchlist = ["AAPL", "MSFT"]
+default_chart_timeframe = "1Y"
+chart_style = "block"
+volume_enabled = true
+news_enabled = true
+news_max_items = 5
+
+[theme_colors]
+positive = "#00aa00"
+negative = "#aa0000"
+background = "#111111"
+""")
+
+        with patch("viper.config.get_config_path", return_value=config_file):
+            config = load_config()
+
+        # Verify all options loaded correctly
+        assert config.refresh_interval == 120
+        assert config.default_watchlist == ["AAPL", "MSFT"]
+        assert config.theme_colors["positive"] == "#00aa00"
+        assert config.default_chart_timeframe == "1Y"
+        assert config.chart_style == "block"
+        assert config.volume_enabled is True
+        assert config.news_enabled is True
+        assert config.news_max_items == 5

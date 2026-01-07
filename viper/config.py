@@ -3,17 +3,24 @@
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from viper.utils.logger import get_logger
 
 logger = get_logger()
+
+# Valid chart styles
+ChartStyle = Literal["braille", "block"]
+
+# Valid timeframes
+VALID_TIMEFRAMES = ["1W", "1M", "3M", "6M", "1Y", "5Y", "MAX"]
 
 
 @dataclass
 class Config:
     """Viper Terminal configuration."""
 
+    # Watchlist settings
     refresh_interval: int = 60  # Watchlist refresh interval in seconds
     theme_colors: dict[str, str] = field(
         default_factory=lambda: {
@@ -23,6 +30,15 @@ class Config:
         }
     )
     default_watchlist: list[str] = field(default_factory=list)
+
+    # Chart settings
+    default_chart_timeframe: str = "1M"  # Default timeframe for charts
+    chart_style: str = "braille"  # 'braille' or 'block'
+    volume_enabled: bool = False  # Whether volume bars are shown by default
+
+    # News settings
+    news_enabled: bool = True  # Whether news panel is available
+    news_max_items: int = 10  # Maximum news items to display
 
     def __post_init__(self) -> None:
         """Validate configuration values after initialization."""
@@ -51,6 +67,41 @@ class Config:
             )
             self.default_watchlist = []
 
+        # Validate chart_style
+        if self.chart_style not in ("braille", "block"):
+            logger.warning(
+                f"Invalid chart_style '{self.chart_style}', using default 'braille'"
+            )
+            self.chart_style = "braille"
+
+        # Validate default_chart_timeframe
+        if self.default_chart_timeframe not in VALID_TIMEFRAMES:
+            logger.warning(
+                f"Invalid default_chart_timeframe '{self.default_chart_timeframe}', using default '1M'"
+            )
+            self.default_chart_timeframe = "1M"
+
+        # Validate volume_enabled is bool
+        if not isinstance(self.volume_enabled, bool):
+            logger.warning(
+                f"Invalid volume_enabled type {type(self.volume_enabled)}, using default False"
+            )
+            self.volume_enabled = False
+
+        # Validate news_enabled is bool
+        if not isinstance(self.news_enabled, bool):
+            logger.warning(
+                f"Invalid news_enabled type {type(self.news_enabled)}, using default True"
+            )
+            self.news_enabled = True
+
+        # Validate news_max_items is positive
+        if not isinstance(self.news_max_items, int) or self.news_max_items <= 0:
+            logger.warning(
+                f"Invalid news_max_items '{self.news_max_items}', using default 10"
+            )
+            self.news_max_items = 10
+
 
 def get_config_path() -> Path:
     """Get the path to the config file."""
@@ -77,6 +128,7 @@ def load_config() -> Config:
         # Extract values with defaults
         config_dict: dict[str, Any] = {}
 
+        # Watchlist settings
         if "refresh_interval" in data:
             config_dict["refresh_interval"] = data["refresh_interval"]
 
@@ -85,6 +137,23 @@ def load_config() -> Config:
 
         if "default_watchlist" in data:
             config_dict["default_watchlist"] = data["default_watchlist"]
+
+        # Chart settings
+        if "default_chart_timeframe" in data:
+            config_dict["default_chart_timeframe"] = data["default_chart_timeframe"]
+
+        if "chart_style" in data:
+            config_dict["chart_style"] = data["chart_style"]
+
+        if "volume_enabled" in data:
+            config_dict["volume_enabled"] = data["volume_enabled"]
+
+        # News settings
+        if "news_enabled" in data:
+            config_dict["news_enabled"] = data["news_enabled"]
+
+        if "news_max_items" in data:
+            config_dict["news_max_items"] = data["news_max_items"]
 
         logger.info(f"Loaded config from {config_path}")
         return Config(**config_dict)
