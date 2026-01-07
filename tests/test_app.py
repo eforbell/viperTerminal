@@ -1,10 +1,13 @@
 """Tests for the main Viper Terminal application."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from textual.widgets import Footer, Header
 
 from viper.app import ViperApp
-from viper.widgets import TickerInput
+from viper.services.stock import StockError, StockQuote
+from viper.widgets import QuotePanel, TickerInput
 
 
 @pytest.mark.asyncio
@@ -69,16 +72,87 @@ async def test_ticker_input_widget_present() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ticker_lookup_event_handled() -> None:
-    """Test that the app handles TickerLookup events."""
+async def test_quote_panel_widget_present() -> None:
+    """Test that the QuotePanel widget is present in the app."""
     app = ViperApp()
-    async with app.run_test() as pilot:
-        ticker_input = app.query_one(TickerInput)
+    async with app.run_test():
+        # Should have a QuotePanel widget
+        quote_panel = app.query_one(QuotePanel)
+        assert quote_panel is not None
 
-        # Submit a ticker
-        ticker_input.focus()
-        ticker_input.value = "AAPL"
-        await pilot.press("enter")
 
-        # The app should handle the event (logged, but no error)
-        # If the handler wasn't working, an exception would be raised
+@pytest.mark.asyncio
+async def test_ticker_lookup_triggers_quote_fetch() -> None:
+    """Test that submitting a ticker triggers quote fetching and display."""
+    app = ViperApp()
+
+    # Mock the fetch_stock_quote function
+    mock_quote = StockQuote(
+        ticker="AAPL",
+        price=150.00,
+        change=5.00,
+        change_percent=3.45,
+        volume=50000000,
+        market_cap=2500000000000,
+        high_52w=180.00,
+        low_52w=120.00,
+        name="Apple Inc.",
+    )
+
+    with patch("viper.app.fetch_stock_quote", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = mock_quote
+
+        async with app.run_test() as pilot:
+            ticker_input = app.query_one(TickerInput)
+            quote_panel = app.query_one(QuotePanel)
+
+            # Initially should be in empty state
+            assert quote_panel._state == "empty"
+
+            # Submit a ticker
+            ticker_input.focus()
+            ticker_input.value = "AAPL"
+            await pilot.press("enter")
+
+            # Wait for async event handling
+            await pilot.pause()
+
+            # The fetch should have been called
+            mock_fetch.assert_called_once_with("AAPL")
+
+            # Quote panel should now be in success state
+            assert quote_panel._state == "success"
+            assert isinstance(quote_panel._quote, StockQuote)
+            assert quote_panel._quote.ticker == "AAPL"
+
+
+@pytest.mark.asyncio
+async def test_ticker_lookup_handles_error() -> None:
+    """Test that errors from quote fetching are displayed correctly."""
+    app = ViperApp()
+
+    # Mock the fetch_stock_quote function to return an error
+    mock_error = StockError(ticker="INVALID", error_message="Invalid ticker symbol")
+
+    with patch("viper.app.fetch_stock_quote", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = mock_error
+
+        async with app.run_test() as pilot:
+            ticker_input = app.query_one(TickerInput)
+            quote_panel = app.query_one(QuotePanel)
+
+            # Submit an invalid ticker
+            ticker_input.focus()
+            ticker_input.value = "INVALID"
+            await pilot.press("enter")
+
+            # Wait for async event handling
+            await pilot.pause()
+
+            # The fetch should have been called
+            mock_fetch.assert_called_once_with("INVALID")
+
+            # Quote panel should now be in error state
+            assert quote_panel._state == "error"
+            assert isinstance(quote_panel._quote, StockError)
+            assert quote_panel._quote.error_message == "Invalid ticker symbol"

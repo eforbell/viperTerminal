@@ -58,3 +58,20 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Test Edge Cases**: Zero division protection, missing data fields, API exceptions
 - **MagicMock for Objects**: Use `MagicMock()` to mock complex objects with nested attributes (e.g., `ticker.fast_info`)
 - **Property Mocking**: Use `type(obj).property_name = property(lambda: value)` to mock properties that raise exceptions
+
+### VPR-004: Stock Quote Display Panel
+- **Widget Composition**: Use `compose()` with context manager syntax for nested widgets: `with Container(): yield Widget()`
+- **Dynamic Mounting**: Can't mount to a container before it's attached; use `compose()` for initial setup, `mount()` for runtime updates
+- **Multiple States**: Implement state machine pattern with `_state` attribute and `show_*()` methods for each state (empty, loading, success, error)
+- **Container Updates**: Use `container.remove_children()` to clear before remounting for state transitions
+- **Loading Indicators**: Mount LoadingIndicator with Label in a container; pass children to Container constructor: `Container(widget1, widget2)`
+- **Label Testing**: Use `str(label.render())` to get text content for assertions, not `label.renderable` (doesn't exist)
+- **Pilot Pause**: Call `await pilot.pause()` after dynamic updates to let UI refresh before assertions
+- **Color Classes**: Apply CSS classes based on data values (positive/negative) for conditional styling
+- **Number Formatting**: Use f-strings with `:,` for thousands separators and `:.Nf` for decimals
+- **Ternary for Simple Conditionals**: Use ternary operators for simple if/else assignments to satisfy ruff linter
+- **Remove Unnecessary else**: After return statements, remove else clause (ruff RET505)
+- **Unused Variables**: Remove unused variables assigned in conditional blocks (ruff F841)
+- **Widget Queries**: Use `query()` to get all matching widgets, `query_one()` for a single required widget
+- **Integration Testing**: Mock async functions with `AsyncMock` and verify both success and error paths
+- **Event Handler Testing**: Use `await pilot.pause()` after triggering events to let async handlers complete

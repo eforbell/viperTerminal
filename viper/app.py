@@ -4,7 +4,8 @@ from textual.app import App, ComposeResult
 from textual.containers import Container
 from textual.widgets import Footer, Header
 
-from viper.widgets import TickerInput
+from viper.services.stock import StockError, StockQuote, fetch_stock_quote
+from viper.widgets import QuotePanel, TickerInput
 
 
 class ViperApp(App[None]):
@@ -58,15 +59,28 @@ class ViperApp(App[None]):
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header(show_clock=False)
-        yield Container(id="main-container")
+        with Container(id="main-container"):
+            yield QuotePanel()
         yield TickerInput()
         yield Footer()
 
-    def on_ticker_input_ticker_lookup(self, event: TickerInput.TickerLookup) -> None:
+    async def on_ticker_input_ticker_lookup(self, event: TickerInput.TickerLookup) -> None:
         """Handle ticker lookup events.
 
         Args:
             event: The ticker lookup event containing the normalized ticker symbol.
         """
-        # For now, just log the ticker (future stories will handle actual lookup)
-        self.log(f"Looking up ticker: {event.ticker}")
+        # Get the quote panel
+        quote_panel = self.query_one(QuotePanel)
+
+        # Show loading state
+        quote_panel.show_loading()
+
+        # Fetch the quote
+        result = await fetch_stock_quote(event.ticker)
+
+        # Display result based on type
+        if isinstance(result, StockQuote):
+            quote_panel.show_quote(result)
+        elif isinstance(result, StockError):
+            quote_panel.show_error(result)
