@@ -43,3 +43,18 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Event Testing**: Create test app with event tracking; use instance variable to collect events
 - **TCSS Docking**: Use `dock: bottom` to position widgets at the bottom of the screen
 - **Test Isolation**: Each test should use a fresh app instance for proper isolation
+
+### VPR-003: Stock Quote Fetching with yfinance
+- **Async Wrappers**: Use `asyncio.get_event_loop().run_in_executor()` to run blocking I/O (yfinance) without blocking UI
+- **Error as Data**: Return error results (dataclass) instead of raising exceptions for better type safety
+- **Union Result Types**: Use `Result = Success | Error` pattern for functions that can fail
+- **yfinance fast_info**: Use `ticker.fast_info` for faster responses; it provides essential fields without full info fetch
+- **Defensive Defaults**: Use `.get(key, default)` on API responses and provide sensible fallback values
+- **Timeout Handling**: Wrap executor calls in `asyncio.wait_for()` for timeout support
+- **Type Stubs**: Add `# type: ignore[import-untyped]` for libraries without type stubs (mypy --strict)
+- **Modern Type Syntax**: Use `X | None` instead of `Optional[X]` (Python 3.10+ union syntax)
+- **Comprehensive Testing**: Test success path, invalid inputs, network errors, timeouts, and malformed responses
+- **Mock External APIs**: Always mock yfinance (or any external API) in tests - use `unittest.mock.patch`
+- **Test Edge Cases**: Zero division protection, missing data fields, API exceptions
+- **MagicMock for Objects**: Use `MagicMock()` to mock complex objects with nested attributes (e.g., `ticker.fast_info`)
+- **Property Mocking**: Use `type(obj).property_name = property(lambda: value)` to mock properties that raise exceptions
