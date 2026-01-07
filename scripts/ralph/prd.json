@@ -126,7 +126,7 @@
         "Tests: prefix parsing, auto-detection logic, fallback behavior, panel adaptation"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "Keep detection logic simple and testable. Maintain crypto symbol list."
     },
     {

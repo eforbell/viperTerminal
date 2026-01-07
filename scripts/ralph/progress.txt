@@ -182,3 +182,42 @@
 - Use clear error messages that include HTTP status codes for debugging
 
 ---
+## 2026-01-06 - VPR-006
+- Implemented unified quote service with asset type detection
+- Created viper/services/quote.py with delegation pattern to stock/crypto services
+- Added support for explicit type prefixes (`:CRYPTO`, `:STOCK`) and auto-detection
+- Updated QuotePanel to adapt display for both stock and crypto quotes
+- Added conditional rendering methods: _render_stock_quote() and _render_crypto_quote()
+- Wrote 22 comprehensive tests for unified service (prefix parsing, auto-detection, type helpers)
+- Added 4 crypto quote display tests for QuotePanel
+- Updated app integration tests to use unified fetch_quote() instead of fetch_stock_quote()
+- Achieved 98% test coverage with 105 tests passing, all type checks and linting pass
+
+**Files changed:**
+- `viper/services/quote.py` - New unified quote service with fetch_quote(), prefix parsing, auto-detection
+- `viper/widgets/quote_panel.py` - Updated to handle both stock and crypto quotes with union types
+- `viper/app.py` - Changed to use unified fetch_quote() service
+- `viper/services/__init__.py` - Added quote module to exports
+- `tests/test_quote.py` - 22 comprehensive tests for unified service
+- `tests/test_quote_panel.py` - Added 4 crypto quote rendering tests
+- `tests/test_app.py` - Updated integration tests to use fetch_quote, added crypto test
+- `AGENTS.md` - Added VPR-006 learnings section
+
+**Learnings:**
+- Union types enable type-safe multi-asset handling: `Quote = StockQuote | CryptoQuote`
+- Use isinstance() checks for runtime type discrimination in union types
+- Delegation pattern: unified service delegates to specialized services based on detected type
+- Prefix parsing allows user control: explicit `:CRYPTO` or `:STOCK` suffix
+- Auto-detection checks known symbol lists first (crypto SYMBOL_TO_ID), then falls back to alternative
+- Symbol normalization (uppercase, strip) should happen before any processing or lookups
+- Conditional rendering: single widget can handle multiple types by routing to different render methods
+- Display adaptation: different field labels for different asset types (52W Range vs 24h Volume)
+- Error handling: handle both error types (StockError | CryptoError) with union types
+- Test both paths: explicit prefix usage AND auto-detection logic separately
+- Integration testing: mock the unified service rather than individual underlying services
+- Line length: split long mock patch statements across multiple lines to satisfy 100-char limit
+- Type consistency: ensure all related functions throughout the stack use consistent union types
+- Helper functions improve readability: is_crypto_quote(), is_stock_quote()
+
+---
+
