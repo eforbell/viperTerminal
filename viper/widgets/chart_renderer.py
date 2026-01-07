@@ -116,6 +116,7 @@ class ChartRenderer:
 
         # Downsample data to fit chart width
         # Each braille char represents 2 horizontal data points
+        # Force exactly chart_width * 2 points to ensure consistent width
         max_data_points = chart_width * 2
         downsampled_prices_raw = self._downsample(prices, max_data_points)
         # Type narrowing: we know prices is list[float], so result is list[float]
@@ -123,6 +124,12 @@ class ChartRenderer:
             not downsampled_prices_raw or isinstance(downsampled_prices_raw[0], (int, float))
         )
         downsampled_prices: list[float] = downsampled_prices_raw
+        
+        # Ensure we have exactly chart_width * 2 points
+        # If we have fewer, pad with the last value; if more, truncate
+        while len(downsampled_prices) < max_data_points:
+            downsampled_prices.append(downsampled_prices[-1] if downsampled_prices else 0.0)
+        downsampled_prices = downsampled_prices[:max_data_points]
 
         downsampled_dates_raw = self._downsample(dates, max_data_points) if dates else None
         downsampled_dates: list[datetime] | None = downsampled_dates_raw if downsampled_dates_raw else None
@@ -141,7 +148,7 @@ class ChartRenderer:
         scaled = [int(n * (vertical_positions - 1)) for n in normalized]
 
         # Render braille characters
-        chart_lines = self._render_braille_line(scaled, chart_height)
+        chart_lines = self._render_braille_line(scaled, chart_height, chart_width)
 
         # Add Y-axis labels
         if dimensions.include_y_axis:
@@ -161,47 +168,81 @@ class ChartRenderer:
             max_value=max_price,
         )
 
-    def _render_braille_line(self, scaled_values: list[int], height: int) -> list[str]:
+    def _render_braille_line(self, scaled_values: list[int], height: int, target_width: int) -> list[str]:
         """Convert scaled values to braille characters.
 
         Args:
             scaled_values: Values scaled to vertical positions (0 to height*4-1)
             height: Chart height in characters
+            target_width: Exact width in characters to render
 
         Returns:
             List of strings representing chart lines
         """
         if not scaled_values:
-            return []
+            return [" " * target_width for _ in range(height)]
 
-        # Initialize grid: height rows, each with width//2 characters (2 cols per char)
-        # Braille works with 2 columns per character
-        num_chars = (len(scaled_values) + 1) // 2
+        # Use exactly target_width characters
+        num_chars = target_width
         lines = [[" " for _ in range(num_chars)] for _ in range(height)]
 
-        # Process pairs of values (2 columns per braille character)
-        for i in range(0, len(scaled_values), 2):
-            char_idx = i // 2
-            left_val = scaled_values[i]
-            right_val = scaled_values[i + 1] if i + 1 < len(scaled_values) else left_val
+        # Calculate how many data points we have vs. how many we need (target_width * 2)
+        target_data_points = target_width * 2
+        actual_data_points = len(scaled_values)
 
-            # Determine which row this belongs to (from bottom)
-            # Higher values are at the top, so invert
-            left_row = height - 1 - (left_val // 4)
-            right_row = height - 1 - (right_val // 4)
+        # If we have fewer data points than needed, space them out across the full width
+        if actual_data_points < target_data_points:
+            # Map each data point to its position in the full width
+            for i in range(0, actual_data_points, 2):
+                # Calculate which character position this pair should go to
+                # Spread points evenly across the full width
+                char_idx = int((i / actual_data_points) * num_chars)
+                if char_idx >= num_chars:
+                    char_idx = num_chars - 1
+                    
+                left_val = scaled_values[i]
+                right_val = scaled_values[i + 1] if i + 1 < actual_data_points else left_val
 
-            # Determine dot positions within the row (0-3)
-            left_dot = left_val % 4
-            right_dot = right_val % 4
+                # Determine which row this belongs to (from bottom)
+                left_row = height - 1 - (left_val // 4)
+                right_row = height - 1 - (right_val // 4)
 
-            # Calculate braille pattern
-            braille_char = self._get_braille_char(left_row, left_dot, right_row, right_dot, height)
+                # Determine dot positions within the row (0-3)
+                left_dot = left_val % 4
+                right_dot = right_val % 4
 
-            # Place character in the correct row
-            # Use the topmost row that needs rendering
-            target_row = min(left_row, right_row)
-            if 0 <= target_row < height:
-                lines[target_row][char_idx] = braille_char
+                # Calculate braille pattern
+                braille_char = self._get_braille_char(left_row, left_dot, right_row, right_dot, height)
+
+                # Place character in the correct row
+                target_row = min(left_row, right_row)
+                if 0 <= target_row < height:
+                    lines[target_row][char_idx] = braille_char
+        else:
+            # Normal case: we have enough data points, process sequentially
+            for i in range(0, min(actual_data_points, target_data_points), 2):
+                char_idx = i // 2
+                if char_idx >= num_chars:
+                    break
+                    
+                left_val = scaled_values[i]
+                right_val = scaled_values[i + 1] if i + 1 < actual_data_points else left_val
+
+                # Determine which row this belongs to (from bottom)
+                left_row = height - 1 - (left_val // 4)
+                right_row = height - 1 - (right_val // 4)
+
+                # Determine dot positions within the row (0-3)
+                left_dot = left_val % 4
+                right_dot = right_val % 4
+
+                # Calculate braille pattern
+                braille_char = self._get_braille_char(left_row, left_dot, right_row, right_dot, height)
+
+                # Place character in the correct row
+                target_row = min(left_row, right_row)
+                if 0 <= target_row < height:
+                    lines[target_row][char_idx] = braille_char
 
         # Convert grid to strings
         return ["".join(line) for line in lines]
