@@ -18,7 +18,7 @@ from viper.utils import (
     mark_first_run_complete,
     setup_logging,
 )
-from viper.widgets import HelpScreen, InfoPanel, QuotePanel, StatusBar, TickerInput, WatchlistPanel
+from viper.widgets import ChartPanel, HelpScreen, InfoPanel, QuotePanel, StatusBar, TickerInput, WatchlistPanel
 
 
 class ViperApp(App[None]):
@@ -108,6 +108,17 @@ class ViperApp(App[None]):
     #info-container:focus-within {
         border: double $accent;
     }
+
+    #chart-container {
+        width: 70%;
+        border: solid $accent;
+        padding: 0;
+        display: none;
+    }
+
+    #chart-container:focus-within {
+        border: double $accent;
+    }
     """
 
     # Green on black color theme
@@ -123,6 +134,7 @@ class ViperApp(App[None]):
         ("slash", "focus_input", "Focus Input"),
         ("escape", "clear_or_close", "Clear/Close"),
         ("i", "toggle_info", "Toggle Info"),
+        ("c", "toggle_chart", "Toggle Chart"),
         ("question_mark,f1", "show_help", "Help"),
     ]
 
@@ -148,6 +160,7 @@ class ViperApp(App[None]):
             self.watchlist_manager.add(ticker)
 
         self._info_panel_visible = False
+        self._chart_panel_visible = False
         self._current_ticker: str | None = None
 
     def on_resize(self, event: object) -> None:
@@ -189,6 +202,8 @@ class ViperApp(App[None]):
                     yield QuotePanel()
                 with Container(id="info-container"):
                     yield InfoPanel()
+                with Container(id="chart-container"):
+                    yield ChartPanel()
         yield TickerInput(history_manager=self.history_manager)
         yield StatusBar()
         yield Footer()
@@ -227,6 +242,7 @@ class ViperApp(App[None]):
         """Toggle the info panel visibility."""
         info_container = self.query_one("#info-container")
         quote_container = self.query_one("#quote-container")
+        chart_container = self.query_one("#chart-container")
 
         # Toggle visibility
         if self._info_panel_visible:
@@ -235,6 +251,11 @@ class ViperApp(App[None]):
             quote_container.styles.display = "block"
             self._info_panel_visible = False
         else:
+            # Hide chart panel if visible
+            if self._chart_panel_visible:
+                chart_container.styles.display = "none"
+                self._chart_panel_visible = False
+
             # Show info panel, hide quote panel
             quote_container.styles.display = "none"
             info_container.styles.display = "block"
@@ -243,6 +264,34 @@ class ViperApp(App[None]):
             # If we have a current ticker, fetch and display info
             if self._current_ticker:
                 self.run_worker(self._fetch_and_display_info(self._current_ticker))
+
+    def action_toggle_chart(self) -> None:
+        """Toggle the chart panel visibility."""
+        chart_container = self.query_one("#chart-container")
+        quote_container = self.query_one("#quote-container")
+        info_container = self.query_one("#info-container")
+
+        # Toggle visibility
+        if self._chart_panel_visible:
+            # Hide chart panel, show quote panel
+            chart_container.styles.display = "none"
+            quote_container.styles.display = "block"
+            self._chart_panel_visible = False
+        else:
+            # Hide info panel if visible
+            if self._info_panel_visible:
+                info_container.styles.display = "none"
+                self._info_panel_visible = False
+
+            # Show chart panel, hide quote panel
+            quote_container.styles.display = "none"
+            chart_container.styles.display = "block"
+            self._chart_panel_visible = True
+
+            # If we have a current ticker, fetch and display chart
+            if self._current_ticker:
+                chart_panel = self.query_one(ChartPanel)
+                self.run_worker(chart_panel.load_chart(self._current_ticker, "1M"))
 
     async def on_watchlist_panel_ticker_selected(
         self, event: WatchlistPanel.TickerSelected

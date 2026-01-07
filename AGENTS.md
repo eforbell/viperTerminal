@@ -332,3 +332,23 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Test Comprehensiveness**: Include edge cases: empty data, single point, flat line, negative prices, very large/small ranges
 - **Type Assertions**: When downcasting union types, add `assert isinstance()` checks to help mypy understand the narrowing
 - **Dataclass for Results**: Use dataclasses (RenderedChart) to return multiple related values (lines, width, height, min, max)
+
+### VPR-018: Chart Panel Widget
+- **Panel Toggle Pattern**: Use `styles.display = "none"/"block"` to show/hide panels without destroying state
+- **Mutual Exclusivity**: When multiple panels can replace quote panel, hide others before showing new one
+- **State Flags for Panels**: Track visibility with `_info_panel_visible`, `_chart_panel_visible` flags in app
+- **Panel States**: Implement same state pattern as QuotePanel: empty, loading, success, error
+- **Widget Initialization**: Pass configuration (e.g., ChartStyle) via widget `__init__`, not after creation
+- **Responsive Chart Sizing**: Calculate available dimensions dynamically: `available_height = self.size.height - header_space`
+- **Minimum Dimensions**: Always enforce minimum chart size (e.g., 40x10) for readable output
+- **Loading with Context**: Show ticker and period in loading message: "Loading chart for AAPL (1M)..."
+- **Worker Pattern**: Use `self.run_worker()` to run async tasks (e.g., `chart_panel.load_chart()`) from action methods
+- **Stats Display**: Show high, low, and percent change with appropriate color (positive=green, negative=red)
+- **Chart Lines**: Use `markup=False` on Labels when rendering chart to preserve unicode characters
+- **Ticker Change Handling**: Check if `_current_ticker` matches before rendering fetched data to prevent stale updates
+- **Test with Mock fetch**: Use `patch("viper.widgets.chart_panel.fetch_historical_data")` to mock data service
+- **Test Multiple Periods**: Verify panel handles all supported periods (1W, 1M, 3M, 6M, 1Y, 5Y, MAX)
+- **Test Responsive Behavior**: Test chart renders correctly at different terminal dimensions
+- **Container CSS**: Use `padding: 0` for chart container to maximize chart space (unlike info panel with `padding: 1`)
+- **Action Keybinding**: Add new action to `BINDINGS` list with tuple: `("c", "toggle_chart", "Toggle Chart")`
+- **Widget Export**: Remember to add new widget to `viper/widgets/__init__.py` and `__all__` list
