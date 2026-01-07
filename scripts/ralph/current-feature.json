@@ -1,0 +1,19 @@
+{
+  "currentFeature": "feature-2",
+  "featureName": "Historical Charts & News Feed",
+  "prdPath": "features/feature-2-prd.json",
+  "branch": "viper/feature-2-charts-news",
+  "status": "planning",
+  "startedAt": null,
+  "completedFeatures": [
+    {
+      "feature": "feature-1",
+      "name": "MVP Terminal",
+      "prdPath": "features/feature-1-prd.json",
+      "branch": "viper/feature-mvp-terminal",
+      "status": "complete",
+      "completedAt": "2026-01-07",
+      "stories": 15
+    }
+  ]
+}
