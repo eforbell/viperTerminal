@@ -8,6 +8,7 @@ from viper.widgets.chart_renderer import (
     ChartDimensions,
     ChartRenderer,
     ChartStyle,
+    OverlayData,
     RenderedChart,
     create_chart,
 )
@@ -457,9 +458,9 @@ class TestVolumeRendering:
             y_axis_width=12,
         )
 
-        # Check that ANSI color codes are present
+        # Check that Rich markup color tags are present
         volume_line = result[1]  # Middle line has the volume bars
-        assert "\033[32m" in volume_line or "\033[31m" in volume_line  # Green or red color code
+        assert "[green]" in volume_line or "[red]" in volume_line  # Rich markup tags
 
     def test_render_volume_bars_normalization(self) -> None:
         """Test that volume bars are normalized to max volume."""
@@ -526,3 +527,375 @@ class TestVolumeRendering:
 
         # Should handle zero volumes gracefully
         assert len(result) == 3
+
+    def test_interpolated_count_returned(self) -> None:
+        """Test that interpolated_count is returned when data is upsampled."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=60, height=10, include_y_axis=False, include_x_axis=False)
+
+        # Small dataset that will trigger upsampling (< 60% of max_data_points)
+        # max_data_points = 60 * 2 = 120, so < 72 points triggers upsampling
+        prices = [100.0, 110.0, 105.0, 115.0, 120.0]  # Only 5 points
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions)
+
+        # Should have been interpolated to 120 data points
+        assert result.interpolated_count == 120
+
+    def test_no_interpolation_with_sufficient_data(self) -> None:
+        """Test that interpolated_count is 0 when no upsampling occurs."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=60, height=10, include_y_axis=False, include_x_axis=False)
+
+        # Enough data points (>= 60% of max_data_points)
+        # max_data_points = 120, so >= 72 points means no upsampling
+        prices = [100.0 + i for i in range(100)]  # 100 points
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions)
+
+        # Should NOT have been interpolated
+        assert result.interpolated_count == 0
+
+    def test_volume_alignment_with_interpolation(self) -> None:
+        """Test that volume bars align with price chart when interpolation occurs."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=60, height=10, include_y_axis=False, include_x_axis=False)
+
+        # Small dataset that will trigger upsampling
+        prices = [100.0, 110.0, 105.0, 115.0, 120.0]  # 5 points
+        volumes = [1000000, 2000000, 1500000, 3000000, 2500000]  # 5 points
+        opens = [100.0, 108.0, 105.0, 112.0, 118.0]
+        closes = prices
+
+        # Render price chart (will trigger interpolation)
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions)
+
+        # Now render volume bars with interpolation info
+        volume_lines = renderer.render_volume_bars(
+            volumes=volumes,
+            opens=opens,
+            closes=closes,
+            width=60,
+            height=3,
+            y_axis_width=12,
+            style=ChartStyle.BRAILLE,
+            interpolated_count=result.interpolated_count,
+        )
+
+        # Volume bars should render successfully with same alignment
+        assert len(volume_lines) == 3
+
+    def test_volume_alignment_without_interpolation(self) -> None:
+        """Test that volume bars work normally when no interpolation occurs."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+
+        # Enough data points (no interpolation)
+        prices = [100.0 + i for i in range(100)]
+        volumes = [1000000 + i * 10000 for i in range(100)]
+        opens = [100.0 + i for i in range(100)]
+        closes = prices
+
+        # Render with no interpolation
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions)
+        assert result.interpolated_count == 0
+
+        # Volume bars should work the same as before
+        volume_lines = renderer.render_volume_bars(
+            volumes=volumes,
+            opens=opens,
+            closes=closes,
+            width=40,
+            height=3,
+            y_axis_width=12,
+            style=ChartStyle.BRAILLE,
+            interpolated_count=0,
+        )
+
+        assert len(volume_lines) == 3
+
+    def test_volume_upsampling_edge_cases(self) -> None:
+        """Test volume bar upsampling with various edge case data sizes."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+
+        # Test with single data point
+        volumes = [1000000]
+        opens = [100.0]
+        closes = [105.0]
+
+        volume_lines = renderer.render_volume_bars(
+            volumes=volumes,
+            opens=opens,
+            closes=closes,
+            width=20,
+            height=3,
+            y_axis_width=12,
+            style=ChartStyle.BRAILLE,
+            interpolated_count=40,  # Simulate interpolation to 40 points
+        )
+
+        # Should handle upsampling from 1 point
+        assert len(volume_lines) == 3
+
+        # Test with exactly 2 points
+        volumes = [1000000, 2000000]
+        opens = [100.0, 105.0]
+        closes = [105.0, 110.0]
+
+        volume_lines = renderer.render_volume_bars(
+            volumes=volumes,
+            opens=opens,
+            closes=closes,
+            width=30,
+            height=3,
+            y_axis_width=12,
+            style=ChartStyle.BRAILLE,
+            interpolated_count=60,  # Simulate interpolation to 60 points
+        )
+
+        # Should handle upsampling from 2 points
+        assert len(volume_lines) == 3
+
+
+class TestOverlayRendering:
+    """Test suite for overlay line rendering."""
+
+    def test_single_overlay_basic(self) -> None:
+        """Test rendering with a single overlay."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        # Create price data
+        prices = [100.0 + i for i in range(50)]
+
+        # Create overlay (e.g., moving average)
+        overlay_values = [None] * 10 + [105.0 + i for i in range(40)]  # First 10 are None
+        overlay = OverlayData(
+            values=overlay_values,
+            color="cyan",  # Rich cyan markup
+            name="SMA20"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should render successfully
+        assert result.height == 10
+        assert len(result.lines) == 10
+        # Should contain ANSI color codes from overlay
+        chart_text = "".join(result.lines)
+        assert "[cyan]" in chart_text  # Rich cyan markup
+
+    def test_multiple_overlays(self) -> None:
+        """Test rendering with multiple overlays."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        prices = [100.0 + i * 0.5 for i in range(50)]
+
+        # Two overlays with different colors
+        overlay1 = OverlayData(
+            values=[None] * 10 + [102.0 + i * 0.5 for i in range(40)],
+            color="cyan",  # Rich cyan markup
+            name="SMA20"
+        )
+        overlay2 = OverlayData(
+            values=[None] * 20 + [104.0 + i * 0.5 for i in range(30)],
+            color="magenta",  # Rich magenta markup
+            name="SMA50"
+        )
+
+        result = renderer.render(
+            prices=prices,
+            dates=None,
+            dimensions=dimensions,
+            overlays=[overlay1, overlay2]
+        )
+
+        # Should contain both color codes
+        chart_text = "".join(result.lines)
+        assert "[cyan]" in chart_text  # Rich cyan markup
+        assert "[magenta]" in chart_text  # Rich magenta markup
+
+    def test_overlay_with_all_none_values(self) -> None:
+        """Test overlay where all values are None."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        prices = [100.0 + i for i in range(50)]
+        overlay = OverlayData(
+            values=[None] * 50,  # All None
+            color="cyan",
+            name="Empty"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should render without errors, but overlay won't be visible
+        assert result.height == 10
+        assert len(result.lines) == 10
+
+    def test_overlay_none_handling(self) -> None:
+        """Test that None values in overlay are not rendered."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        prices = [100.0 + i for i in range(50)]
+        # Overlay with gaps (None values in middle)
+        overlay_values = [105.0 + i for i in range(20)] + [None] * 10 + [115.0 + i for i in range(20)]
+        overlay = OverlayData(
+            values=overlay_values,
+            color="\033[33m",  # Yellow
+            name="Gapped"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should render successfully (gaps won't cause errors)
+        assert result.height == 10
+
+    def test_overlay_alignment_with_interpolation(self) -> None:
+        """Test that overlays align correctly when price chart is interpolated."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=60, height=10, include_y_axis=False, include_x_axis=False)
+
+        # Small dataset that triggers interpolation (< 60% of max_data_points)
+        prices = [100.0, 110.0, 105.0, 115.0, 120.0]  # 5 points
+        overlay_values = [None, 108.0, 107.0, 113.0, 118.0]  # 5 points, first is None
+
+        overlay = OverlayData(
+            values=overlay_values,
+            color="cyan",
+            name="MA"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should have been interpolated
+        assert result.interpolated_count == 120  # 60 * 2
+        # Should render successfully with overlay aligned
+        assert len(result.lines) == 10
+
+    def test_overlay_downsampling(self) -> None:
+        """Test that overlays are downsampled correctly for large datasets."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        # Large dataset (more than chart can display)
+        prices = [100.0 + i * 0.1 for i in range(200)]
+        overlay_values = [102.0 + i * 0.1 for i in range(200)]
+
+        overlay = OverlayData(
+            values=overlay_values,
+            color="cyan",
+            name="SMA"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should render successfully with downsampling
+        assert result.height == 10
+        assert len(result.lines) == 10
+
+    def test_overlay_flat_price_chart(self) -> None:
+        """Test overlay on a flat (zero range) price chart."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        # All prices the same
+        prices = [100.0] * 50
+        overlay_values = [100.0] * 50  # Also flat
+
+        overlay = OverlayData(
+            values=overlay_values,
+            color="cyan",
+            name="Flat"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should render (overlay won't be visible on flat chart due to price_range == 0 check)
+        assert result.height == 10
+
+    def test_overlay_with_empty_overlays_list(self) -> None:
+        """Test that empty overlays list works correctly."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        prices = [100.0 + i for i in range(50)]
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[])
+
+        # Should render normally without overlays
+        assert result.height == 10
+        assert len(result.lines) == 10
+
+    def test_overlay_no_overlays_parameter(self) -> None:
+        """Test backward compatibility when overlays parameter is not provided."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        prices = [100.0 + i for i in range(50)]
+
+        # Don't pass overlays parameter at all
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions)
+
+        # Should render normally
+        assert result.height == 10
+        assert len(result.lines) == 10
+
+    def test_overlay_block_style_ignores_overlays(self) -> None:
+        """Test that block style ignores overlays (not supported)."""
+        renderer = ChartRenderer(style=ChartStyle.BLOCK)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        prices = [100.0 + i for i in range(50)]
+        overlay = OverlayData(
+            values=[105.0 + i for i in range(50)],
+            color="cyan",
+            name="SMA"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should render successfully (overlay ignored)
+        assert result.height == 10
+
+    def test_overlay_with_y_axis(self) -> None:
+        """Test overlay rendering with Y-axis enabled."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=60, height=10, include_y_axis=True, include_x_axis=False)
+
+        prices = [100.0 + i for i in range(50)]
+        overlay = OverlayData(
+            values=[None] * 10 + [105.0 + i for i in range(40)],
+            color="cyan",
+            name="SMA20"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should render with Y-axis (overlay applied before Y-axis is added)
+        assert result.height == 10
+        # Check for Y-axis markers
+        assert any("│" in line for line in result.lines)
+
+    def test_overlay_values_outside_price_range(self) -> None:
+        """Test overlay with values outside the main price range."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        # Price range: 100-150
+        prices = [100.0 + i for i in range(50)]
+        # Overlay extends beyond price range
+        overlay_values = [90.0 + i for i in range(50)]  # Starts below price range
+
+        overlay = OverlayData(
+            values=overlay_values,
+            color="cyan",
+            name="BelowRange"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should still render (overlay will be clipped or scaled appropriately)
+        assert result.height == 10

@@ -14,7 +14,14 @@ from viper.services.history_data import (
     calculate_stats,
     fetch_historical_data,
 )
-from viper.widgets.chart_renderer import ChartDimensions, ChartRenderer, ChartStyle
+from viper.services.indicators import calculate_rsi, calculate_sma
+from viper.widgets.chart_renderer import (
+    ChartDimensions,
+    ChartRenderer,
+    ChartStyle,
+    OverlayData,
+)
+from viper.widgets.rsi_panel import RSIPanel
 
 
 class ChartPanel(Widget):
@@ -28,6 +35,12 @@ class ChartPanel(Widget):
         height: 100%;
         width: 100%;
         padding: 1 2;
+        layout: vertical;
+    }
+
+    ChartPanel #chart-content {
+        height: 1fr;
+        width: 100%;
     }
 
     ChartPanel Label {
@@ -93,11 +106,12 @@ class ChartPanel(Widget):
     }
     """
 
-    def __init__(self, style: ChartStyle = ChartStyle.BRAILLE) -> None:
+    def __init__(self, style: ChartStyle = ChartStyle.BRAILLE, volume_enabled: bool = True) -> None:
         """Initialize the chart panel.
 
         Args:
             style: Chart rendering style (BRAILLE or BLOCK)
+            volume_enabled: Whether volume bars are shown by default
         """
         super().__init__()
         self._state: str = "empty"
@@ -106,7 +120,7 @@ class ChartPanel(Widget):
         self._current_ticker: str | None = None
         self._current_period: str = "1M"  # Default period
         self._renderer = ChartRenderer(style=style)
-        self._volume_enabled: bool = False  # Volume bars toggle state
+        self._volume_enabled: bool = volume_enabled  # Volume bars toggle state
         # Timeframe mappings
         self._timeframes = {
             "1": "1W",
@@ -117,10 +131,22 @@ class ChartPanel(Widget):
             "6": "5Y",
             "7": "MAX",
         }
+        # Moving average display state
+        self._ma_mode: str = "off"  # Cycle: off -> sma20 -> sma50 -> both -> off
+        self._sma20: list[float | None] | None = None  # Cached SMA20 values
+        self._sma50: list[float | None] | None = None  # Cached SMA50 values
+        # RSI indicator state
+        self._rsi_values: list[float | None] | None = None  # Cached RSI values
+        self._rsi_panel: RSIPanel | None = None  # RSI panel widget
+        self._chart_area_width: int = 70  # Cached for RSI panel updates
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
         yield Container(id="chart-content")
+        # RSI panel starts hidden
+        self._rsi_panel = RSIPanel()
+        self._rsi_panel.hide()
+        yield self._rsi_panel
 
     def show_loading(self, ticker: str, period: str) -> None:
         """Display loading state with spinner.
@@ -146,6 +172,10 @@ class ChartPanel(Widget):
         self._stats = stats
         self._current_ticker = data.ticker
         self._current_period = data.period
+        # Calculate moving averages when chart loads (cache for toggles)
+        self._calculate_moving_averages(data.prices)
+        # Calculate RSI when chart loads (cache for toggles)
+        self._calculate_rsi(data.prices)
         self._render_content()
 
     def show_error(self, error: HistoricalDataError) -> None:
@@ -202,7 +232,25 @@ class ChartPanel(Widget):
             stats: Calculated statistics for the period (optional)
         """
         # Header with ticker and timeframe
-        header_text = f"{data.ticker} - {data.period} Chart"
+        volume_status = "Vol: ON" if self._volume_enabled else "Vol: OFF"
+        header_text = f"{data.ticker} - {data.period} Chart  [{volume_status}]"
+
+        # Add MA legend if MAs are displayed
+        if self._ma_mode != "off":
+            ma_legend_parts = []
+            if self._ma_mode in ("sma20", "both") and self._sma20:
+                # Get last non-None value from SMA20
+                sma20_value = next((v for v in reversed(self._sma20) if v is not None), None)
+                if sma20_value:
+                    ma_legend_parts.append(f"SMA20: ${sma20_value:.2f}")
+            if self._ma_mode in ("sma50", "both") and self._sma50:
+                # Get last non-None value from SMA50
+                sma50_value = next((v for v in reversed(self._sma50) if v is not None), None)
+                if sma50_value:
+                    ma_legend_parts.append(f"SMA50: ${sma50_value:.2f}")
+            if ma_legend_parts:
+                header_text += "  " + "  ".join(ma_legend_parts)
+
         container.mount(Label(header_text, classes="chart-header"))
 
         # Timeframe selector bar with active indicator
@@ -258,8 +306,10 @@ class ChartPanel(Widget):
         # Calculate available dimensions for chart
         # Reserve space for header (2 lines), timeframe bar (1 line), stats (2 lines), and padding
         # If volume is enabled, reserve additional 3 lines for volume bars
+        # If RSI is visible, reserve additional 7 lines for RSI panel
         volume_height = 3 if self._volume_enabled else 0
-        available_height = self.size.height - 7 - volume_height
+        rsi_height = 7 if self.is_rsi_visible() else 0
+        available_height = self.size.height - 7 - volume_height - rsi_height
         available_width = self.size.width - 4  # Account for padding
 
         # Ensure minimum dimensions
@@ -276,21 +326,41 @@ class ChartPanel(Widget):
             include_x_axis=True,
         )
 
+        # Build overlay list based on MA mode
+        overlays: list[OverlayData] = []
+        if self._ma_mode in ("sma20", "both") and self._sma20:
+            overlays.append(OverlayData(
+                values=self._sma20,
+                color="cyan",  # Cyan for SMA20
+                name="SMA20"
+            ))
+        if self._ma_mode in ("sma50", "both") and self._sma50:
+            overlays.append(OverlayData(
+                values=self._sma50,
+                color="magenta",  # Magenta for SMA50
+                name="SMA50"
+            ))
+
         rendered = self._renderer.render(
             prices=data.prices,
             dates=data.dates,
             dimensions=dimensions,
             period=self._current_period,
+            overlays=overlays if overlays else None,
         )
 
         # Mount each line of the chart
+        # Enable markup when overlays are present (they use Rich markup for colors)
+        has_overlays = bool(overlays)
         for line in rendered.lines:
-            container.mount(Label(line, classes="chart-line", markup=False))
+            container.mount(Label(line, classes="chart-line", markup=has_overlays))
+
+        # Calculate chart area width (used by volume and RSI)
+        chart_area_width = available_width - dimensions.y_axis_width
+        self._chart_area_width = chart_area_width  # Cache for RSI toggle
 
         # Render volume bars if enabled
         if self._volume_enabled and len(data.volumes) > 0:
-            # Calculate chart area width (must match the price chart area)
-            chart_area_width = available_width - dimensions.y_axis_width
             volume_lines = self._renderer.render_volume_bars(
                 volumes=data.volumes,
                 opens=data.opens,
@@ -299,9 +369,16 @@ class ChartPanel(Widget):
                 height=volume_height,
                 y_axis_width=dimensions.y_axis_width,
                 style=self._renderer.style,  # Pass the chart style for proper alignment
+                interpolated_count=rendered.interpolated_count,  # Pass interpolation info for alignment
             )
             for line in volume_lines:
-                container.mount(Label(line, classes="chart-line", markup=False))
+                # Volume lines use Rich markup for colors, so markup=True (default)
+                container.mount(Label(line, classes="chart-line"))
+
+        # Update RSI panel with correct width (even if hidden, so it's ready when toggled)
+        if self._rsi_panel and self._rsi_values:
+            current_rsi = next((v for v in reversed(self._rsi_values) if v is not None), None)
+            self._rsi_panel.show_indicator(self._rsi_values, current_rsi, chart_width=chart_area_width)
 
     def _format_number(self, value: float, decimals: int) -> str:
         """Format a number with commas and specified decimal places.
@@ -376,3 +453,62 @@ class ChartPanel(Widget):
             True if volume is enabled, False otherwise
         """
         return self._volume_enabled
+
+    def _calculate_moving_averages(self, prices: list[float]) -> None:
+        """Calculate and cache moving averages for the current chart data.
+
+        Args:
+            prices: List of price values
+        """
+        # Calculate SMA20 and SMA50 for overlay display
+        self._sma20 = calculate_sma(prices, 20) if len(prices) >= 20 else None
+        self._sma50 = calculate_sma(prices, 50) if len(prices) >= 50 else None
+
+    def _calculate_rsi(self, prices: list[float]) -> None:
+        """Calculate and cache RSI for the current chart data.
+
+        Args:
+            prices: List of price values
+        """
+        # Calculate RSI (requires at least 15 prices: 14 for period + 1 for first calculation)
+        self._rsi_values = calculate_rsi(prices, 14) if len(prices) >= 15 else None
+        # Note: RSI panel is updated in _render_chart() where we have the correct chart width
+
+    def cycle_ma_display(self) -> None:
+        """Cycle through moving average display modes: off -> sma20 -> sma50 -> both -> off."""
+        # Define cycle order
+        cycle_order = ["off", "sma20", "sma50", "both"]
+        current_idx = cycle_order.index(self._ma_mode)
+        next_idx = (current_idx + 1) % len(cycle_order)
+        self._ma_mode = cycle_order[next_idx]
+        # Re-render to show/hide MAs
+        self._render_content()
+
+    def get_ma_mode(self) -> str:
+        """Get current MA display mode.
+
+        Returns:
+            Current mode: 'off', 'sma20', 'sma50', or 'both'
+        """
+        return self._ma_mode
+
+    def toggle_rsi(self) -> None:
+        """Toggle RSI indicator panel visibility."""
+        if self._rsi_panel:
+            self._rsi_panel.toggle_visibility()
+            # If panel is now visible and we have RSI data, update it with correct width
+            if self._rsi_panel.is_visible() and self._rsi_values:
+                current_rsi = next((v for v in reversed(self._rsi_values) if v is not None), None)
+                self._rsi_panel.show_indicator(
+                    self._rsi_values, current_rsi, chart_width=self._chart_area_width
+                )
+            # Re-render chart to adjust height for RSI panel
+            self._render_content()
+
+    def is_rsi_visible(self) -> bool:
+        """Check if RSI panel is currently visible.
+
+        Returns:
+            True if RSI is visible, False otherwise
+        """
+        return self._rsi_panel.is_visible() if self._rsi_panel else False

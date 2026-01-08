@@ -5,7 +5,7 @@ MAX_ITERATIONS=${1:-10}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-echo "🚀 Starting Ralph - Feature 2: Charts & News"
+echo "🚀 Starting Ralph - Feature 3: Data Reliability & Chart Improvements"
 echo "📁 Project: $PROJECT_DIR"
 echo "📋 Max iterations: $MAX_ITERATIONS"
 echo ""
@@ -27,7 +27,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo ""
     echo "⚠️  Rate limit hit. Stopping Ralph."
     echo "💤 Resume later when limit resets."
-    exit 2
+    #exit 2
   fi
   
   # Check for the completion tag (case-insensitive just in case)

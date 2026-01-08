@@ -1,12 +1,12 @@
-# Feature 2: Historical Charts & News Feed - Progress Log
+# Feature 3: Data Reliability & Chart Improvements - Progress Log
 
 ## Codebase Patterns
 
-### From Feature 1 (Reference AGENTS.md for full details)
+### From Features 1 & 2 (Reference AGENTS.md for full details)
 - **Virtual Environment**: Always use `.venv/bin/python` for commands
 - **Async Testing**: Use `@pytest.mark.asyncio` with `asyncio_mode = "auto"`
 - **Textual Testing**: Use `async with app.run_test() as pilot` pattern
-- **External APIs**: Always mock yfinance and httpx in tests
+- **External APIs**: Always mock yfinance in tests
 - **Type Checking**: `mypy --strict` requires explicit annotations everywhere
 - **Coverage**: Maintain 90%+ test coverage
 - **Event Handlers**: Use `on_{widget_name}_{event_name}` pattern (snake_case)
@@ -14,341 +14,502 @@
 - **Panel Toggle Pattern**: Use `styles.display = "block"/"none"` for visibility
 - **Focus Management**: Set `can_focus = True` and use `priority=True` on bindings
 - **Responsive Layout**: Use `on_resize()` handler (no @media queries in TCSS)
-
-### New Patterns (Add as discovered)
-- **Period Mapping**: User-friendly periods (1W, 1M) map to yfinance periods (5d, 1mo) via dicts
-- **Interval Selection**: Match data interval to period length for appropriate granularity
+- **Period Mapping**: User-friendly periods (1W, 1M) map to yfinance periods via dicts
 - **Volume Integer Conversion**: Convert pandas volume to int: `[int(v) for v in hist["Volume"].tolist()]`
 - **Mock DataFrames**: Use `pd.DataFrame` with `pd.date_range` index for realistic test mocks
+
+### New Patterns for Feature 3 (Add as discovered)
+- **yfinance News**: Use `ticker.news` attribute, returns list of dicts with `content.title`, `content.summary`, etc.
+- **yfinance Crypto**: Use SYMBOL-USD format (BTC-USD, ETH-USD) for crypto via yfinance
+- **Chart Interpolation**: When data < 60% of chart width, price chart upsamples - volume must match
+- **Technical Indicators**: Pure calculation functions, return None for initial values where calculation not possible
+- **Indicator Panels**: Use IndicatorPanel base class for oscillator indicators (RSI, MACD, etc.)
+- **Reference Lines**: HorizontalLine dataclass with value, label, style, color for level markers
+- **Explicit Type Hints**: Always add explicit type annotations to attributes (self._name: str = name)
+- **Braille Indicators**: Use dots 7+8 for simpler indicator line vs full vertical lines for price chart
+- **Unicode Box Drawing**: "─" (solid), "┄" (dashed), "┈" (dotted) for reference lines
 
 ---
 
 ## Progress Log
 
-## 2026-01-07 - VPR-016
-- Implemented historical price data service with full OHLCV support
-- Created history_data.py with HistoricalData, HistoricalStats, HistoricalDataError dataclasses
-- Added fetch_historical_data() async function with executor pattern
-- Supports all 8 periods: 1W, 1M, 3M, 6M, 1Y, 2Y, 5Y, MAX
-- Added calculate_stats() for period metrics (high, low, % change, avg volume)
-
-### Files Changed
-- `viper/services/history_data.py` (new, 201 lines)
-- `tests/test_history_data.py` (new, 355 lines)
-- `AGENTS.md` (updated with VPR-016 learnings)
-
-### Learnings
-- Named file history_data.py to avoid collision with existing history.py (quote history feature)
-- Used PERIOD_MAP and INTERVAL_MAP dicts to translate user periods to yfinance API
-- yfinance returns pandas DataFrame; must convert to Python lists for dataclass
-- Volume values need explicit int() conversion from pandas to avoid float types
-- Mock tests with pd.DataFrame and pd.date_range for realistic historical data
-- Comprehensive tests: 18 test cases covering all periods, errors, edge cases
-- All tests pass, mypy --strict passes, ready for chart renderer integration
-
----
-## 2026-01-07 - VPR-017
-- Implemented chart rendering engine with Braille and block character support
-- Created chart_renderer.py with ChartRenderer, ChartDimensions, RenderedChart classes
-- Braille rendering: 2x4 dots per character (Unicode U+2800-U+28FF) for high resolution
-- Block rendering: fallback using ▁▂▃▄▅▆▇█ characters (8 vertical levels)
-- Auto-scaling: normalize data to 0-1 range, scale to chart height
-- Auto-downsampling: evenly-spaced sampling when data exceeds chart width
-- Y-axis: 3-5 price labels distributed vertically, right-aligned with │ separator
-- X-axis: two-line design (border + date labels showing first/last dates)
-
-### Files Changed
-- `viper/widgets/chart_renderer.py` (new, 434 lines, 96% test coverage)
-- `tests/test_chart_renderer.py` (new, 393 lines, 29 tests)
-- `AGENTS.md` (updated with VPR-017 learnings)
-- `scripts/ralph/features/feature-2-prd.json` (marked VPR-017 as passing)
-
-### Learnings
-- **Type Overloading**: Used `@overload` decorator for _downsample method to preserve type safety (list[float] vs list[datetime])
-- **Downsampling Gotcha**: Must use original data for min/max to avoid losing extremes during downsampling
-- **Type Narrowing**: Required `cast()` and `isinstance()` checks to help mypy understand type narrowing in generic functions
-- **Multi-Line Returns**: When functions return strings with `\n`, use `.split("\n")` and `.extend()` not `.append()`
-- **Braille Unicode**: Range U+2800-U+28FF provides 256 patterns (2 columns × 4 rows of dots per character)
-- **Braille Dot Mapping**: Left column uses dots 1-3,7; right column uses dots 4-6,8
-- **Chart Dimensions**: Subtract axis widths from total dimensions before rendering chart area
-- **Normalization Formula**: `(value - min) / (max - min)` maps to 0-1, then scale to target resolution
-- **Even-Spaced Downsampling**: `step = len(data) / target; sampled = [data[int(i * step)] for i in range(target)]`
-- **Floating Point Tests**: Use epsilon tolerance (0.011) instead of exact equality for float comparisons
-- **Edge Case Testing**: 29 tests covering empty data, single point, flat lines, zigzag, negative prices, large ranges
-- **Dataclass Pattern**: RenderedChart dataclass cleanly returns multiple related values (lines, dimensions, min/max)
-- **Type Assertions**: Add `assert isinstance()` checks when downcasting union types to help mypy
-
-### Implementation Notes
-- Skipped color support (green/red for trends) - marked as enhancement for later
-- Focus was on core rendering quality and comprehensive testing
-- Both rendering styles (Braille and Block) fully functional and tested
-- Ready for integration into ChartPanel widget (VPR-018)
-
----
-## 2026-01-07 - VPR-018
-- Implemented chart panel widget with full state management
-- Created chart_panel.py with ChartPanel widget class
-- Integrated into main app with 'c' key toggle functionality
-- Panel supports empty, loading, success, and error states
-- Loading state shows spinner with ticker and period context
-- Success state displays header, stats (high, low, % change), and rendered chart
-- Error state shows error message from historical data service
-- Responsive chart sizing: calculates available dimensions dynamically
-- Toggle behavior: mutually exclusive with info panel, replaces quote panel
-- Default period is 1M, uses ChartRenderer for visualization
-
-### Files Changed
-- `viper/widgets/chart_panel.py` (new, 267 lines, 97% test coverage)
-- `tests/test_chart_panel.py` (new, 14 comprehensive tests)
-- `viper/app.py` (added chart container, toggle action, keybinding)
-- `viper/widgets/__init__.py` (exported ChartPanel)
-- `AGENTS.md` (updated with VPR-018 learnings)
-- `scripts/ralph/features/feature-2-prd.json` (marked VPR-018 as passing)
-
-### Learnings
-- **Panel Toggle Pattern**: Use `styles.display = "none"/"block"` to toggle visibility without destroying widget state
-- **Mutual Exclusivity**: When multiple panels replace quote panel, hide others before showing new one
-- **State Tracking**: Use instance flags (`_info_panel_visible`, `_chart_panel_visible`) in app to track panel states
-- **Widget Init Configuration**: Pass rendering style (ChartStyle) to widget constructor, not after creation
-- **Responsive Sizing**: Calculate available chart dimensions dynamically: `size.height - header_lines`
-- **Minimum Dimensions**: Enforce minimum chart size (40x10) for readable output
-- **Loading Context**: Show what's loading in message: "Loading chart for AAPL (1M)..."
-- **Worker Pattern**: Use `self.run_worker(chart_panel.load_chart())` to run async tasks from action methods
-- **Stats Display**: Show period high, low, and percent change with color coding (green/red)
-- **Chart Rendering**: Use `markup=False` on chart line labels to preserve unicode characters
-- **Ticker Change Protection**: Check `_current_ticker` matches before applying fetched data to prevent stale updates
-- **Container Padding**: Use `padding: 0` for chart container to maximize chart rendering space
-- **Test Mocking**: Use `patch("viper.widgets.chart_panel.fetch_historical_data")` to mock the service
-- **Test Coverage**: 14 tests covering all states, periods, styles, responsive behavior, async handling
-- **Type Safety**: All code passes mypy --strict with proper type annotations
-- **Widget Export**: Always add new widgets to `viper/widgets/__init__.py` and `__all__` list
-
-### Implementation Notes
-- Chart panel follows same pattern as QuotePanel and InfoPanel for consistency
-- Uses ChartRenderer (VPR-017) for actual chart visualization
-- Uses HistoricalData service (VPR-016) for data fetching
-- Ready for timeframe selection feature (VPR-019)
-- All acceptance criteria met, tests pass, ready for next story
+## 2026-01-07 - VPR-028
+- **What was implemented**: Fixed news service by replacing broken RSS feed with yfinance .news attribute
+- **Files changed**:
+  - `viper/services/news.py`: Replaced feedparser RSS parsing with yfinance ticker.news, added safe nested dict access helper
+  - `tests/test_news.py`: Rewrote all tests to mock yfinance instead of HTTP, added edge case tests
+  - `pyproject.toml`: Removed feedparser dependency (no longer needed)
+  - `AGENTS.md`: Added VPR-028 learnings section
+- **Learnings**:
+  - yfinance .news provides structured JSON (content.title, content.summary, etc.) - much simpler than RSS parsing
+  - Use `_safe_get_nested(data, keys, default)` helper for safely navigating nested dicts
+  - Validate "content" key exists and title is non-empty; skip malformed items with `continue`
+  - URL fallback: try `content.previewUrl` first, then `content.canonicalUrl.url`
+  - ISO date parsing: Replace 'Z' with '+00:00' for `datetime.fromisoformat()`
+  - Mock yfinance Ticker with `.news` attribute - simpler than mocking HTTP with respx
+  - Maintain backward-compatible interface (NewsItem dataclass) so no changes to widgets needed
+  - Achieved 93% coverage on news.py, 571 total tests passing
 
 ---
 
-## 2026-01-07 - VPR-019
-- Implemented timeframe selection with number keys (1-7) for quick chart switching
-- Added visual timeframe selector bar showing all periods with active indicator
-- Number keys 1-7 map to: 1W, 1M, 3M, 6M, 1Y, 5Y, MAX respectively
-- Only active when chart panel is visible (conditional action handling)
-- Smooth loading transitions when changing timeframes
-- Timeframe persists in _current_period state until explicitly changed
-- Default timeframe is 1M for all new charts
+## 2026-01-07 - VPR-029
+- **What was implemented**: Unified crypto data source to use yfinance instead of CoinGecko
+- **Files changed**:
+  - `viper/services/crypto.py`: Replaced CoinGecko HTTP API with yfinance Ticker, updated symbol mapping
+  - `tests/test_crypto.py`: Rewrote all tests to mock yfinance objects instead of HTTP responses
+  - `tests/test_crypto_info.py`: Simplified tests with yfinance mocking
+  - `AGENTS.md`: Added VPR-029 learnings section
+- **Learnings**:
+  - yfinance supports crypto via SYMBOL-USD format (BTC-USD, ETH-USD, etc.)
+  - Auto-convert user input: "BTC" → "BTC-USD", also support explicit "-USD" suffix
+  - Use `await asyncio.to_thread()` to run synchronous yfinance calls without blocking UI
+  - Calculate 24h change from `.history(period="2d")`: compare last 2 Close prices
+  - Handle edge cases: empty history (0% change), division by zero (0% change)
+  - Mock pattern: `patch("yfinance.Ticker")` with MagicMock having fast_info, info, history attrs
+  - Use `pd.DataFrame` with `pd.date_range` index for realistic historical data mocks
+  - Renamed SYMBOL_TO_ID → SYMBOL_TO_PAIR, kept legacy alias for backward compatibility
+  - No retry logic needed - yfinance doesn't have aggressive rate limits like CoinGecko
+  - Achieved 93% coverage on crypto.py with 30 comprehensive tests
+  - All 547 existing non-crypto-history tests still pass (history tests fixed in VPR-030)
 
-### Files Changed
-- `viper/widgets/chart_panel.py` (added timeframe dict, UI bar, change_timeframe method)
-- `viper/app.py` (added 7 key bindings and action methods for timeframes)
-- `tests/test_chart_panel.py` (added 8 new tests for timeframe functionality)
-- `AGENTS.md` (added VPR-019 learnings section)
-- `scripts/ralph/features/feature-2-prd.json` (marked VPR-019 as passing)
-
-### Learnings
-- **Timeframe Mapping Pattern**: Store key-to-period dict in widget for centralized management and easy lookup
-- **Multiple Action Methods**: Create individual `action_timeframe_N()` methods that delegate to shared `_change_chart_timeframe(key)` helper
-- **Conditional Actions**: Check panel visibility flag (`_chart_panel_visible`) before processing timeframe changes
-- **Widget Query Methods**: Add public `get_timeframe_for_key(key)` method for app to access widget's mappings
-- **Async Change Method**: `async change_timeframe(period)` checks if ticker exists and period differs before reloading
-- **Rich Markup Escaping**: Use `\\[` to escape literal brackets in markup (e.g., `\\[1]` for key indicator in UI)
-- **Markup Tag Nesting**: Must properly nest tags: `[b][cyan]...[/cyan][/b]` not `[b][cyan]...[/b][/cyan]` to avoid MarkupError
-- **Active/Inactive Styling**: Use `[b][cyan]` for active period, `[dim]` for inactive in timeframe bar
-- **Height Adjustment**: Update available height calculation when adding UI elements: `- 7` instead of `- 6` for new timeframe bar
-- **No Redundant Fetches**: Check `period != self._current_period` to avoid re-fetching when same period selected
-- **Natural Persistence**: Timeframe persists via `_current_period` state - no special persistence logic needed
-- **Test Comprehensiveness**: 8 tests cover: key mappings, invalid keys, conditional behavior, same period, no ticker, UI display, persistence
-- **AsyncMock for Services**: Use `AsyncMock` when mocking async functions like `fetch_historical_data` in tests
-- **All Tests Pass**: 22/22 chart_panel tests pass, mypy --strict passes, ready for production
-
-### Implementation Notes
-- Timeframe selector bar displays inline above stats, doesn't take focus
-- Active timeframe highlighted in cyan with bold brackets, inactive are dimmed
-- Smooth UX: shows loading state during fetch, updates immediately on success
-- Works seamlessly with existing chart panel toggle and ticker selection
-- Ready for volume overlay feature (VPR-020)
+---
+## 2026-01-07 - VPR-030
+- **What was implemented**: Unified crypto historical data source to use yfinance instead of CoinGecko
+- **Files changed**:
+  - `viper/services/history_data.py`: Removed CoinGecko code, unified crypto/stock paths via yfinance
+  - `tests/test_history_data.py`: Converted all CoinGecko HTTP mocks to yfinance object mocks
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-030 as complete
+  - `AGENTS.md`: Added VPR-030 learnings section
+- **Learnings**:
+  - Changed import from `SYMBOL_TO_ID` to `SYMBOL_TO_PAIR` (legacy alias exists in crypto.py)
+  - Enhanced `_is_crypto_ticker()` to check both SYMBOL_TO_PAIR dict and -USD suffix
+  - Auto-convert crypto symbols: BTC → BTC-USD, ETH → ETH-USD before yfinance call
+  - Handle explicit -USD suffix: if already present, pass through without double conversion
+  - Fallback pattern: `SYMBOL_TO_PAIR.get(symbol, f"{symbol}-USD")` for unmapped symbols
+  - Unified code path: both stocks and crypto use `_fetch_stock_historical()` function
+  - Removed 3 functions: `_fetch_crypto_historical()`, `_fetch_crypto_with_timeout()`, `_parse_coingecko_chart()`
+  - Removed imports: httpx (no longer needed), COINGECKO_DAYS_MAP constant
+  - Updated all docstrings to reflect yfinance-only implementation
+  - Test conversion: replaced respx HTTP mocking with simple yfinance Ticker mocking
+  - Removed `respx` and `httpx.Response` imports from test file
+  - Removed helper: `create_mock_coingecko_response()` no longer needed
+  - Added test coverage for explicit -USD suffix handling
+  - Test assertions updated: expect "BTC-USD" ticker (converted format) not "BTC"
+  - yfinance provides full OHLCV data for crypto (vs CoinGecko Close-only)
+  - Same interval logic applies: 1d, 1wk, 1mo based on period
+  - No rate limits with yfinance - removed exponential backoff/retry logic
+  - Code reduction: history_data.py from 473 lines to ~240 lines (49% smaller)
+  - Cleaner tests: yfinance object mocking simpler than HTTP route mocking
+  - All 557 tests passing with 90.39% overall coverage
+  - mypy --strict validates with no issues after refactoring
 
 ---
 
-## 2026-01-07 - VPR-020
-- Implemented volume chart overlay with toggle functionality
-- Created render_volume_bars() method in ChartRenderer for volume visualization
-- Volume bars use 9-level block characters (▁▂▃▄▅▆▇█) with ANSI color codes
-- Green bars for up days (close > open), red for down days (close < open)
-- Height proportional to volume (normalized to max in period)
-- Volume stats displayed: avg daily volume, last volume, and % vs average
-- Toggle with 'v' key (only active when chart panel is visible)
-- Volume bars take 3 lines of vertical space below price chart
-
-### Files Changed
-- `viper/widgets/chart_renderer.py` (added render_volume_bars method, extended _downsample overloads)
-- `viper/widgets/chart_panel.py` (added volume toggle, volume stats display, height management)
-- `viper/app.py` (added 'v' key binding and action_toggle_volume method)
-- `tests/test_chart_renderer.py` (added 6 volume rendering tests)
-- `tests/test_chart_panel.py` (added 4 volume toggle tests)
-- `AGENTS.md` (added VPR-020 learnings section with 27 patterns)
-- `scripts/ralph/features/feature-2-prd.json` (marked VPR-020 as passing)
-
-### Learnings
-- **ANSI Color Codes for Terminal**: Raw ANSI codes work in Textual: `\033[32m` (green), `\033[31m` (red), `\033[0m` (reset)
-- **9-Level Block Array**: Include space as first element: `[" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]` for 0-8 mapping
-- **Volume Color Convention**: Match candlestick coloring: green if close > open (up day), red otherwise
-- **Separate Volume Rendering**: Create dedicated method that returns list[str], keeps concerns separated from price chart
-- **Y-Axis Alignment**: Prepend Y-axis padding (12 spaces) to volume lines to align with main chart
-- **Height Reservation**: Subtract volume_height from available chart height when enabled: `height - volume_height`
-- **Conditional Rendering Check**: Always check `_volume_enabled and len(data.volumes) > 0` before rendering
-- **Toggle Pattern**: Simple toggle flips bool flag then calls `_render_content()` to trigger re-render
-- **Volume Stats in Stats Line**: Append volume info to existing stats line when enabled (don't create separate line)
-- **Volume Ratio Display**: Show last volume as percentage of average: `(last_vol / avg_vol * 100)`
-- **Format Volumes**: Use `_format_number(value, 0)` for volumes (no decimals, with thousand separators)
-- **Type Overload for list[int]**: Must add explicit `@overload` for list[int] to generic _downsample method
-- **Type Narrowing with isinstance**: Use `isinstance(data[0], int)` to help mypy understand return type
-- **Multiple Type Support**: When adding new type to generic method, update BOTH overload AND implementation signature
-- **Zero Volume Safety**: Set `max_volume = 1` if max is 0 to avoid division by zero
-- **Conditional Key Binding**: Volume toggle only processes when `_chart_panel_visible` is True
-- **Test ANSI Codes**: Check for presence of `\033[32m` or `\033[31m` in rendered output
-- **Test Block Characters**: Verify at least one block character from the set is present in output
-- **Test Edge Cases**: Empty volumes, all-zero volumes, single volume, very large volumes
-- **Test Toggle State**: Test both public method `is_volume_enabled()` and internal `_volume_enabled` flag
-- **Test with Mock Data**: Use HistoricalData with volumes in tests, vary open/close to test colors
-- **Test Downsampling**: Verify volume bars correctly downsample when data points exceed width
-- **Test Stats Display**: Verify volume stats appear in stats line when volume is enabled
-- **Coverage**: All 61 tests pass (35 chart_renderer + 26 chart_panel), mypy --strict passes, ready for next story
-
-### Implementation Notes
-- Volume bars integrate seamlessly with existing chart rendering pipeline
-- No changes to HistoricalData dataclass needed - volumes already available
-- Color-coded volume bars provide instant visual feedback on market sentiment
-- Volume stats help contextualize whether current volume is unusual or normal
-- Ready for crypto historical charts feature (VPR-021)
+## 2026-01-07 - VPR-031
+- **What was implemented**: Fixed volume bar alignment with price chart by tracking and applying interpolation
+- **Files changed**:
+  - `viper/widgets/chart_renderer.py`: Added interpolated_count to RenderedChart, created _upsample() method, updated render_volume_bars to accept and use interpolated_count
+  - `viper/widgets/chart_panel.py`: Pass rendered.interpolated_count to render_volume_bars() call
+  - `tests/test_chart_renderer.py`: Added 5 comprehensive tests for interpolation tracking and volume alignment
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-031 as complete
+  - `AGENTS.md`: Added VPR-031 learnings section with 28 detailed points
+- **Learnings**:
+  - **Root cause diagnosed**: Price chart upsamples when data < 60% of max_data_points, but volume bars didn't follow
+  - **max_data_points formula**: For BRAILLE charts, max_data_points = chart_width * 2 (2 points per character)
+  - **Upsampling threshold**: Triggers when `len(prices) < max_data_points * 0.6`
+  - **Solution pattern**: Add metadata to return value to communicate interpolation state downstream
+  - **RenderedChart enhancement**: Added `interpolated_count: int = 0` field (0=no interpolation, >0=count)
+  - **Block style**: Doesn't interpolate, always returns interpolated_count=0
+  - **Created _upsample() method**: Mirrors price chart interpolation logic for volumes
+  - **Type safety challenge**: Mypy requires separate `upsampled_int` and `upsampled_float` lists to avoid type errors
+  - **Can't append to generic list**: `upsampled.append(int(value))` fails because list type is `list[float] | list[int]`
+  - **Solution**: Create separate typed lists, populate one based on is_int flag, return correct one
+  - **Parameter addition**: render_volume_bars() now accepts `interpolated_count: int = 0` (backward compatible)
+  - **Conditional upsampling**: Only upsample volumes if interpolated_count > 0
+  - **Order matters**: Upsample FIRST (to match price data), THEN downsample (to fit chart width)
+  - **Integration point**: chart_panel passes `rendered.interpolated_count` to volume renderer
+  - **Test coverage**: Added tests for interpolation detection, alignment, no-interpolation, edge cases
+  - **Edge case 1 point**: Upsampling from single point creates flat line (all same value)
+  - **Edge case 2 points**: Linear interpolation creates smooth gradient between 2 values
+  - **Backward compatible**: Existing calls work (interpolated_count defaults to 0)
+  - **No performance cost**: Upsampling only occurs when data is sparse (< 60% threshold)
+  - **Visual fix confirmed**: Volume bars now perfectly align regardless of data density
+  - All 562 tests passing with 90.33% overall coverage
+  - mypy --strict validates with no type errors
 
 ---
 
-## 2026-01-07 - VPR-021
-- Implemented crypto historical chart support via CoinGecko API integration
-- Extended history_data.py with auto-detection of crypto vs stock tickers
-- Added _is_crypto_ticker() helper using SYMBOL_TO_ID lookup from crypto.py
-- Created _fetch_crypto_historical() with CoinGecko market_chart endpoint
-- Implemented _fetch_crypto_with_timeout() and _parse_coingecko_chart() helper functions
-- Added COINGECKO_DAYS_MAP for period to days parameter mapping
-- Rate limit handling with exponential backoff (2^attempt seconds, max_retries=3)
-- Multi-source routing: yfinance for stocks, CoinGecko for crypto
-- CoinGecko returns millisecond timestamps, convert with datetime.fromtimestamp(ms/1000)
-- For crypto, OHLC all use price (market_chart doesn't provide separate OHLC)
-- Volume padding when response has fewer volumes than prices
-- Interval heuristic based on average time between data points
-
-### Files Changed
-- `viper/services/history_data.py` (added crypto support, +240 lines total 459 lines)
-- `tests/test_history_data.py` (added 20 crypto tests, +246 lines total 598 lines)
-- `AGENTS.md` (added VPR-021 section with 36 learnings)
-- `scripts/ralph/features/feature-2-prd.json` (marked VPR-021 as passing)
-
-### Learnings
-- **Auto-Detection**: Simple SYMBOL_TO_ID lookup determines routing, no complex heuristics needed
-- **Multi-Source Pattern**: Route within main function based on detection, call separate _fetch_X_historical() helpers
-- **CoinGecko API**: market_chart endpoint is simpler than OHLC endpoint, sufficient for charts
-- **CoinGecko Response**: {"prices": [[ms, price], ...], "total_volumes": [[ms, vol], ...]}
-- **Timestamp Conversion**: Must divide milliseconds by 1000 before datetime.fromtimestamp()
-- **OHLC Workaround**: Use price for all OHLC fields when separate data unavailable (acceptable for line charts)
-- **Volume Padding**: Pad volumes with zeros if count mismatch to avoid index errors
-- **Interval Label**: Calculate from time delta, not a field in response: <1h="5m", <24h="1h", else="1d"
-- **Rate Limit Pattern**: Reuse exponential backoff from crypto.py: check 429, wait 2^attempt, max_retries
-- **httpx AsyncClient**: Preferred over requests for async operations, use context manager
-- **httpx Errors**: Separate exception types (TimeoutError, ConnectError, RequestError) for specific handling
-- **respx Mocking**: Use @respx.mock decorator, respx.get().mock() for HTTP mocking in tests
-- **respx Side Effects**: route.side_effect = [Response1, Response2] simulates retries perfectly
-- **respx Call Counting**: route.call_count verifies retry logic worked correctly
-- **Mock Helper Functions**: create_mock_coingecko_response() generates realistic test data
-- **Test Parameterization**: Test all 7 periods in one test to avoid duplication
-- **Timezone-Safe Tests**: Use flexible assertions (year in [2023, 2024]) for timestamp tests
-- **Test Coverage**: 20 new tests (crypto detection, all periods, rate limiting, errors, edge cases)
-- **Module Coverage**: 91% on history_data.py, exceeds 90% threshold, all 38 tests pass
-- **Function Signature**: Added max_retries parameter to fetch_historical_data() for crypto retry control
-- **Import Reuse**: Import SYMBOL_TO_ID from crypto.py to avoid duplication
-- **Result Type**: Maintain HistoricalResult union type for consistency across data sources
-- **Error Messages**: Always include ticker and descriptive message in HistoricalDataError for debugging
-- **Private Helpers**: Use leading underscore for internal functions: _is_crypto_ticker(), _fetch_crypto_historical()
-- **Type Safety**: All code passes mypy --strict with proper annotations
-- **Backwards Compatible**: Existing stock functionality unchanged, only extended with crypto support
-
-### Implementation Notes
-- Charts now work seamlessly for both stocks (AAPL, TSLA) and crypto (BTC, ETH, SOL)
-- No UI changes needed - chart panel automatically uses correct data source
-- Volume overlay works for crypto (uses total_volumes from CoinGecko)
-- All existing chart features (timeframes, volume toggle, responsive sizing) work with crypto
-- Ready for news feed implementation (VPR-022)
+## 2026-01-07 - VPR-032
+- **What was implemented**: Enabled volume bars by default with config support and status indicator
+- **Files changed**:
+  - `viper/config.py`: Changed volume_enabled default from False to True, updated validation message
+  - `viper/widgets/chart_panel.py`: Added volume_enabled parameter to __init__, added status indicator to header
+  - `viper/app.py`: Pass config.volume_enabled to ChartPanel constructor
+  - `viper/widgets/help_screen.py`: Removed "experimental" label, changed to "enabled by default"
+  - `tests/test_config.py`: Updated default assertions, added test_volume_enabled_false
+  - `tests/test_chart_panel.py`: Updated all volume tests, added 2 new tests for config override and status indicator
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-032 as complete
+  - `AGENTS.md`: Added VPR-032 learnings section with 27 detailed points
+- **Learnings**:
+  - **Config default change**: Changed from `volume_enabled: bool = False` to `True` in dataclass
+  - **Constructor parameter**: Added `volume_enabled: bool = True` to ChartPanel.__init__ for flexibility
+  - **Parameter default True**: Ensures volume enabled even without config (fail-safe default)
+  - **App integration**: Pass `config.volume_enabled` to ChartPanel in compose() method
+  - **Status indicator pattern**: Show state in header with bracket notation: `[Vol: ON]` or `[Vol: OFF]`
+  - **Ternary operator**: `volume_status = "Vol: ON" if self._volume_enabled else "Vol: OFF"`
+  - **Header format**: Append status to existing header with spacing for readability
+  - **Help screen updates**: Remove experimental warnings when feature is production-ready
+  - **Help text consistency**: Update all mentions - keybindings section AND charts section
+  - **Removed CoinGecko reference**: Help text updated to reflect yfinance-only crypto support
+  - **Test update pattern**: When changing defaults, update ALL tests checking that default
+  - **Reversed toggle test**: test_chart_panel_volume_toggle now starts enabled, toggles off, then on
+  - **Remove redundant setup**: Tests that relied on toggling ON first can skip that step
+  - **New test for False override**: test_volume_enabled_false verifies config can set to False
+  - **New test for constructor**: test_chart_panel_volume_disabled_via_config tests parameter
+  - **Status indicator test**: test_chart_panel_volume_status_indicator validates header text
+  - **Query pattern for header**: Use `[label for label in labels if "Chart" in str(label.render())]`
+  - **Assert in header text**: Use `any("[Vol: ON]" in str(label.render()) for label in header_labels)`
+  - **Config backward compatible**: Existing configs without volume_enabled get new True default
+  - **User can override**: Set `volume_enabled = false` in ~/.config/viper/config.toml to disable
+  - **Dependency on VPR-031**: Only enabled after alignment issues fixed - important sequence
+  - **User experience**: Volume provides context for price movements - worth default ON
+  - All 565 tests passing with 90.34% overall coverage
+  - mypy --strict validates with no type errors
 
 ---
 
-## 2026-01-07 - VPR-022
-- Implemented news fetching service using Yahoo Finance RSS feeds
-- Created news.py with NewsItem, NewsError dataclasses and NewsResult union type
-- Added fetch_news() async function with Yahoo Finance RSS integration
-- Implemented 2-minute TTL caching for both success and error results
-- Used feedparser library for robust RSS parsing with bozo flag error detection
-- Two-tier architecture: async wrapper with executor pattern calling sync helper
-- Comprehensive error handling: timeout, connection, HTTP (404, 500), parsing, generic exceptions
-- Source extraction from title using "Title - Source" pattern parsing
-- Published date parsing with fallback to datetime.now() on invalid dates
-- Optional summary field mapped from RSS description element
-
-### Files Changed
-- `viper/services/news.py` (new, 196 lines, 100% coverage)
-- `tests/test_news.py` (new, 597 lines, 27 tests)
-- `AGENTS.md` (added VPR-022 section with 44 learnings)
-- `scripts/ralph/features/feature-2-prd.json` (marked VPR-022 as passing)
-
-### Learnings
-- **feedparser Installation**: Installed feedparser 6.0.12 for RSS parsing (no type stubs available)
-- **Type Ignore Pattern**: Use `import feedparser  # type: ignore[import-untyped]` for untyped libraries
-- **Yahoo RSS Endpoint**: `https://feeds.finance.yahoo.com/rss/2.0/headline?s={TICKER}` - free, no API key
-- **Caching Pattern**: Module-level dict with (timestamp, result) tuples and TTL check via timedelta
-- **Cache Error Results**: Cache NewsError results to prevent repeated failing requests (same TTL)
-- **Executor for Blocking I/O**: Use `loop.run_in_executor(None, sync_func, args)` for feedparser
-- **httpx Sync Client**: Use `with httpx.Client(timeout=timeout)` for sync HTTP in executor
-- **raise_for_status()**: Call after request to convert HTTP errors to HTTPStatusError exceptions
-- **feedparser Structure**: Returns dict with .entries list and .bozo flag for parsing errors
-- **Bozo Flag Check**: `feed.bozo and isinstance(feed.get("bozo_exception"), Exception)` detects parse errors
-- **hasattr Pattern**: Use `hasattr(entry, "field")` for optional RSS fields (title, link, summary, pubDate)
-- **Date Parsing**: `time.mktime(entry.published_parsed)` converts time.struct_time to timestamp
-- **Date Fallback**: Wrap date parsing in try/except, fall back to `datetime.now()` on ValueError
-- **Source Extraction**: Parse "Title - Source" with `title.rsplit(" - ", 1)` and check len == 2
-- **Default Source**: Use "Yahoo Finance" as default source when not found in title
-- **Empty Feed Check**: Return NewsError when `len(items) == 0` after parsing all entries
-- **httpx Error Types**: TimeoutException, ConnectError, HTTPStatusError, RequestError - catch separately
-- **404 Handling**: Check `e.response.status_code == 404` for specific "No news feed available" message
-- **Generic Exception**: Final `except Exception as e` for unexpected errors with descriptive message
-- **clear_news_cache Function**: Provide function to clear specific ticker or all cache (optional ticker param)
-- **Global Cache Modification**: Use `global _cache` when clearing all cache with `_cache.clear()`
-- **Ticker Normalization**: Always `.upper().strip()` on input for cache key consistency
-- **Empty String for URL**: Use `""` instead of None for missing URL to avoid Optional complexity
-- **Mock RSS Helpers**: Create `create_mock_rss_feed(num_items)` for realistic test data generation
-- **respx HTTP Mocking**: Use `@respx.mock` decorator with `respx.get(url).mock(return_value=Response(...))`
-- **Fixed Test Dates**: Use "Mon, 01 Jan 2024 12:00:00 +0000" in mock RSS for predictable assertions
-- **Test All Errors**: 27 tests cover timeout, connection, 404, 500, request, parse, empty, edge cases
-- **Test Cache Lifecycle**: Test cache hit, miss, expiration (mock cache timestamp), clearing (all/specific)
-- **Test Missing Fields**: Test RSS without summary, pubDate, source, verify graceful handling
-- **Mock Executor**: Use `patch("asyncio.get_event_loop")` to mock executor and raise exceptions
-- **Mock feedparser**: Use `patch("feedparser.parse")` to trigger generic exception path
-- **Mock time.mktime**: Use `patch("time.mktime")` to trigger date parsing exception path
-- **100% Coverage**: Achieved with 27 comprehensive tests covering all code paths
-- **Test Organization**: Grouped by TestNewsItem, TestNewsError, TestFetchNews, TestClearCache, TestParsingEdgeCases
-- **Error Caching Test**: Verify 404 error is cached and second call returns cached error
-- **Ticker Normalization Test**: Verify "  aapl  " normalizes and caches under "AAPL"
-- **Time Tolerance Tests**: Use `(datetime.now() - result).total_seconds() < 60` for time comparisons
-- **Union Result Type**: `NewsResult = list[NewsItem] | NewsError` provides type-safe error handling
-- **Optional Dataclass Field**: Use `Optional[str] = None` for summary field in NewsItem
-- **Multi-Source Ready**: Architecture easily supports additional sources (Google News, Finnhub, etc.)
-
-### Implementation Notes
-- All acceptance criteria met: RSS parsing, caching, error handling, tests
-- Ready for news panel widget integration (VPR-023)
-- mypy --strict passes, all 27 tests pass
-- Service follows same patterns as crypto.py and history_data.py for consistency
+## 2026-01-07 - VPR-033
+- **What was implemented**: Simple Moving Average (SMA) indicator calculation service
+- **Files changed**:
+  - `viper/services/indicators.py`: Created new module with calculate_sma() pure function
+  - `tests/test_indicators.py`: Created comprehensive test suite with 16 tests
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-033 as complete
+  - `AGENTS.md`: Added VPR-033 learnings section with 28 detailed points
+- **Learnings**:
+  - **New Module Pattern**: Created dedicated `viper/services/indicators.py` for all technical indicators
+  - **Pure Functions Only**: No external dependencies (yfinance, pandas), just pure Python math
+  - **Return Type Pattern**: Use `list[float | None]` for indicators that can't always calculate
+  - **None for Initial Values**: Return None for first (period-1) values where SMA unavailable
+  - **SMA Formula**: For position i: `sum(prices[i-period+1:i+1]) / period`
+  - **Window Slicing**: `prices[i - period + 1 : i + 1]` gets last N prices ending at i
+  - **Input Validation**: Raise ValueError for period <= 0 (must be positive)
+  - **Empty List Handling**: Return [] when input is []
+  - **Length Preservation**: Output list always same length as input list
+  - **None Count Invariant**: Number of None values always equals `period - 1`
+  - **Period 1 Edge Case**: SMA with period=1 is identity function (returns original prices)
+  - **Insufficient Data**: When `len(prices) < period`, all values are None
+  - **Exact Period Size**: When `len(prices) == period`, only last value has SMA
+  - **Test Coverage**: 16 comprehensive tests covering all edge cases and common periods
+  - **Common Periods**: Tested 20, 50, 200 day (industry standard moving averages)
+  - **Real World Test**: Included test with realistic stock price data (AAPL-like)
+  - **Flat Prices Test**: SMA of constant prices equals that constant value
+  - **Volatile Prices Test**: SMA smooths price swings (alternating high/low values)
+  - **Float Comparison**: Use `pytest.approx(value, abs=0.01)` for float assertions
+  - **Type Safety**: mypy --strict validates `list[float | None]` union type correctly
+  - **Docstring Examples**: Include usage examples in docstring for clarity
+  - **Module Docstring**: Explain the None-return pattern at module level
+  - **Foundation Pattern**: This establishes pattern for EMA, RSI, MACD calculations
+  - **No numpy/pandas**: Deliberately avoided heavy dependencies for simple calculations
+  - **Performance**: O(n) complexity with simple arithmetic - very fast
+  - **Integration Ready**: Function signature designed for easy chart overlay integration
+  - All 581 tests passing (added 16 new tests) with 90.40% overall coverage
+  - mypy --strict validates with no type errors
+  - indicators.py at 100% test coverage
 
 ---
 
+## 2026-01-07 - VPR-034
+- **What was implemented**: Exponential Moving Average (EMA) indicator calculation service
+- **Files changed**:
+  - `viper/services/indicators.py`: Added calculate_ema() function with exponential smoothing formula
+  - `tests/test_indicators.py`: Added 20 comprehensive tests for EMA calculation
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-034 as complete
+  - `AGENTS.md`: Added VPR-034 learnings section with 27 detailed points
+- **Learnings**:
+  - **EMA Formula**: k = 2/(period+1), then EMA = (Price * k) + (EMA_prev * (1-k))
+  - **Smoothing factor k**: Calculate once at start, use throughout - k gives weight to current price
+  - **First EMA value**: Use SMA of first `period` prices as initial EMA (bootstrapping)
+  - **Three-branch loop logic**: (1) i < period-1 → None, (2) i == period-1 → SMA, (3) i > period-1 → EMA formula
+  - **Recursive dependency**: Each EMA calculation needs previous EMA value from result[i-1]
+  - **Window slicing for first SMA**: Use `prices[:period]` to get initial window
+  - **State tracking pattern**: Reference previous result in list to build current value
+  - **Defensive None check**: Even though prev_ema shouldn't be None, check for type safety
+  - **None count invariant**: Same as SMA - always `period - 1` None values at start
+  - **Return type consistency**: Use `list[float | None]` to match SMA interface pattern
+  - **Period 1 edge case**: k = 2/(1+1) = 1.0, so EMA equals current price (same as SMA)
+  - **Common periods tested**: 12 (MACD fast), 26 (MACD slow), 50 (trend indicator)
+  - **EMA vs SMA behavior**: EMA reacts faster to price changes due to exponential weighting
+  - **Test pattern reuse**: Mirror SMA test structure - basic, periods, edge cases, real world
+  - **Comparison test**: Verify EMA > SMA after price jump (faster reaction to changes)
+  - **Monotonicity tests**: EMA increases with upward trend, decreases with downward trend
+  - **Convergence behavior**: EMA follows trends with smoothing (exponential decay)
+  - **Known calculation test**: Hand-calculate with period=2, k=0.6667 to verify implementation
+  - **Smoothing factor test**: Dedicated test that k=2/(period+1) is correctly applied
+  - **Type ignore cleanup**: Remove unused `# type: ignore` comments to avoid mypy unused-ignore errors
+  - **Assert comparison pattern**: After `assert x is not None`, can compare x directly (mypy knows it's not None)
+  - **Formula in docstring**: Include mathematical formula and example calculation for clarity
+  - **Edge case coverage**: Empty list, single value, insufficient data, exact period size
+  - **Real world test**: Use AAPL-like prices to verify practical behavior
+  - All 601 tests passing (added 20 new EMA tests) with 90.45% overall coverage
+  - indicators.py at 97% coverage (one defensive branch unreachable)
+  - mypy --strict validates with no type errors
+
+---
+
+
+## 2026-01-07 - VPR-035
+- **What was implemented**: Chart renderer support for overlay lines (moving averages, indicators)
+- **Files changed**:
+  - `viper/widgets/chart_renderer.py`: Added OverlayData dataclass, overlays parameter to render methods, _apply_overlays_braille() processing method
+  - `tests/test_chart_renderer.py`: Added TestOverlayRendering class with 14 comprehensive tests
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-035 as complete
+  - `AGENTS.md`: Added VPR-035 learnings section with 48 detailed points
+- **Learnings**:
+  - **OverlayData dataclass**: Encapsulates overlay info - values: list[float | None], color: str (ANSI), name: str
+  - **None values pattern**: Use None to skip rendering at specific positions (preserves gaps in data)
+  - **Backward compatible parameter**: overlays: list[OverlayData] | None = None (optional)
+  - **Block style limitation**: Overlays only supported in braille style, block style ignores them
+  - **Apply order critical**: Apply overlays AFTER main chart, BEFORE Y-axis (chart_lines not finalized yet)
+  - **Grid conversion pattern**: Convert immutable strings to 2D mutable grid for overlay application
+  - **Same interpolation logic**: Overlays follow exact same interpolation/downsampling as price chart
+  - **Interpolation detection**: Check if interpolated_count > 0 to know if upsampling was applied
+  - **Upsampling overlays**: Apply same linear interpolation formula as price chart upsampling
+  - **Type annotation requirement**: upsampled_overlay: list[float | None] = [] needed for mypy
+  - **Type narrowing for None**: Extract values, assert not None, then perform math (avoids mypy errors)
+  - **Don't interpolate across Nones**: Check if either value is None before interpolating
+  - **_downsample_overlay helper**: Separate method to downsample overlays while preserving None values
+  - **Same scaling**: Use same min_price/max_price from main chart for consistent vertical alignment
+  - **Flat chart check**: Skip overlay rendering if price_range == 0 (can't scale overlay)
+  - **Vertical positions**: Same as main - chart_height * 4 (4 dots per braille character row)
+  - **Scaled overlay type**: scaled_overlay: list[int | None] = [] for vertical positions
+  - **Simpler braille pattern**: Overlays use single dots (7, 8) not full vertical lines like main chart
+  - **Visual distinction**: Simpler pattern makes overlays visually separate from dense price chart
+  - **Color wrapping**: f"{color}{overlay_char}{reset}" with reset = "\033[0m"
+  - **Target row logic**: Handle 3 cases - both available (min), left only, right only
+  - **Skip both None case**: If left_row and right_row both None, continue (don't crash)
+  - **Bounds checking**: Verify 0 <= target_row < chart_height before grid access
+  - **Grid update**: grid[target_row][char_idx] = colored_char replaces existing character
+  - **Multiple overlay support**: Process each overlay in list, all applied to same grid
+  - **Overlay stacking**: Later overlays can overwrite earlier ones at same position (visual priority)
+  - **Grid to strings**: After all overlays, convert back with ["".join(line) for line in grid]
+  - **14 new tests**: Comprehensive coverage - basic, multiple, None handling, interpolation, etc.
+  - **Test None values**: All None (no crash), gaps in middle (preserved), outside price range
+  - **Test interpolation**: Verify overlay aligns when chart triggers upsampling
+  - **Test downsampling**: Verify overlay works with large datasets (> chart width)
+  - **Test backward compat**: No overlays param still works, empty list works
+  - **Test block style**: Verify overlays ignored in block style (braille only)
+  - **Test with Y-axis**: Verify overlay works when Y-axis enabled (applied before axis)
+  - **All 613 tests passing**: Added 14 new tests, all existing tests still pass
+  - **Coverage 90.34%**: Maintained overall coverage, chart_renderer.py at 94%
+  - **mypy --strict clean**: Fixed all type errors with proper annotations and narrowing
+  - **Foundation ready**: Chart renderer now ready for VPR-036 (moving average UI integration)
+
+---
+
+## 2026-01-07 - VPR-036
+- **What was implemented**: Moving average display on chart with interactive 'm' key cycling
+- **Files changed**:
+  - `viper/widgets/chart_panel.py`: Added MA cycle state, caching, overlay building, legend display
+  - `viper/app.py`: Added 'm' keybinding and action_cycle_ma() handler
+  - `viper/widgets/help_screen.py`: Updated keybindings and charts sections with MA info
+  - `tests/test_chart_panel.py`: Added 8 comprehensive MA tests
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-036 as complete
+  - `AGENTS.md`: Added VPR-036 learnings section with 38 detailed points
+- **Learnings**:
+  - **Cycle Pattern**: Use list of modes and modulo to cycle: `(current_idx + 1) % len(modes)`
+  - **State Tracking**: Store current mode in `_ma_mode` attribute (off/sma20/sma50/both)
+  - **Caching Strategy**: Calculate MAs once on chart load, store in attributes for fast toggle
+  - **Cache Attributes**: `_sma20: list[float | None] | None` and `_sma50` for cached values
+  - **Cache as None**: Set to None when insufficient data (avoids AttributeError on access)
+  - **Conditional Calculation**: Check `len(prices) >= period` before calculating each MA
+  - **Calculate Helper**: `_calculate_moving_averages(prices)` called from `show_chart()`
+  - **Cycle Method**: `cycle_ma_display()` updates mode and calls `_render_content()`
+  - **Getter for Testing**: `get_ma_mode()` returns current mode string for assertions
+  - **Overlay Building**: Create `list[OverlayData]` based on mode before calling renderer
+  - **Conditional Add**: Only add overlay if mode includes it AND cached MA is not None
+  - **Color Coding**: Cyan `\033[36m` for SMA20, Magenta `\033[35m` for SMA50
+  - **Pass to Renderer**: Pass overlays list or None to `render()` method
+  - **Legend in Header**: Append MA values to header text when mode is active
+  - **Latest Value Pattern**: Use `next((v for v in reversed(sma) if v is not None), None)`
+  - **Format Legend**: Format as "SMA20: $123.45" with .2f precision
+  - **String Building**: Build parts list and join with spacing for clean formatting
+  - **Both Mode Legend**: Shows both "SMA20: $X  SMA50: $Y" when mode is "both"
+  - **App Integration**: Added "m" key to BINDINGS with "Cycle MA" description
+  - **Action Handler**: `action_cycle_ma()` checks `_chart_panel_visible` before calling method
+  - **Query Pattern**: Use `query_one("#chart-container ChartPanel", ChartPanel)` to get panel
+  - **Help Screen Updates**: Added 'm' key to two sections (keybindings and charts)
+  - **Help Text Format**: "Cycle moving averages (Off/SMA20/SMA50/Both)" for clarity
+  - **Charts Section**: "Off -> SMA20 -> SMA50 -> Both" shows cycle direction
+  - **News Help Fix**: Removed outdated warning, replaced with "News powered by yfinance"
+  - **Test Pattern**: Follow volume toggle test patterns for consistency
+  - **Test Data Size**: Use 50 points for SMA20 tests, 60 points for SMA50/both tests
+  - **Test Full Cycle**: Verify all 4 transitions work correctly and return to start
+  - **Test Legend Format**: Check for "SMA20:" and "$" in header text
+  - **Test Insufficient Data**: Verify graceful handling when data < 20 or < 50 points
+  - **Test None Caching**: Verify _sma20 and _sma50 are None when data insufficient
+  - **Test Calculation**: Verify MAs calculated on load with correct length and None values
+  - **Test Caching**: Verify same object reference after multiple toggles (not recalculated)
+  - **Test Overlay Creation**: Verify overlay data created when in active MA mode
+  - **Header Query**: `[label for label in labels if "Chart" in str(label.render())]`
+  - **Assert Contains**: Use `any("SMA20" in str(label.render()) for label in labels)`
+  - **8 Comprehensive Tests**: Cover all aspects - cycle, legend, data, caching, overlays
+  - All 620 tests passing (added 8 new MA tests) with 90.36% overall coverage
+  - mypy --strict validates with no type errors
+  - chart_panel.py at 98% coverage
+
+---
+
+
+## 2026-01-07 - VPR-037
+- **What was implemented**: Relative Strength Index (RSI) indicator calculation service using Wilder's smoothing
+- **Files changed**:
+  - `viper/services/indicators.py`: Added calculate_rsi() function with Wilder's smoothing method
+  - `tests/test_indicators.py`: Added 24 comprehensive tests for RSI calculation
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-037 as complete
+  - `AGENTS.md`: Added VPR-037 learnings section with 38 detailed points
+- **Learnings**:
+  - **RSI Formula**: RSI = 100 - (100 / (1 + RS)) where RS = Average Gain / Average Loss
+  - **Wilder's Smoothing Critical**: Use Wilder's smoothing for averages, NOT simple moving average
+  - **Two-stage averaging**: First avg = simple average of first period, then Wilder's smoothing for rest
+  - **Wilder's Formula**: ((prev_avg * (period-1)) + current_value) / period
+  - **Default Period 14**: Industry standard for RSI, included as default parameter
+  - **Return Type Pattern**: Use `list[float | None]` to match SMA/EMA interface consistency
+  - **None Count Difference**: RSI returns `period` Nones (not period-1 like MA indicators)
+  - **Reason for More Nones**: Need period+1 prices total (period deltas, then period for first avg)
+  - **Delta Calculation**: Pre-calculate all deltas first: `prices[i] - prices[i-1]`
+  - **Separate Gains/Losses**: Extract gains with `max(delta, 0.0)`, losses with `abs(min(delta, 0.0))`
+  - **Initial Lists**: Create separate initial_gains and initial_losses lists from first period deltas
+  - **First Averages**: Calculate avg_gain and avg_loss from initial lists using simple average
+  - **First RSI Index**: Calculate first RSI at index `period` (need period+1 prices for first RSI)
+  - **Division by Zero Handling**: Check `if avg_loss == 0.0`, return RSI = 100.0 (infinite RS)
+  - **All Losses Case**: If avg_gain == 0.0, RS = 0, RSI = 100 - (100/1) = 0.0
+  - **Flat Prices Edge Case**: All same prices → all deltas = 0 → both avgs = 0 → RSI = 100
+  - **State Variable Updates**: After each RSI calculation, update avg_gain and avg_loss for next iteration
+  - **Smoothing Loop Range**: Loop from `period` to `len(deltas)` for subsequent calculations
+  - **Extract Current Values**: For each iteration: gain = max(delta, 0.0), loss = abs(min(delta, 0.0))
+  - **Apply Smoothing**: avg_gain = ((avg_gain * (period-1)) + gain) / period
+  - **Check Zero Again**: Check avg_loss == 0.0 for each iteration (not just first)
+  - **Range Invariant**: RSI mathematically constrained to [0, 100], validate in all tests
+  - **Overbought Level**: RSI > 70 indicates overbought (strong upward momentum)
+  - **Oversold Level**: RSI < 30 indicates oversold (strong downward momentum)
+  - **Neutral Range**: RSI between 30-70 is neutral (balanced gains/losses)
+  - **Test All Gains**: Steadily increasing prices should yield RSI = 100 (no losses)
+  - **Test All Losses**: Steadily decreasing prices should yield RSI = 0 (no gains)
+  - **Test Alternating**: Mixed gains and losses should yield RSI in middle range
+  - **Edge Cases Tested**: Empty list, single value, insufficient data (< period+1)
+  - **Period Validation**: Raise ValueError if period <= 0 (must be positive)
+  - **Real World Prices**: Test with realistic stock prices to verify practical behavior
+  - **Smoothing Verification**: Consecutive RSI values should be relatively smooth (not wildly different)
+  - **Small Period Test**: Test period=7 for short-term trading analysis
+  - **Large Period Test**: Test period=21 for long-term trend analysis
+  - **Length Invariant**: Output list always same length as input, filled with Nones as needed
+  - **None Count Test**: Explicitly verify first `period` values are None (critical for correctness)
+  - **Comprehensive Coverage**: 24 tests covering basic, edge cases, periods, conditions, smoothing
+  - All 641 tests passing (added 24 new RSI tests) with 90.51% overall coverage
+  - indicators.py at 99% coverage (only defensive EMA branch unreachable)
+  - mypy --strict validates with no type errors
+  - Removed unused `# type: ignore[operator]` comments to avoid mypy warnings
+  - Foundation ready for VPR-038 (sub-panel framework) and VPR-039 (RSI visualization)
+
+---
+
+## 2026-01-07 - VPR-038
+- **What was implemented**: Sub-panel framework for technical indicators with braille chart rendering
+- **Files changed**:
+  - `viper/widgets/indicator_panel.py`: Created new base class for indicator sub-panels
+  - `tests/test_indicator_panel.py`: Created comprehensive test suite with 17 tests
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-038 as complete
+  - `AGENTS.md`: Added VPR-038 learnings section with 54 detailed points
+- **Learnings**:
+  - **IndicatorPanel Base Class**: Generic widget for oscillator indicators (RSI, MACD, Stochastic, etc.)
+  - **HorizontalLine Dataclass**: Encapsulates reference line config - value, label, style, color
+  - **Configurable Height**: Panel accepts height parameter (default 4, supports 3-5 lines)
+  - **Configurable Range**: min_value and max_value define Y-axis scale (default 0-100 for RSI)
+  - **Reference Lines**: Support horizontal markers (e.g., RSI overbought 70, oversold 30)
+  - **Line Styles**: Support "solid", "dashed", "dotted" styles using Unicode box-drawing chars
+  - **Show/Hide Pattern**: hide(), show(), toggle_visibility(), is_visible() methods
+  - **Display Control**: styles.display = "block"/"none" for visibility toggle
+  - **Data Interface**: show_indicator(values, current_value) method to update display
+  - **None Values Support**: Handle None in data list (filter out for rendering)
+  - **Current Value Header**: Display indicator name and latest value in header (e.g., "RSI: 55.00")
+  - **Braille Chart Rendering**: Use same braille pattern approach as main price chart
+  - **Downsampling Logic**: Automatically downsample if data exceeds chart width * 2 points
+  - **Downsampling Method**: Chunk-based averaging preserves general shape of data
+  - **2 Points Per Char**: Braille supports 2 data points per character (left and right dots)
+  - **Vertical Scaling**: Map indicator values to (height * 4) positions (4 dots per row)
+  - **Dot Pattern Choice**: Use dots 7+8 (bottom half) for indicator line (simpler than price chart)
+  - **Color Coding**: Cyan (\033[36m) for indicator line, customizable for reference lines
+  - **Reference Line Drawing**: Draw before data line so data renders on top
+  - **Unicode Box Chars**: "─" (solid), "┄" (dashed), "┈" (dotted) for reference lines
+  - **Grid-based Rendering**: 2D mutable grid pattern for overlaying elements
+  - **Type Annotations Critical**: Explicit type hints needed for all attributes (self._name: str)
+  - **Empty State Handling**: Display "No data" when indicator_values is None or all None
+  - **Flat Line Edge Case**: When value_range == 0, render middle-height horizontal line
+  - **Bounds Clamping**: Clamp vertical positions to valid range before grid access
+  - **Container Pattern**: Use Container with #indicator-content id for dynamic content
+  - **CSS Classes**: indicator-header, indicator-line, empty-state for styling
+  - **can_focus = False**: Indicators are display-only, no user interaction needed
+  - **Margin Pattern**: margin-top: 1 to separate from chart above, margin-bottom: 0 for compact layout
+  - **Test Pattern**: Follow existing widget test patterns (async with app.run_test())
+  - **17 Comprehensive Tests**: Cover initialization, visibility, data display, edge cases, reference lines
+  - **Test Edge Cases**: Empty data, all None, flat values, extreme values, large datasets
+  - **Test Custom Config**: Custom height (5), custom range (-10 to +10 for MACD-like)
+  - **Test Reference Lines**: Multiple lines with different styles, verify rendering
+  - **Test Downsampling**: Verify preservation of data shape after downsampling
+  - **Generic Design**: Can support any oscillator indicator by changing min/max and reference lines
+  - **RSI Ready**: Default config (0-100 range, height 4) perfect for RSI in VPR-039
+  - **MACD Ready**: Can configure with range -10 to +10, height 5 for future MACD implementation
+  - **All 658 tests passing**: Added 17 new tests, all existing tests still pass
+  - **Coverage 90.81%**: Maintained above 90% threshold, indicator_panel.py at 96%
+  - **mypy --strict clean**: All type annotations correct, no type errors
+  - **Foundation Complete**: Ready for VPR-039 (RSI panel implementation using this framework)
+
+---
+
+## 2026-01-08 - VPR-039
+- **What was implemented**: RSI indicator panel implementation with 'r' key toggle and comprehensive testing
+- **Files changed**:
+  - `viper/widgets/rsi_panel.py`: Created RSI-specific panel extending IndicatorPanel base class
+  - `viper/widgets/chart_panel.py`: Integrated RSI calculation, caching, panel composition, and toggle method
+  - `viper/app.py`: Added 'r' keybinding for RSI toggle with action handler
+  - `viper/widgets/help_screen.py`: Added RSI documentation in keybindings and technical indicators sections
+  - `tests/test_rsi_panel.py`: Created 14 comprehensive tests for RSI panel widget
+  - `tests/test_chart_panel.py`: Added 5 integration tests for RSI in chart panel
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-039 as complete
+  - `AGENTS.md`: Added VPR-039 learnings section with 60+ detailed points
+- **Learnings**:
+  - **RSIPanel Class**: Inherits from IndicatorPanel, configures overbought (70, red) and oversold (30, green) reference lines
+  - **Rich Markup Colors**: Use "red", "green", "cyan" color names (not ANSI codes) for Textual compatibility
+  - **RSI Configuration**: 0-100 range with height=4 lines, perfect for momentum oscillator visualization
+  - **Integration Pattern**: Create RSIPanel in chart_panel compose(), yield after chart content container
+  - **Initial Hidden State**: Call `_rsi_panel.hide()` after creation so panel starts hidden
+  - **RSI Calculation**: Call `calculate_rsi(prices, 14)` in show_chart(), cache in `_rsi_values` attribute
+  - **Minimum Data Check**: Require at least 15 prices (14 period + 1), set None if insufficient
+  - **Chart Width Tracking**: Cache `chart_area_width` after rendering for RSI panel alignment
+  - **Always Update Panel**: Update RSI data even when hidden so it's ready when toggled visible
+  - **Current Value Pattern**: Extract with `next((v for v in reversed(rsi_values) if v is not None), None)`
+  - **Toggle Method**: `toggle_rsi()` toggles visibility then calls `_render_content()` to adjust layout
+  - **Visibility Helper**: Provide `is_rsi_visible()` for external queries (tests, status checks)
+  - **Null Safety**: Check `if self._rsi_panel` before calling methods (could be None)
+  - **App Keybinding**: Add to BINDINGS: `("r", "toggle_rsi", "Toggle RSI")`
+  - **Action Handler**: `action_toggle_rsi()` checks `_chart_panel_visible` before calling toggle
+  - **Panel Query**: Use `query_one("#chart-container ChartPanel", ChartPanel)` to get instance
+  - **Help Screen**: Document 'r' key in keybindings section AND RSI details in charts section
+  - **Reference Lines Docs**: Document RSI > 70 = overbought (red), RSI < 30 = oversold (green)
+  - **14 Widget Tests**: Initialization, visibility, neutral/overbought/oversold, None handling, extremes, realistic data
+  - **Test Structure**: Create standalone test app with just RSIPanel for isolated widget testing
+  - **Test All None**: Verify "No data" displayed when insufficient data (all None values)
+  - **Test Partial None**: Verify first 14 None + valid RSI renders correctly (typical pattern)
+  - **Test Extremes**: RSI = 0 and RSI = 100 render without errors (boundary values)
+  - **Test Large Dataset**: 200+ points verify downsampling works (exceeds 140 chart capacity)
+  - **Test Crossing Thresholds**: Verify rendering when RSI crosses 30 and 70 reference lines
+  - **5 Integration Tests**: Calculation, toggle, insufficient data, panel updates, caching
+  - **Test Caching**: Verify same RSI object reference across toggles (not recalculated)
+  - **Coverage**: All 678 tests pass with 90.90% overall coverage, rsi_panel.py at 100%
+  - **Type Safety**: mypy --strict passes with no errors, all annotations correct
+  - **User Experience**: Press 'r' to toggle RSI momentum indicator with overbought/oversold zones
+  - **Visual Design**: Cyan indicator line, red dashed at 70, green dashed at 30, current value in header
+  - **Dependency Chain Complete**: VPR-037 (calculation) + VPR-038 (framework) + VPR-039 (integration)
+  - **Foundation Pattern**: RSI establishes pattern for future oscillators (MACD, Stochastic, Williams %R)
+
+---

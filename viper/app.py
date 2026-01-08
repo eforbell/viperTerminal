@@ -148,6 +148,8 @@ class ViperApp(App[None]):
         ("c", "toggle_chart", "Toggle Chart"),
         ("n", "toggle_news", "Toggle News"),
         ("v", "toggle_volume", "Toggle Volume"),
+        ("m", "cycle_ma", "Cycle MA"),
+        ("r", "toggle_rsi", "Toggle RSI"),
         ("1", "timeframe_1", "1W"),
         ("2", "timeframe_2", "1M"),
         ("3", "timeframe_3", "3M"),
@@ -224,7 +226,7 @@ class ViperApp(App[None]):
                 with Container(id="info-container"):
                     yield InfoPanel()
                 with Container(id="chart-container"):
-                    yield ChartPanel()
+                    yield ChartPanel(volume_enabled=self.config.volume_enabled)
                 with Container(id="news-container"):
                     yield NewsPanel()
         yield TickerInput(history_manager=self.history_manager)
@@ -403,6 +405,20 @@ class ViperApp(App[None]):
         if self._chart_panel_visible:
             chart_panel = self.query_one("#chart-container ChartPanel", ChartPanel)
             chart_panel.toggle_volume()
+
+    def action_cycle_ma(self) -> None:
+        """Cycle through moving average display modes on the chart panel."""
+        # Only cycle MA when chart panel is visible
+        if self._chart_panel_visible:
+            chart_panel = self.query_one("#chart-container ChartPanel", ChartPanel)
+            chart_panel.cycle_ma_display()
+
+    def action_toggle_rsi(self) -> None:
+        """Toggle RSI indicator panel on the chart panel."""
+        # Only toggle RSI when chart panel is visible
+        if self._chart_panel_visible:
+            chart_panel = self.query_one("#chart-container ChartPanel", ChartPanel)
+            chart_panel.toggle_rsi()
 
     def on_news_panel_browser_opening(self, event: NewsPanel.BrowserOpening) -> None:
         """Handle browser opening event from news panel.

@@ -2,6 +2,40 @@
 
 This file documents patterns, best practices, and gotchas discovered during development.
 
+## ⚠️ CRITICAL: Textual Color Rendering ⚠️
+
+**NEVER USE ANSI ESCAPE CODES** for colors in Textual widgets!
+
+Textual uses **Rich markup** (`[green]text[/green]`), NOT ANSI codes (`\033[32m`).
+
+ANSI escape codes will:
+1. Be treated as literal characters (not interpreted)
+2. Break widget rendering and layout
+3. Cause screenshots to fail
+4. Display garbage like `[0m` or escape sequences
+
+**CORRECT (Rich markup):**
+```python
+volume_bars.append(f"[green]{char}[/green]")  # ✅ Works!
+overlay_char = f"[cyan]{char}[/cyan]"          # ✅ Works!
+```
+
+**WRONG (ANSI codes):**
+```python
+volume_bars.append(f"\033[32m{char}\033[0m")  # ❌ BROKEN!
+overlay_char = f"\033[36m{char}\033[0m"        # ❌ BROKEN!
+```
+
+**ALSO CRITICAL:** When using Rich markup in Label widgets, you MUST set `markup=True`:
+```python
+Label(line_with_colors, markup=True)   # ✅ Renders colors
+Label(line_with_colors, markup=False)  # ❌ Shows literal [green] tags
+```
+
+This applies to: volume bars, moving average overlays, RSI indicators, any colored text.
+
+---
+
 ## Codebase Patterns
 
 ### Python Project Setup
@@ -485,3 +519,453 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Optional Fields**: Use `Optional[str]` for summary field in NewsItem dataclass
 - **Time-Based Tests**: Use tolerance for time comparisons: `(datetime.now() - result).total_seconds() < 60`
 - **Multiple Source Support**: Architecture supports easy addition of other news sources (Google News, etc.)
+
+### VPR-028: Fix News Service with yfinance Built-in News
+- **yfinance .news Attribute**: Use `ticker.news` property to get news directly from yfinance (no external API needed)
+- **No RSS Parsing Needed**: yfinance returns structured JSON, eliminating need for feedparser library
+- **Nested Dict Structure**: News data is nested: `item["content"]["title"]`, `item["content"]["summary"]`, etc.
+- **Safe Nested Access Helper**: Create `_safe_get_nested(data, keys, default)` helper for navigating nested dicts safely
+- **URL Fallback Pattern**: Try `content.previewUrl` first, fall back to `content.canonicalUrl.url` if not available
+- **Provider Display Name**: Extract source from `content.provider.displayName`, default to "Yahoo Finance"
+- **ISO Date Format**: yfinance uses ISO format strings like "2024-01-15T10:30:00Z", parse with `datetime.fromisoformat()`
+- **Z Suffix Handling**: Replace 'Z' with '+00:00' for proper timezone parsing: `pub_date_str.replace("Z", "+00:00")`
+- **Malformed Item Skipping**: Validate `"content"` key exists and is dict; skip items without valid title
+- **Type Validation**: Check `isinstance(value, expected_type)` for all extracted values to handle malformed data
+- **Continue Pattern**: Use `continue` in loop to skip malformed items rather than creating default items
+- **Empty Check After Parsing**: Return error if `len(items) == 0` after filtering malformed items (not just empty input)
+- **Remove Unused Dependency**: Remove feedparser from pyproject.toml dependencies list
+- **Keep httpx**: httpx is still used by crypto.py, don't remove it
+- **Mock yfinance Ticker**: Use `patch("yfinance.Ticker")` with `MagicMock()` that has `.news` attribute
+- **Mock News Structure**: Create helpers like `create_mock_yfinance_news()` that return list of content dicts
+- **Test Malformed Items**: Verify that items without "content" key or without valid title are skipped
+- **Test All-Malformed**: Verify that if all items are malformed, returns NewsError (not empty list)
+- **Test canonicalUrl Fallback**: Test URL extraction when previewUrl missing but canonicalUrl.url present
+- **Remove respx Tests**: Since no HTTP requests anymore, remove `@respx.mock` decorators from news tests
+- **Simpler Mocking**: yfinance mocking is simpler than RSS mocking - just set `.news` attribute to list
+- **Coverage Improvement**: Improved news.py from 83% to 93% coverage with comprehensive edge case tests
+- **Test Helper Functions**: Add dedicated test class for `_safe_get_nested()` helper function
+- **Backward Compatibility**: Maintained exact same NewsItem interface so no changes needed to news panel widget
+- **Unified Data Source**: Now using yfinance for stocks, crypto, AND news - single dependency
+- **No Rate Limits**: yfinance news has same moderate rate limits as ticker data, avoids CoinGecko-style aggressive limits
+
+### VPR-029: Unify crypto data source using yfinance
+- **yfinance Crypto Format**: Use SYMBOL-USD format (BTC-USD, ETH-USD) for crypto pairs via yfinance
+- **Auto-conversion Pattern**: Accept both "BTC" and "BTC-USD"; auto-convert common symbols to -USD pairs
+- **Symbol Mapping Update**: Renamed SYMBOL_TO_ID to SYMBOL_TO_PAIR with values like "BTC-USD" instead of "bitcoin"
+- **Legacy Alias**: Keep `SYMBOL_TO_ID = SYMBOL_TO_PAIR` for backward compatibility with history_data.py
+- **Remove CoinGecko**: Completely replaced httpx/CoinGecko with yfinance - no HTTP mocking needed
+- **asyncio.to_thread**: Use `await asyncio.to_thread(sync_function)` to run synchronous yfinance calls without blocking
+- **yfinance fast_info**: Access via `.get()` method for quote data, returns dict-like object
+- **yfinance .info**: Full info dict with marketCap, volume24Hr, regularMarketVolume, longName, name
+- **24h Change Calculation**: Use `.history(period="2d")` to get 2 days of data, calculate percentage change
+- **Handle Empty History**: Check `hist.empty or len(hist) < 2` before calculating change; default to 0.0%
+- **Division by Zero**: Check `if previous_close > 0` before calculating percentage change
+- **Optional Fields**: Use `.get(key, default)` for optional fields; market_cap and volume may be None
+- **Name Extraction**: Try `longName` first, fallback to `name` from .info dict
+- **Mock yfinance.Ticker**: Patch "yfinance.Ticker" and return MagicMock with fast_info, info, history attrs
+- **Mock DataFrame**: Use `pd.DataFrame` with Close column and `pd.date_range` index for realistic mocks
+- **Test Both Formats**: Test both "BTC" (auto-convert) and "BTC-USD" (explicit) formats
+- **Test Edge Cases**: Empty history, single data point, zero previous close, missing optional fields
+- **Simpler Testing**: yfinance mocking is simpler than CoinGecko - no HTTP routes, just object mocking
+- **No Retry Logic**: yfinance doesn't have same rate limit issues as CoinGecko - removed retry/backoff
+- **Unified API**: Stock and crypto now use identical yfinance code path - single data source
+- **Test Coverage**: Achieved 93% coverage on crypto.py with 30 comprehensive tests
+- **Remove respx**: No longer need respx or httpx for crypto tests - pure object mocking sufficient
+
+### VPR-030: Unify crypto historical data with yfinance
+- **Single Data Source**: Completely unified on yfinance - removed all CoinGecko historical data code
+- **Import Update**: Changed from `SYMBOL_TO_ID` to `SYMBOL_TO_PAIR` import (legacy alias exists for compatibility)
+- **Crypto Detection Enhanced**: Updated `_is_crypto_ticker()` to check both SYMBOL_TO_PAIR and -USD suffix
+- **Auto-conversion in fetch_historical_data**: Crypto symbols auto-converted to SYMBOL-USD before yfinance call
+- **Handle Explicit Suffix**: If symbol already ends with -USD, use as-is without double conversion
+- **Fallback Pattern**: Use `SYMBOL_TO_PAIR.get(symbol, f"{symbol}-USD")` for unmapped crypto symbols
+- **Unified Code Path**: Both stocks and crypto now use `_fetch_stock_historical()` - no separate crypto function
+- **Removed Functions**: Deleted `_fetch_crypto_historical()`, `_fetch_crypto_with_timeout()`, `_parse_coingecko_chart()`
+- **Removed Imports**: Removed `httpx` import and `COINGECKO_DAYS_MAP` mapping dict
+- **Docstring Updates**: Updated all docstrings to reflect yfinance-only approach
+- **Test Conversion**: Replaced all respx HTTP mocks with yfinance Ticker mocks
+- **Removed respx Import**: No longer need `respx` or `httpx.Response` imports in test_history_data.py
+- **Simplified Test Helpers**: Removed `create_mock_coingecko_response()` helper function
+- **New Test Coverage**: Added test for explicit -USD suffix handling
+- **Test Ticker Assertions**: Updated assertions to expect "BTC-USD" ticker instead of "BTC"
+- **yfinance Call Verification**: Tests verify yfinance.Ticker called with correct converted symbol (e.g., "BTC-USD")
+- **Same OHLCV Data**: yfinance provides full OHLCV data for crypto (unlike CoinGecko which only had Close)
+- **Consistent Intervals**: Crypto historical data now uses same interval logic as stocks (1d, 1wk, 1mo)
+- **No Rate Limits**: Eliminated CoinGecko rate limiting issues - yfinance has no aggressive rate limits
+- **No Retry Logic Needed**: Removed exponential backoff and retry logic - not needed with yfinance
+- **Cleaner Codebase**: Reduced history_data.py from 473 lines to ~240 lines by removing CoinGecko code
+- **All Tests Pass**: 557 tests passing with 90.39% overall coverage
+- **Type Safety Maintained**: mypy --strict passes with no issues after refactoring
+
+### VPR-031: Fix volume bar alignment with price chart
+- **Root Cause**: Price chart upsamples data when `len(prices) < max_data_points * 0.6` but volume bars don't follow
+- **max_data_points**: For BRAILLE charts, `max_data_points = chart_width * 2` (each char holds 2 data points)
+- **Upsampling Trigger**: When data < 60% of max_data_points, price chart upsamples to max_data_points
+- **Linear Interpolation**: Upsampling uses linear interpolation between existing data points
+- **Solution Pattern**: Track interpolation in RenderedChart, pass to volume renderer for matching
+- **RenderedChart Field**: Added `interpolated_count: int = 0` field (0 = no interpolation, >0 = upsampled count)
+- **Set interpolated_count**: Set to max_data_points when upsampling occurs in _render_braille
+- **Block Style**: _render_block doesn't interpolate, so always returns `interpolated_count=0`
+- **New Method _upsample()**: Created helper method matching price interpolation logic for volumes
+- **Separate List Types**: Use `upsampled_int: list[int]` and `upsampled_float: list[float]` for type safety
+- **Type Narrowing**: Mypy requires separate lists to avoid "Argument 1 to append has incompatible type" error
+- **render_volume_bars Parameter**: Added `interpolated_count: int = 0` parameter for alignment info
+- **Volume Upsampling**: If `interpolated_count > 0`, upsample volumes/opens/closes BEFORE downsampling
+- **Order Matters**: Upsample first (to match price data), THEN downsample (to fit chart width)
+- **chart_panel Integration**: Pass `rendered.interpolated_count` to `render_volume_bars()` call
+- **Test Coverage**: Added 5 new tests for interpolation tracking and volume alignment
+- **Test interpolated_count_returned**: Verifies small dataset triggers upsampling and returns correct count
+- **Test no_interpolation_with_sufficient_data**: Verifies large dataset doesn't trigger upsampling (count=0)
+- **Test volume_alignment_with_interpolation**: Verifies volume bars render correctly with interpolation info
+- **Test volume_alignment_without_interpolation**: Verifies backward compatibility with no interpolation
+- **Test volume_upsampling_edge_cases**: Tests single data point and 2-point upsampling edge cases
+- **Edge Case: 1 Point**: Upsampling from single data point creates flat line (all same value)
+- **Edge Case: 2 Points**: Linear interpolation between 2 points creates smooth gradient
+- **All Tests Pass**: 562 tests passing with 90.33% overall coverage after changes
+- **Type Safety**: mypy --strict passes with no issues on chart_renderer.py and chart_panel.py
+- **Backward Compatible**: Old volume render calls still work (interpolated_count defaults to 0)
+- **Performance**: No performance impact - upsampling only happens when data is sparse
+- **Visual Fix**: Volume bars now perfectly align with price chart regardless of data density
+
+### VPR-032: Enable Volume Bars by Default
+- **Config Default Change**: Changed `volume_enabled: bool = False` to `True` in config.py
+- **Config Validation Update**: Updated validation error message from "default False" to "default True"
+- **ChartPanel Constructor**: Added `volume_enabled: bool = True` parameter to `__init__`
+- **Constructor Default**: Parameter defaults to True, maintaining new behavior even without config
+- **App Integration**: Pass `config.volume_enabled` to ChartPanel in app.py compose()
+- **Status Indicator**: Added volume status to chart header: `[Vol: ON]` or `[Vol: OFF]`
+- **Header Format**: `f"{data.ticker} - {data.period} Chart  [{volume_status}]"`
+- **Help Screen Updates**: Removed "(experimental)" from volume toggle description
+- **Help Text Change**: Changed "disabled by default" to "enabled by default"
+- **Help Chart Section**: Updated to say "enabled by default" and removed CoinGecko reference
+- **Test Updates**: Changed all volume default assertions from False to True
+- **test_chart_panel_volume_toggle**: Reversed toggle order - start enabled, toggle off, toggle on
+- **test_chart_panel_volume_bars_displayed**: Updated comments - volume enabled by default
+- **test_chart_panel_volume_stats_displayed**: Removed redundant toggle - already enabled
+- **test_chart_panel_volume_empty_data**: Removed redundant toggle - already enabled
+- **test_config Default Test**: Changed assertion from `assert config.volume_enabled is False` to True
+- **test_config Invalid Test**: Changed invalid type correction from False to True
+- **New Test: test_volume_enabled_false**: Added test to verify config can override to False
+- **New Test: test_chart_panel_volume_disabled_via_config**: Tests ChartPanel(volume_enabled=False)
+- **New Test: test_chart_panel_volume_status_indicator**: Tests [Vol: ON]/[Vol: OFF] in header
+- **Config Override Works**: Users can set `volume_enabled = false` in config.toml to disable
+- **Backward Compatible**: Existing configs without volume_enabled get new True default
+- **All Tests Pass**: 565 tests passing with 90.34% overall coverage
+- **mypy --strict Clean**: No type errors after adding volume_enabled parameter
+- **User Experience**: Volume adds context to price movements, worth showing by default
+- **VPR-031 Dependency**: Only enabled after VPR-031 fixed alignment issues
+
+### VPR-033: Simple Moving Average (SMA) indicator service
+- **New Service Module**: Created `viper/services/indicators.py` for technical indicator calculations
+- **Pure Functions**: All indicator functions are pure - no external dependencies, just math
+- **Return Type**: Use `list[float | None]` to handle cases where calculation isn't possible
+- **None for Initial Values**: Return None for first (period-1) values where SMA can't be calculated
+- **SMA Formula**: `sum(prices[i-period+1:i+1]) / period` for each position i
+- **Window Slicing**: Use `prices[i - period + 1 : i + 1]` to get last N prices
+- **Period Validation**: Raise ValueError for period <= 0
+- **Empty List Handling**: Return empty list when input is empty list
+- **Period 1 Edge Case**: SMA with period=1 returns original prices (identity function)
+- **Insufficient Data**: When `len(prices) < period`, all values are None
+- **Exact Period Size**: When `len(prices) == period`, only last value has SMA
+- **Length Preservation**: Output list always has same length as input list
+- **None Count Pattern**: Number of None values always equals `period - 1`
+- **Test Coverage**: 16 comprehensive tests covering all edge cases
+- **Real World Test**: Include test with realistic stock price data (AAPL-like)
+- **Flat Prices Test**: SMA of constant prices equals that constant
+- **Volatile Prices Test**: SMA smooths price swings (alternating high/low)
+- **Common Periods Tested**: 20, 50, 200 day periods (industry standard)
+- **Type Safety**: mypy --strict validates with no issues on union type `float | None`
+- **pytest.approx**: Use for float comparisons in tests (e.g., `pytest.approx(152.2, abs=0.01)`)
+- **Docstring Examples**: Include examples in docstring showing expected behavior
+- **Module Docstring**: Explain pattern - all functions return None where calc not possible
+- **Foundation for Indicators**: This is foundation for EMA, RSI, MACD, etc.
+- **No External Dependencies**: Pure Python, no numpy/pandas needed for calculations
+- **Performance**: Simple arithmetic, O(n) complexity for n prices
+- **All Tests Pass**: 581 tests passing (added 16 new tests)
+- **Coverage Maintained**: 90.40% overall coverage (indicators.py at 100%)
+- **mypy Clean**: No type errors with --strict flag
+
+### VPR-034: Exponential Moving Average (EMA) indicator service
+- **EMA Formula**: `k = 2/(period+1)`, then `EMA = (Price * k) + (EMA_prev * (1-k))`
+- **Smoothing Factor**: Calculate once at function start: `k = 2.0 / (period + 1)`
+- **First EMA Value**: Use SMA of first `period` prices as the initial EMA value
+- **Recursive Calculation**: Each subsequent EMA depends on previous EMA value
+- **Three-Branch Logic**: Handle three cases in loop: (1) insufficient data (None), (2) first value (SMA), (3) subsequent values (EMA formula)
+- **i == period - 1**: This is the index where first EMA is calculated (using SMA)
+- **Window for First SMA**: Use `prices[:period]` to get first N prices for initial SMA
+- **State Tracking**: Reference `result[i-1]` to get previous EMA for current calculation
+- **Defensive None Check**: Check if `prev_ema is None` even though it shouldn't happen (type safety)
+- **None Count Invariant**: Same as SMA - number of None values always equals `period - 1`
+- **Return Type Consistency**: Same as SMA - `list[float | None]` for uniform indicator interface
+- **Period 1 Edge Case**: With period=1, k=1.0, so EMA equals current price (same as SMA)
+- **Common Periods**: 12 (MACD fast), 26 (MACD slow), 50 (trend indicator)
+- **EMA vs SMA Behavior**: EMA reacts faster to price changes (more weight on recent prices)
+- **Test Pattern Reuse**: Mirror SMA test structure - basic, periods, edge cases, real world
+- **Comparison Test**: Test that EMA > SMA after price jump (EMA reacts faster)
+- **Monotonicity Tests**: Verify EMA increases with upward trend, decreases with downward trend
+- **Convergence Behavior**: EMA follows price trends but with smoothing (exponential weighting)
+- **Known Calculation Test**: Hand-calculate example with period=2, k=0.6667 to verify formula
+- **Smoothing Factor Test**: Dedicated test to verify k is correctly applied in formula
+- **Type Ignore Cleanup**: Remove `# type: ignore` comments if mypy doesn't need them (avoid unused-ignore errors)
+- **Assert Comparison Pattern**: After asserting `is not None`, can directly compare values
+- **Documentation**: Include formula in docstring with example calculation
+- **All Tests Pass**: 601 tests passing (added 20 new EMA tests)
+- **Coverage Maintained**: 90.45% overall coverage (indicators.py at 97%)
+- **mypy Clean**: No type errors with --strict flag
+
+### VPR-035: Chart renderer support for overlay lines
+- **New Dataclass: OverlayData**: Created to encapsulate overlay information (values, color, name)
+- **OverlayData Fields**: `values: list[float | None]`, `color: str` (ANSI code), `name: str` (legend name)
+- **None Values in Overlay**: Use None to indicate no data at that position (don't render)
+- **Added overlays Parameter**: Added to `render()`, `_render_braille()`, `_render_block()` methods
+- **Optional Parameter**: `overlays: list[OverlayData] | None = None` for backward compatibility
+- **Block Style Behavior**: Block style ignores overlays (not supported, only works with braille)
+- **Apply Order**: Overlays applied AFTER main chart rendered, BEFORE Y-axis added
+- **_apply_overlays_braille Method**: Core method that processes overlay list and applies to chart
+- **Grid Conversion**: Convert chart lines to 2D mutable grid for overlay application
+- **Same Interpolation Logic**: Overlays follow same interpolation/downsampling as main price chart
+- **Interpolation Detection**: If `interpolated_count > 0`, apply same upsampling to overlay data
+- **Upsampling Overlays**: Use same linear interpolation formula as price chart
+- **None Handling in Interpolation**: Don't interpolate across None values (preserve gaps)
+- **Type Annotation Required**: `upsampled_overlay: list[float | None] = []` to satisfy mypy
+- **Type Narrowing Pattern**: Extract values, assert not None, then perform math operations
+- **Downsampling Overlays**: Create `_downsample_overlay()` helper that preserves None values
+- **Scaling Overlays**: Use same min_price/max_price as main chart for consistent scaling
+- **Flat Chart Check**: Skip overlay if price_range == 0 (can't scale overlay on flat chart)
+- **Vertical Positions**: Same as main chart - `chart_height * 4` (4 dots per braille row)
+- **Scaled Overlay Type**: `scaled_overlay: list[int | None] = []` for scaled vertical positions
+- **Overlay Character Pattern**: Use `_get_overlay_braille_char()` with simpler dot pattern
+- **Simpler Dots**: Overlays use single dots (dots 7 and 8) instead of full vertical lines
+- **Visual Distinction**: Simpler pattern makes overlays visually distinct from main price chart
+- **Color Application**: Wrap overlay character in ANSI color codes: `f"{color}{char}{reset}"`
+- **ANSI Reset Code**: Always append `\033[0m` after colored character
+- **Target Row Logic**: Handle three cases - both rows available, left only, right only
+- **Skip Both None**: If both left_row and right_row are None, continue to next iteration
+- **Bounds Checking**: Check `0 <= target_row < chart_height` before applying to grid
+- **Grid Update**: Replace character at `grid[target_row][char_idx]` with colored overlay char
+- **Multiple Overlays**: Process each overlay in sequence, all applied to same grid
+- **Overlay Stacking**: Later overlays can overwrite earlier ones at same position
+- **Grid to String**: After all overlays applied, convert grid back to strings with `"".join(line)`
+- **Test Coverage**: Added 14 comprehensive overlay tests in TestOverlayRendering class
+- **test_single_overlay_basic**: Verifies basic overlay rendering with color codes
+- **test_multiple_overlays**: Tests two overlays with different colors (cyan, magenta)
+- **test_overlay_with_all_none_values**: Tests overlay with all None values (no crash)
+- **test_overlay_none_handling**: Tests gaps in overlay data (None in middle)
+- **test_overlay_alignment_with_interpolation**: Verifies overlay aligns when chart interpolated
+- **test_overlay_downsampling**: Tests overlay with large dataset (more than chart width)
+- **test_overlay_flat_price_chart**: Tests overlay on flat chart (price_range == 0)
+- **test_overlay_with_empty_overlays_list**: Tests empty overlay list
+- **test_overlay_no_overlays_parameter**: Tests backward compatibility (no overlays param)
+- **test_overlay_block_style_ignores_overlays**: Verifies block style ignores overlays
+- **test_overlay_with_y_axis**: Tests overlay works with Y-axis enabled
+- **test_overlay_values_outside_price_range**: Tests overlay values beyond price range
+- **Backward Compatible**: Existing code works without overlays parameter
+- **All Tests Pass**: 613 tests passing (added 14 new overlay tests)
+- **Coverage Maintained**: 90.34% overall coverage (chart_renderer.py at 94%)
+- **mypy --strict Clean**: No type errors after type annotations and narrowing fixes
+
+### VPR-036: Moving average display on chart
+- **MA Cycle State**: Added `_ma_mode: str` with cycle: "off" -> "sma20" -> "sma50" -> "both" -> "off"
+- **MA Caching**: Store calculated MAs in `_sma20` and `_sma50` attributes (avoid recalculation on toggles)
+- **Calculate on Load**: Call `_calculate_moving_averages()` when chart loads, not on every toggle
+- **Conditional Calculation**: Only calculate SMA20 if `len(prices) >= 20`, SMA50 if `len(prices) >= 50`
+- **Cache as None**: Set to None when insufficient data (prevents AttributeError on access)
+- **Cycle Method**: `cycle_ma_display()` cycles through modes and triggers re-render
+- **Getter Method**: `get_ma_mode()` returns current mode for testing/debugging
+- **Overlay Building**: Build `list[OverlayData]` based on current `_ma_mode` before render
+- **Cyan for SMA20**: Use ANSI color `\033[36m` (cyan) for SMA20 overlay
+- **Magenta for SMA50**: Use ANSI color `\033[35m` (magenta) for SMA50 overlay
+- **Conditional Overlay List**: Only add to overlays list if mode includes that MA and MA is not None
+- **Pass to Renderer**: Pass overlays list to `render()` method, or None if empty list
+- **MA Legend in Header**: Add MA values to chart header when MA mode is active
+- **Reverse Iteration for Latest**: Use `next((v for v in reversed(self._sma20) if v is not None), None)` to get last non-None value
+- **Format Legend**: Format as "SMA20: $123.45" with 2 decimal places
+- **Append to Header**: Concatenate legend to existing header text with spacing
+- **Both MAs Legend**: Show both "SMA20: $X" and "SMA50: $Y" when in "both" mode
+- **Keybinding Added**: Added "m" key to app.py BINDINGS list with "Cycle MA" description
+- **Action Handler**: `action_cycle_ma()` calls `chart_panel.cycle_ma_display()` when chart visible
+- **Help Screen Updated**: Added "m" key to keybindings section with full description
+- **Help Charts Section**: Added explanation in CHARTS section about MA cycling
+- **News Help Updated**: Removed outdated warning about broken news, replaced with yfinance note
+- **Test Pattern**: Follow existing volume toggle test patterns for MA tests
+- **Test Full Cycle**: Test complete cycle through all 4 modes (off/sma20/sma50/both/off)
+- **Test Legend Display**: Verify MA values appear in header with "$" formatting
+- **Test Insufficient Data**: Verify graceful handling when data < 20 or < 50 points
+- **Test Calculation on Load**: Verify MAs calculated when show_chart() called
+- **Test Cached Values**: Verify MAs are cached (same object after multiple toggles)
+- **Test Overlay Rendering**: Verify overlay data is created when in MA modes
+- **Header Query Pattern**: Use `[label for label in labels if "Chart" in str(label.render())]`
+- **Assert Pattern**: Use `any("SMA20" in str(label.render()) for label in header_labels)`
+- **None Check in Tests**: Check both that list is None AND that no legend appears
+- **8 New Tests**: Added comprehensive MA tests covering all aspects of feature
+- **All Tests Pass**: 620 tests passing (added 8 new MA tests)
+- **Coverage Maintained**: 90.36% overall coverage (chart_panel.py at 98%)
+- **mypy --strict Clean**: No type errors after implementation
+- **Import Pattern**: Import OverlayData from chart_renderer along with other types
+- **Import Indicators**: Import calculate_sma from services.indicators module
+
+### VPR-037: Relative Strength Index (RSI) indicator service
+- **RSI Formula**: RSI = 100 - (100 / (1 + RS)) where RS = Average Gain / Average Loss
+- **Wilder's Smoothing**: Use Wilder's smoothing method, NOT simple moving average for gains/losses
+- **First Average**: First avg = sum(gains/losses over period) / period (simple average)
+- **Subsequent Averages**: ((previous avg * (period-1)) + current value) / period (Wilder's smoothing)
+- **Default Period 14**: RSI uses period=14 by default (industry standard)
+- **Return Type**: Use `list[float | None]` matching SMA/EMA pattern
+- **None Count**: RSI returns `period` None values (not period-1 like MA)
+- **Reason for Period Nones**: Need period+1 prices to calculate first RSI (period deltas, then period for first avg)
+- **Price Deltas**: Calculate deltas first: `delta = prices[i] - prices[i-1]` for all prices
+- **Separate Gains/Losses**: gains = max(delta, 0.0), losses = abs(min(delta, 0.0))
+- **Initial Averages**: Calculate avg_gain and avg_loss from first `period` deltas using simple average
+- **First RSI Calculation**: Use initial averages to calculate first RSI at index `period` (not period-1)
+- **Division by Zero**: Check if avg_loss == 0.0, return RSI = 100.0 (no losses = infinite RS)
+- **No Gains Case**: If avg_gain == 0.0 (all losses), RS = 0, RSI = 100 - (100/1) = 0
+- **Flat Prices Edge Case**: All same prices means all deltas = 0, avg_gain and avg_loss both 0, triggers RSI = 100
+- **Update State Variables**: After calculating each RSI, update avg_gain and avg_loss for next iteration
+- **Smoothing Loop**: Loop from `period` to `len(deltas)` for subsequent RSI calculations
+- **Range Invariant**: RSI always in [0, 100] range - validate in tests
+- **Overbought**: RSI > 70 indicates overbought (strong upward momentum)
+- **Oversold**: RSI < 30 indicates oversold (strong downward momentum)
+- **Test All Gains**: Steadily increasing prices should yield RSI = 100
+- **Test All Losses**: Steadily decreasing prices should yield RSI = 0
+- **Test Alternating**: Mixed gains/losses should yield RSI between 0 and 100
+- **Edge Case Tests**: Empty list, single value, insufficient data (< period+1 prices)
+- **Period Validation**: Raise ValueError if period <= 0
+- **Real World Test**: Test with realistic stock prices with mixed gains/losses
+- **Wilder's Smoothing Test**: Verify consecutive RSI values are smooth (not wildly different)
+- **Small/Large Periods**: Test with period=7 (short-term) and period=21 (long-term)
+- **Length Matches Input**: Output list always same length as input, regardless of period
+- **None Count Test**: Verify first `period` values are None (not period-1)
+- **24 Comprehensive Tests**: Added extensive test coverage for all RSI behaviors
+- **All 641 Tests Pass**: Added 24 new RSI tests, all existing tests still pass
+- **Coverage 90.51%**: Overall coverage maintained above 90% threshold
+- **indicators.py 99% Coverage**: Only one defensive branch unreachable (EMA prev_ema None check)
+- **mypy --strict Clean**: No type errors with proper return type annotations
+- **Test Import**: Added calculate_rsi to imports in test_indicators.py
+- **Removed Unused Ignores**: Removed `# type: ignore[operator]` comments that mypy didn't need
+- **Foundation for VPR-038**: RSI calculation ready for sub-panel visualization implementation
+
+### VPR-038: Sub-panel framework for indicators
+- **IndicatorPanel Base Class**: Created generic widget for oscillator indicators (RSI, MACD, Stochastic, etc.)
+- **Purpose**: Display indicators that don't overlay on price chart (need separate Y-axis scale)
+- **HorizontalLine Dataclass**: Encapsulates reference line config with value, label, style, color fields
+- **Configurable Height**: Panel accepts height parameter (default 4, supports 3-5 lines for flexibility)
+- **Configurable Range**: min_value and max_value define Y-axis scale (default 0-100 for RSI)
+- **Reference Lines Support**: Can display horizontal markers (e.g., RSI overbought 70, oversold 30)
+- **Line Styles**: Support "solid", "dashed", "dotted" styles using Unicode box-drawing characters
+- **Unicode Box Chars**: "─" (solid U+2500), "┄" (dashed U+2504), "┈" (dotted U+2508)
+- **Visibility Control**: hide(), show(), toggle_visibility(), is_visible() methods for display management
+- **Display Toggle**: Use `styles.display = "block"/"none"` for showing/hiding panel
+- **Data Interface**: show_indicator(values, current_value) method to update display with new data
+- **None Values Support**: Handle None in data list by filtering out (for initial values in RSI, etc.)
+- **Header Display**: Show indicator name and latest value in header (e.g., "RSI: 55.00")
+- **Braille Chart Rendering**: Use same braille pattern approach as main price chart for consistency
+- **Downsampling Logic**: Automatically downsample if data exceeds chart_width * 2 points
+- **Downsampling Method**: Chunk-based averaging preserves general shape of data without losing trends
+- **2 Points Per Char**: Braille characters support 2 data points each (left and right dot positions)
+- **Vertical Scaling**: Map indicator values to (height * 4) vertical positions (4 braille dots per row)
+- **Dot Pattern**: Use dots 7+8 (bottom half of braille char) for indicator line (simpler than price chart)
+- **Braille Base**: braille_base = 0x2800, dot_7 = 0x40, dot_8 = 0x80 for braille character construction
+- **Color Coding**: Cyan (\033[36m) for indicator line by default, customizable for reference lines
+- **Reference Line Drawing**: Draw reference lines before data line so indicator renders on top
+- **Grid-based Rendering**: Use 2D mutable grid (list[list[str]]) for overlaying elements before final render
+- **Type Annotations Critical**: Must add explicit type hints to all attributes for mypy --strict
+- **Attribute Type Pattern**: `self._name: str = name` not just `self._name = name`
+- **Empty State Handling**: Display "No data" message when indicator_values is None or all None
+- **Flat Line Edge Case**: When value_range == 0, render horizontal line at middle height
+- **Bounds Clamping**: Clamp vertical positions to [0, height*4-1] before grid access to prevent errors
+- **Container Pattern**: Use Container with #indicator-content id for dynamic content mounting
+- **CSS Classes**: indicator-header (bold, accent), indicator-line (no margin), empty-state (dimmed)
+- **can_focus = False**: Indicators are display-only widgets, no user interaction needed
+- **Margin Pattern**: margin-top: 1 to separate from chart above, margin-bottom: 0 for compact layout
+- **Test Pattern**: Follow existing Textual widget test patterns (async with app.run_test() as pilot)
+- **17 Comprehensive Tests**: Cover initialization, visibility, data display, edge cases, reference lines
+- **Test Edge Cases**: Empty data, all None values, flat values, extreme values, large datasets
+- **Test Custom Config**: Custom height (5 for MACD), custom range (-10 to +10 for MACD-like indicators)
+- **Test Reference Lines**: Multiple lines with different styles, verify rendering without errors
+- **Test Downsampling**: Verify downsampled data preserves min/max range and general shape
+- **Test Visibility States**: Verify hidden panel doesn't render when data updates, shows when toggled
+- **Generic Design**: Can support any oscillator indicator by changing min/max range and reference lines
+- **RSI Configuration**: Default config (0-100 range, height 4) is perfect for RSI implementation
+- **MACD Configuration**: Can configure with range -10 to +10, height 5 for future MACD panel
+- **All 658 Tests Pass**: Added 17 new comprehensive tests, all existing tests still pass
+- **Coverage 90.81%**: Maintained above 90% threshold, indicator_panel.py at 96% coverage
+- **mypy --strict Clean**: All type annotations correct, no type errors in strict mode
+- **Module Imports**: Import Container from textual.containers, Label from textual.widgets
+- **Widget Inheritance**: Inherit from Widget, implement compose() yielding Container
+- **Foundation Complete**: Ready for VPR-039 (RSI panel implementation) using this framework
+- **Extensible Design**: Future indicators (Stochastic, Williams %R) can reuse this framework
+- **Positioning Note**: Panel designed to appear below price chart, above volume bars in layout
+- **Dynamic Content**: Use container.remove_children() + container.mount() pattern for updates
+- **No Focus**: Set can_focus = False since panels are informational, not interactive
+- **Color Reset**: Always reset color with \033[0m after colored characters to avoid bleed
+- **Color Reset**: Always reset color with \033[0m after colored characters to avoid bleed
+
+## VPR-039: RSI Indicator Panel Implementation
+
+**Story**: Integrate RSI indicator panel with chart panel, add 'r' keybinding toggle, and comprehensive testing
+
+**Files Changed**:
+- `viper/widgets/rsi_panel.py`: Created RSI-specific panel extending IndicatorPanel base
+- `viper/widgets/chart_panel.py`: Integrated RSI calculation, caching, panel composition, and toggle
+- `viper/app.py`: Added 'r' keybinding for RSI toggle
+- `viper/widgets/help_screen.py`: Added RSI documentation in keybindings and charts sections
+- `tests/test_rsi_panel.py`: Created 14 comprehensive tests for RSI panel widget
+- `tests/test_chart_panel.py`: Added 5 integration tests for RSI in chart panel
+
+**Learnings**:
+- **RSIPanel Extension**: Inherit from IndicatorPanel, configure with RSI-specific params in __init__
+- **Reference Lines Setup**: Define overbought (70, red, dashed) and oversold (30, green, dashed) in constructor
+- **Rich Markup Colors**: Use color names ("red", "green", "cyan") not ANSI codes for Textual compatibility
+- **RSI Range**: Default 0-100 range with min_value=0.0, max_value=100.0 passed to super().__init__
+- **Panel Height**: RSI uses height=4 (4 lines of chart area) which is standard for oscillators
+- **Integration Pattern**: Import RSIPanel in chart_panel, create in compose(), yield after chart content
+- **Initial State**: RSI panel starts hidden via `self._rsi_panel.hide()` in compose() method
+- **State Tracking**: Store RSI panel instance as `self._rsi_panel: RSIPanel | None` attribute
+- **RSI Calculation**: Call `calculate_rsi(prices, 14)` in show_chart() to cache values for toggles
+- **Cache Pattern**: Store calculated RSI as `self._rsi_values: list[float | None] | None`
+- **Minimum Data**: RSI requires at least 15 prices (14 period + 1 for calculation), check `len(prices) >= 15`
+- **Insufficient Data**: Set `self._rsi_values = None` when not enough data (no error, graceful degradation)
+- **Chart Width Caching**: Store `self._chart_area_width: int` after chart rendering for RSI updates
+- **Chart Width Calculation**: `chart_area_width = available_width - dimensions.y_axis_width`
+- **RSI Update Always**: Update RSI panel data even when hidden so it's ready when toggled visible
+- **Current Value Extract**: Use `next((v for v in reversed(self._rsi_values) if v is not None), None)`
+- **show_indicator Call**: Pass values, current_value, and chart_width for proper alignment with chart
+- **Toggle Method**: `toggle_rsi()` calls `self._rsi_panel.toggle_visibility()` then `_render_content()`
+- **Re-render After Toggle**: Must call `_render_content()` to adjust layout for panel visibility change
+- **Visibility Check**: Provide `is_rsi_visible()` helper method for external queries (e.g., tests, status)
+- **Null Safety**: Check `if self._rsi_panel` before calling methods (panel could be None)
+- **Conditional Update**: Only update RSI data on toggle if `is_visible() and self._rsi_values` both true
+- **App Keybinding**: Add to BINDINGS list: `("r", "toggle_rsi", "Toggle RSI")`
+- **Action Handler**: Create `action_toggle_rsi()` method that checks `_chart_panel_visible` first
+- **Panel Query**: Use `query_one("#chart-container ChartPanel", ChartPanel)` to get panel instance
+- **Help Screen Updates**: Add RSI to both keybindings section AND technical indicators section
+- **Help Format**: "r - Toggle RSI indicator" in keybindings, detail RSI 0-100 range in charts section
+- **Overbought/Oversold Docs**: Document RSI > 70 = overbought (red), RSI < 30 = oversold (green)
+- **Test Structure**: Create standalone test app with just RSIPanel for isolated widget tests
+- **14 Widget Tests**: Initialization, visibility, neutral/overbought/oversold values, None handling, extremes
+- **Test Reference Lines**: Verify 2 lines configured at 70 (red) and 30 (green) with correct properties
+- **Test All None**: Verify "No data" displayed when all values are None (insufficient data case)
+- **Test Partial None**: Verify first 14 None values + valid RSI renders correctly (typical RSI pattern)
+- **Test Extremes**: Verify RSI = 0 and RSI = 100 render without errors (edge values)
+- **Test Large Dataset**: Verify downsampling works with 200+ data points (more than 140 chart capacity)
+- **Test Realistic Values**: Use realistic RSI trend from oversold (28) through neutral to overbought (71)
+- **Test Crossing Threshold**: Verify rendering when RSI crosses 30 and 70 thresholds
+- **Test Empty Data**: Verify `show_indicator(None)` displays "No data" gracefully
+- **Test Hidden No Render**: Verify hidden panel stores data but doesn't re-render until shown
+- **5 Integration Tests**: RSI calculation, toggle, insufficient data, panel updates, caching
+- **Test Calculation**: Verify `calculate_rsi()` called in show_chart(), cached in `_rsi_values`
+- **Test Toggle**: Verify panel starts hidden, becomes visible on first toggle, hidden on second
+- **Test Insufficient Data**: Verify `_rsi_values = None` when fewer than 15 prices
+- **Test Panel Updates**: Verify RSI panel receives correct data and chart_width on render
+- **Test Caching**: Verify same RSI object reference across multiple toggles (not recalculated)
+- **Coverage Impact**: Added 14 widget tests + 5 integration tests = 19 new tests total
+- **All 678 Tests Pass**: Comprehensive test suite passes with RSI implementation
+- **Coverage 90.90%**: Maintained above 90% threshold, rsi_panel.py at 100% coverage
+- **chart_panel.py 99%**: Integration increased chart_panel coverage to 99%
+- **mypy --strict Pass**: No type errors with RSI implementation, all annotations correct
+- **User Experience**: RSI provides momentum analysis - press 'r' to toggle, see overbought/oversold zones
+- **Visual Clarity**: Red dashed line at 70 (exit signal), green dashed line at 30 (buy signal)
+- **Cyan Indicator Line**: RSI line rendered in cyan to distinguish from reference lines
+- **Header Value**: Current RSI value displayed as "RSI: 52.00" format in panel header
+- **Dependency Chain**: VPR-037 (RSI calc) + VPR-038 (framework) → VPR-039 (integration) complete
+- **Foundation Pattern**: RSI implementation establishes pattern for future oscillators (MACD, Stochastic)

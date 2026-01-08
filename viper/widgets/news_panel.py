@@ -215,20 +215,21 @@ class NewsPanel(Widget):
             if is_expanded:
                 classes += " expanded"
 
-            item_container = Container(classes=classes)
+            # Build list of child widgets first
+            children: list[Label] = []
 
             if is_expanded:
                 # Expanded view: full headline + summary
-                item_container.mount(Label(item.title, classes="news-headline"))
+                children.append(Label(item.title, classes="news-headline"))
                 relative_time = self._format_relative_time(item.published_at)
                 meta = f"{item.source} • {relative_time}"
-                item_container.mount(Label(meta, classes="news-meta"))
+                children.append(Label(meta, classes="news-meta"))
 
                 # Show summary if available
                 if item.summary:
-                    item_container.mount(Label(item.summary, classes="news-summary"))
+                    children.append(Label(item.summary, classes="news-summary"))
                 else:
-                    item_container.mount(
+                    children.append(
                         Label("[No summary available - press Enter to open in browser]",
                               classes="news-summary")
                     )
@@ -237,9 +238,11 @@ class NewsPanel(Widget):
                 headline = self._truncate_text(item.title, 80)
                 relative_time = self._format_relative_time(item.published_at)
                 meta = f"{item.source} • {relative_time}"
-                item_container.mount(Label(headline, classes="news-headline"))
-                item_container.mount(Label(meta, classes="news-meta"))
+                children.append(Label(headline, classes="news-headline"))
+                children.append(Label(meta, classes="news-meta"))
 
+            # Create container with children passed to constructor
+            item_container = Container(*children, classes=classes)
             container.mount(item_container)
 
     def _truncate_text(self, text: str, max_length: int) -> str:
@@ -265,7 +268,13 @@ class NewsPanel(Widget):
         Returns:
             Formatted relative time string.
         """
-        now = datetime.now()
+        from datetime import timezone
+
+        # Handle timezone-aware datetimes from yfinance
+        if published_at.tzinfo is not None:
+            now = datetime.now(timezone.utc)
+        else:
+            now = datetime.now()
         delta = now - published_at
 
         # Calculate time units

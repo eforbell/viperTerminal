@@ -114,7 +114,9 @@ class HelpScreen(ModalScreen[None]):
                 yield Static("i                    Toggle info panel", classes="help-item")
                 yield Static("c                    Toggle chart panel", classes="help-item")
                 yield Static("n                    Toggle news panel", classes="help-item")
-                yield Static("v                    Toggle volume bars (experimental)", classes="help-item")
+                yield Static("v                    Toggle volume bars", classes="help-item")
+                yield Static("m                    Cycle moving averages (Off/SMA20/SMA50/Both)", classes="help-item")
+                yield Static("r                    Toggle RSI indicator", classes="help-item")
                 yield Static("e                    Expand news item (show summary)", classes="help-item")
                 yield Static("1-7                  Select timeframe (chart)", classes="help-item")
                 yield Static("? / F1               Show this help screen", classes="help-item")
@@ -135,11 +137,19 @@ class HelpScreen(ModalScreen[None]):
                     classes="help-item",
                 )
                 yield Static(
-                    "Press 'v' to toggle volume bars (experimental - disabled by default).",
+                    "Press 'v' to toggle volume bars (enabled by default).",
                     classes="help-item",
                 )
                 yield Static(
-                    "Charts support both stocks (yfinance) and crypto (CoinGecko).",
+                    "Press 'm' to cycle moving averages: Off -> SMA20 -> SMA50 -> Both.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Press 'r' to toggle RSI (Relative Strength Index) indicator panel.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Charts support both stocks and crypto via yfinance.",
                     classes="help-item",
                 )
 
@@ -158,11 +168,7 @@ class HelpScreen(ModalScreen[None]):
                     classes="help-item",
                 )
                 yield Static(
-                    "⚠️  News currently unavailable (Yahoo RSS feed discontinued).",
-                    classes="help-item",
-                )
-                yield Static(
-                    "Alternative news sources in development (see future enhancements).",
+                    "News powered by yfinance - displays recent headlines and summaries.",
                     classes="help-item",
                 )
 

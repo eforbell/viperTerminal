@@ -14,6 +14,15 @@ class ChartStyle(Enum):
 
 
 @dataclass
+class OverlayData:
+    """Data for a single overlay line on the chart."""
+
+    values: list[float | None]  # Overlay values (same length as prices), None = no render
+    color: str  # Rich markup color name (e.g., "cyan", "magenta")
+    name: str  # Display name for legend (e.g., "SMA20")
+
+
+@dataclass
 class ChartDimensions:
     """Chart rendering dimensions."""
 
@@ -34,6 +43,7 @@ class RenderedChart:
     height: int  # Actual height of rendered chart
     min_value: float  # Data minimum
     max_value: float  # Data maximum
+    interpolated_count: int = 0  # Number of data points after interpolation (0 = no interpolation)
 
 
 class ChartRenderer:
@@ -55,6 +65,7 @@ class ChartRenderer:
         volumes: list[int] | None = None,
         opens: list[float] | None = None,
         period: str | None = None,
+        overlays: list[OverlayData] | None = None,
     ) -> RenderedChart:
         """Render price data as a chart.
 
@@ -65,6 +76,7 @@ class ChartRenderer:
             volumes: Optional list of volume values (same length as prices)
             opens: Optional list of open prices (for volume bar coloring)
             period: Optional time period for date formatting (1W, 1M, 1Y, etc.)
+            overlays: Optional list of overlay data (e.g., moving averages)
 
         Returns:
             RenderedChart with lines ready for display
@@ -77,9 +89,9 @@ class ChartRenderer:
 
         # Delegate to specific renderer
         if self.style == ChartStyle.BRAILLE:
-            return self._render_braille(prices, dates, dimensions, volumes, opens, period)
+            return self._render_braille(prices, dates, dimensions, volumes, opens, period, overlays)
         else:
-            return self._render_block(prices, dates, dimensions, volumes, opens, period)
+            return self._render_block(prices, dates, dimensions, volumes, opens, period, overlays)
 
     def _render_braille(
         self,
@@ -89,6 +101,7 @@ class ChartRenderer:
         volumes: list[int] | None = None,
         opens: list[float] | None = None,
         period: str | None = None,
+        overlays: list[OverlayData] | None = None,
     ) -> RenderedChart:
         """Render chart using Braille patterns (2x4 dots per character).
 
@@ -117,7 +130,10 @@ class ChartRenderer:
         # Downsample data to fit chart width
         # Each braille char represents 2 horizontal data points
         max_data_points = chart_width * 2
-        
+
+        # Track if we interpolated (for volume alignment)
+        interpolated_count = 0
+
         # If we have significantly fewer data points, we need to upsample
         # to distribute them across the full chart width
         if len(prices) < max_data_points * 0.6:  # Less than 60% of target
@@ -135,7 +151,8 @@ class ChartRenderer:
                 value = prices[idx_low] * (1 - weight) + prices[idx_high] * weight
                 upsampled_prices.append(value)
             downsampled_prices = upsampled_prices
-            
+            interpolated_count = max_data_points  # Signal that we interpolated
+
             # Also upsample dates if present
             if dates:
                 upsampled_dates = []
@@ -176,6 +193,20 @@ class ChartRenderer:
         # Render braille characters
         chart_lines = self._render_braille_line(scaled, chart_height, chart_width)
 
+        # Apply overlays if provided
+        if overlays:
+            chart_lines = self._apply_overlays_braille(
+                chart_lines,
+                overlays,
+                downsampled_prices,
+                min_price,
+                max_price,
+                chart_height,
+                chart_width,
+                max_data_points,
+                interpolated_count,
+            )
+
         # Add Y-axis labels
         if dimensions.include_y_axis:
             chart_lines = self._add_y_axis(chart_lines, min_price, max_price, dimensions.y_axis_width)
@@ -192,6 +223,7 @@ class ChartRenderer:
             height=len(chart_lines),
             min_value=min_price,
             max_value=max_price,
+            interpolated_count=interpolated_count,
         )
 
     def _render_braille_line(self, scaled_values: list[int], height: int, target_width: int) -> list[str]:
@@ -300,11 +332,14 @@ class ChartRenderer:
         volumes: list[int] | None = None,
         opens: list[float] | None = None,
         period: str | None = None,
+        overlays: list[OverlayData] | None = None,
     ) -> RenderedChart:
         """Render chart using block characters (▁▂▃▄▅▆▇█).
 
         This is a simpler fallback that provides lower resolution
         but better terminal compatibility.
+
+        Note: Overlays are not supported in block style (ignored).
         """
         # Calculate available space
         chart_width = dimensions.width
@@ -375,7 +410,52 @@ class ChartRenderer:
             height=len(chart_lines),
             min_value=min_price,
             max_value=max_price,
+            interpolated_count=0,  # Block style doesn't interpolate
         )
+
+    @overload
+    def _upsample(self, data: list[float], target_size: int) -> list[float]: ...
+
+    @overload
+    def _upsample(self, data: list[int], target_size: int) -> list[int]: ...
+
+    def _upsample(self, data: list[float] | list[int], target_size: int) -> list[float] | list[int]:
+        """Upsample data using linear interpolation to reach target size.
+
+        Uses the same algorithm as the price chart interpolation.
+
+        Args:
+            data: Data to upsample
+            target_size: Target number of points
+
+        Returns:
+            Upsampled data
+        """
+        if len(data) >= target_size:
+            return data
+
+        is_int = isinstance(data[0], int)
+        upsampled_int: list[int] = []
+        upsampled_float: list[float] = []
+        for i in range(target_size):
+            # Map this output index to input space
+            input_idx = (i / target_size) * len(data)
+            # Find the two surrounding data points
+            idx_low = int(input_idx)
+            idx_high = min(idx_low + 1, len(data) - 1)
+            # Linear interpolation weight
+            weight = input_idx - idx_low
+            # Interpolate
+            value = data[idx_low] * (1 - weight) + data[idx_high] * weight
+            if is_int:
+                upsampled_int.append(int(value))
+            else:
+                upsampled_float.append(value)
+
+        if is_int:
+            return upsampled_int
+        else:
+            return upsampled_float
 
     @overload
     def _downsample(self, data: list[float], target_size: int) -> list[float]: ...
@@ -420,6 +500,183 @@ class ChartRenderer:
             return cast(list[int], result)
         else:
             return cast(list[float], result)
+
+    def _apply_overlays_braille(
+        self,
+        chart_lines: list[str],
+        overlays: list[OverlayData],
+        downsampled_prices: list[float],
+        min_price: float,
+        max_price: float,
+        chart_height: int,
+        chart_width: int,
+        max_data_points: int,
+        interpolated_count: int,
+    ) -> list[str]:
+        """Apply overlay lines to rendered braille chart.
+
+        Args:
+            chart_lines: Existing chart lines (without Y-axis)
+            overlays: List of overlay data to render
+            downsampled_prices: Downsampled price data (for reference, not used but kept for consistency)
+            min_price: Minimum price value (for scaling)
+            max_price: Maximum price value (for scaling)
+            chart_height: Chart height in characters
+            chart_width: Chart width in characters
+            max_data_points: Maximum data points (width * 2 for braille)
+            interpolated_count: If > 0, indicates interpolation was applied
+
+        Returns:
+            Chart lines with overlays applied
+        """
+        # Convert chart lines to a mutable 2D grid
+        grid = [list(line) for line in chart_lines]
+
+        # Process each overlay
+        for overlay in overlays:
+            overlay_values = overlay.values
+            # Use Rich markup for Textual compatibility
+            color_open = f"[{overlay.color}]"
+            color_close = f"[/{overlay.color}]"
+
+            # Apply same interpolation/downsampling as main chart
+            if interpolated_count > 0:
+                # Upsample overlay to match interpolated data
+                upsampled_overlay: list[float | None] = []
+                for i in range(max_data_points):
+                    input_idx = (i / max_data_points) * len(overlay_values)
+                    idx_low = int(input_idx)
+                    idx_high = min(idx_low + 1, len(overlay_values) - 1)
+
+                    # Handle None values - don't interpolate across Nones
+                    if overlay_values[idx_low] is None or overlay_values[idx_high] is None:
+                        upsampled_overlay.append(None)
+                    else:
+                        weight = input_idx - idx_low
+                        # Type narrowing: we know both values are not None
+                        val_low = overlay_values[idx_low]
+                        val_high = overlay_values[idx_high]
+                        assert val_low is not None and val_high is not None
+                        value = val_low * (1 - weight) + val_high * weight
+                        upsampled_overlay.append(value)
+                downsampled_overlay = upsampled_overlay
+            else:
+                # Normal downsampling
+                downsampled_overlay = self._downsample_overlay(overlay_values, max_data_points)
+
+            # Normalize and scale overlay values
+            price_range = max_price - min_price
+            if price_range == 0:
+                continue  # Can't render overlay on flat chart
+
+            # Scale to chart height (4 dots per row)
+            vertical_positions = chart_height * 4
+            scaled_overlay: list[int | None] = []
+            for val in downsampled_overlay:
+                if val is None:
+                    scaled_overlay.append(None)
+                else:
+                    normalized = (val - min_price) / price_range
+                    scaled_overlay.append(int(normalized * (vertical_positions - 1)))
+
+            # Render overlay as dots/markers on the grid
+            for i in range(0, min(len(scaled_overlay), chart_width * 2), 2):
+                char_idx = i // 2
+                if char_idx >= chart_width:
+                    break
+
+                left_val = scaled_overlay[i]
+                right_val = scaled_overlay[i + 1] if i + 1 < len(scaled_overlay) else None
+
+                # Skip None values
+                if left_val is None and right_val is None:
+                    continue
+
+                # Determine positions
+                if left_val is not None:
+                    left_row = chart_height - 1 - (left_val // 4)
+                    left_dot = left_val % 4
+                else:
+                    left_row = None
+                    left_dot = None
+
+                if right_val is not None:
+                    right_row = chart_height - 1 - (right_val // 4)
+                    right_dot = right_val % 4
+                else:
+                    right_row = None
+                    right_dot = None
+
+                # Get overlay character
+                if left_row is not None or right_row is not None:
+                    overlay_char = self._get_overlay_braille_char(
+                        left_row, left_dot, right_row, right_dot, chart_height
+                    )
+
+                    # Determine target row (use whichever is available)
+                    if left_row is not None and right_row is not None:
+                        target_row = min(left_row, right_row)
+                    elif left_row is not None:
+                        target_row = left_row
+                    elif right_row is not None:
+                        target_row = right_row
+                    else:
+                        continue  # Both None, skip this iteration
+
+                    # Apply colored overlay character with Rich markup
+                    if 0 <= target_row < chart_height and 0 <= char_idx < chart_width:
+                        grid[target_row][char_idx] = f"{color_open}{overlay_char}{color_close}"
+
+        # Convert grid back to strings
+        return ["".join(line) for line in grid]
+
+    def _get_overlay_braille_char(
+        self, left_row: int | None, left_dot: int | None, right_row: int | None, right_dot: int | None, height: int
+    ) -> str:
+        """Get braille character for overlay dots.
+
+        Uses smaller dots to distinguish from main chart.
+
+        Args:
+            left_row: Row index for left column (or None)
+            left_dot: Dot position within row for left column (0-3) (or None)
+            right_row: Row index for right column (or None)
+            right_dot: Dot position within row for right column (0-3) (or None)
+            height: Total chart height
+
+        Returns:
+            Braille Unicode character
+        """
+        dots = 0
+
+        # For overlays, use single dots rather than full vertical lines
+        # This creates a more subtle marker effect
+        if left_row is not None and left_dot is not None:
+            # Just use dot 7 (bottom of left column) as marker
+            dots |= 0x40  # dot 7
+
+        if right_row is not None and right_dot is not None:
+            # Just use dot 8 (bottom of right column) as marker
+            dots |= 0x80  # dot 8
+
+        return chr(0x2800 + dots)
+
+    def _downsample_overlay(self, values: list[float | None], target_size: int) -> list[float | None]:
+        """Downsample overlay data, preserving None values.
+
+        Args:
+            values: Overlay values with potential None entries
+            target_size: Target number of points
+
+        Returns:
+            Downsampled overlay data
+        """
+        if len(values) <= target_size:
+            return values
+
+        # Calculate step size
+        step = len(values) / target_size
+        return [values[int(i * step)] for i in range(target_size)]
 
     def _add_y_axis(self, chart_lines: list[str], min_value: float, max_value: float, axis_width: int) -> list[str]:
         """Add Y-axis with price labels to the left of chart.
@@ -515,6 +772,7 @@ class ChartRenderer:
         height: int = 3,
         y_axis_width: int = 12,
         style: ChartStyle | None = None,
+        interpolated_count: int = 0,
     ) -> list[str]:
         """Render volume bars below the price chart.
 
@@ -526,6 +784,7 @@ class ChartRenderer:
             height: Height in characters for volume bars (default: 3)
             y_axis_width: Width of Y-axis for alignment
             style: Chart style (BRAILLE or BLOCK) - if BRAILLE, each char represents 2 data points
+            interpolated_count: If > 0, price chart was upsampled to this many points. Apply same upsampling.
 
         Returns:
             List of strings representing volume bar lines with ANSI color codes
@@ -539,6 +798,13 @@ class ChartRenderer:
             target_data_points = width * 2
         else:
             target_data_points = width
+
+        # If price chart was interpolated, apply same interpolation to volume data
+        if interpolated_count > 0:
+            # Upsample volumes/opens/closes to match interpolated price data
+            volumes = self._upsample(volumes, interpolated_count)
+            opens = self._upsample(opens, interpolated_count)
+            closes = self._upsample(closes, interpolated_count)
 
         # Downsample to target data points
         downsampled_volumes_raw = self._downsample(volumes, target_data_points)
@@ -590,12 +856,8 @@ class ChartRenderer:
         # Block characters for volume (8 levels)
         block_chars = [" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
 
-        # ANSI color codes
-        green = "\033[32m"
-        red = "\033[31m"
-        reset = "\033[0m"
-
-        # Build volume bar string with colors
+        # Build volume bar string with Rich markup colors
+        # Use Rich markup tags instead of ANSI codes for Textual compatibility
         volume_bars = []
         for i, vol in enumerate(downsampled_volumes):
             # Normalize to 0-1
@@ -607,9 +869,9 @@ class ChartRenderer:
             # Determine color: green if close > open, red otherwise
             if i < len(downsampled_closes) and i < len(downsampled_opens):
                 if downsampled_closes[i] > downsampled_opens[i]:
-                    volume_bars.append(f"{green}{block_char}{reset}")
+                    volume_bars.append(f"[green]{block_char}[/green]")
                 else:
-                    volume_bars.append(f"{red}{block_char}{reset}")
+                    volume_bars.append(f"[red]{block_char}[/red]")
             else:
                 volume_bars.append(block_char)
 
