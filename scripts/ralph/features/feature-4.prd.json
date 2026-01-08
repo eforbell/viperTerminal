@@ -1,0 +1,199 @@
+{
+  "branchName": "viper/feature-4-chart-layout-refactoring",
+  "projectName": "Viper Terminal - Feature 4",
+  "description": "Chart Layout Architecture Refactoring: Establish consistent sub-panel architecture with shared X-axis and proper indicator alignment. Address layout bugs where volume and RSI panels occlude each other.",
+  "principles": [
+    "Rock-solid quality over speed - every feature must be bulletproof before moving on",
+    "Comprehensive test coverage - unit tests, integration tests, edge cases", 
+    "All tests must pass before a story is marked complete",
+    "No story is done until it's documented and tested",
+    "Fail fast, fail loudly - errors should be obvious and actionable",
+    "Consistent architecture - establish patterns for future indicator additions",
+    "Apply learnings from AGENTS.md - no ANSI codes, use Rich markup, explicit heights"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "tui": "Textual (built on Rich)",
+    "stockData": "yfinance (already integrated)",
+    "cryptoData": "CoinGecko API (already integrated)",
+    "charting": "Custom Unicode/Braille renderer (already working)",
+    "testing": "pytest + pytest-asyncio + pytest-cov",
+    "mocking": "pytest-mock, respx (for HTTP mocking)",
+    "typecheck": "mypy --strict",
+    "linting": "ruff"
+  },
+  "background": {
+    "problemStatement": "The current ChartPanel has an inconsistent architecture: volume bars are rendered as inline Labels within #chart-content while RSI is a separate IndicatorPanel widget. This causes layout conflicts where toggling RSI visibility occludes volume bars and X-axis labels.",
+    "currentState": [
+      "Volume bars rendered inline as Labels in _render_chart()",
+      "RSI panel is a sibling widget to #chart-content container", 
+      "X-axis rendered as part of price chart, not shared",
+      "Height calculations scattered across multiple methods",
+      "Toggle interactions cause visual occlusion bugs"
+    ],
+    "desiredState": [
+      "Clean separation: PriceSubPanel (with embedded volume) + IndicatorPanels + SharedXAxis",
+      "Single ChartContext dataclass shared by all sub-panels",
+      "X-axis rendered once at bottom, after all panels",
+      "Volume always visible (no toggle), tightly coupled with price",
+      "Perfect alignment between price chart and indicators"
+    ]
+  },
+  "userStories": [
+    {
+      "id": "VPR-040",
+      "title": "Create ChartContext shared data structure",
+      "acceptanceCriteria": [
+        "ChartContext dataclass with frozen=True for immutability",
+        "Fields: dates, prices, volumes, opens, closes, highs, lows",
+        "Fields: chart_width, y_axis_width, period, ticker",
+        "Factory method to create from HistoricalData + calculated dimensions",
+        "Unit tests for ChartContext creation and immutability"
+      ],
+      "priority": 1,
+      "passes": true,
+      "estimatedEffort": "Small",
+      "dependencies": [],
+      "notes": "Foundation dataclass - single source of truth for all sub-panels"
+    },
+    {
+      "id": "VPR-041",
+      "title": "Extract X-axis rendering to standalone component",
+      "acceptanceCriteria": [
+        "New render_x_axis() function or XAxisRenderer class",
+        "Accepts ChartContext for dates, chart_width, y_axis_width",
+        "Returns list of strings (typically 2 lines: border + labels)",
+        "Remove X-axis rendering from main chart render path",
+        "ChartDimensions.include_x_axis still works but defaults to False",
+        "Unit tests for X-axis rendering in isolation"
+      ],
+      "priority": 2,
+      "passes": true,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-040"],
+      "notes": "X-axis will be rendered once at bottom of all chart content"
+    },
+    {
+      "id": "VPR-042",
+      "title": "Lock volume as always-on and clean up rendering",
+      "acceptanceCriteria": [
+        "Remove 'v' keybinding for volume toggle from app.py",
+        "Remove volume_enabled config option",
+        "Remove toggle_volume() method and is_volume_enabled()",
+        "Remove [Vol: ON/OFF] from chart header",
+        "Volume stats always shown in stats line",
+        "Update help screen to remove volume toggle references",
+        "Volume renders in bottom portion of price chart area",
+        "All existing volume rendering tests updated"
+      ],
+      "priority": 3,
+      "passes": true,
+      "estimatedEffort": "Small",
+      "dependencies": [],
+      "notes": "Simplifies logic, matches traditional charting UX where volume is always visible"
+    },
+    {
+      "id": "VPR-043",
+      "title": "Refactor IndicatorPanel to use ChartContext",
+      "acceptanceCriteria": [
+        "IndicatorPanel.show_indicator() accepts ChartContext",
+        "Panel extracts chart_width, y_axis_width from context",
+        "Y-axis padding matches price chart exactly",
+        "RSIPanel updated to work with new interface",
+        "Indicator chart aligns perfectly with price chart above",
+        "Unit tests verify alignment calculations"
+      ],
+      "priority": 4,
+      "passes": true,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-040"],
+      "notes": "Ensures all indicators use consistent dimensions for perfect alignment"
+    },
+    {
+      "id": "VPR-044",
+      "title": "Refactor ChartPanel layout orchestration",
+      "acceptanceCriteria": [
+        "ChartPanel builds ChartContext once per render",
+        "Price+volume section gets calculated height",
+        "Each visible indicator panel gets its fixed height",
+        "X-axis rendered last, always at bottom",
+        "No more height calculation duplication",
+        "Toggling RSI does not affect price/volume visibility",
+        "Container heights set explicitly, not relying on CSS auto/1fr",
+        "Integration tests verify all toggle combinations work"
+      ],
+      "priority": 5,
+      "passes": true,
+      "estimatedEffort": "Large",
+      "dependencies": ["VPR-041", "VPR-042", "VPR-043"],
+      "notes": "Main orchestration refactoring - most complex story"
+    },
+    {
+      "id": "VPR-045",
+      "title": "Visual polish and alignment verification",
+      "acceptanceCriteria": [
+        "RSI indicator line aligns with price chart data points",
+        "X-axis date labels align with chart data",
+        "Y-axis labels don't shift when indicators toggle",
+        "Layout works at minimum terminal size (80x24)",
+        "Layout scales properly to large terminals", 
+        "Manual verification with multiple tickers and timeframes",
+        "Update AGENTS.md with learnings from this refactoring"
+      ],
+      "priority": 6,
+      "passes": true,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-044"],
+      "notes": "Final verification and documentation of refactoring"
+    }
+  ],
+  "technicalNotes": {
+    "criticalLearningsFromAgentsMd": [
+      "NEVER use ANSI escape codes for colors in Textual widgets - use Rich markup ([green]text[/green])",
+      "Label widgets need markup=True to render Rich markup colors", 
+      "Use styles.display = 'block'/'none' for visibility toggling",
+      "Textual CSS height: auto and 1fr can conflict - prefer explicit heights for predictable layout",
+      "Widget compose() defines structure, _render_content() updates dynamic content",
+      "Use container.remove_children() + mount() pattern for dynamic updates"
+    ],
+    "architecturePrinciples": [
+      "Single source of truth: ChartContext holds all shared data",
+      "Parent orchestrates: ChartPanel calculates heights, children render within bounds", 
+      "Immutable data: ChartContext is frozen, passed by reference safely",
+      "Consistent interface: All indicators extend IndicatorPanel with same contract"
+    ],
+    "filesToModify": [
+      "viper/widgets/chart_panel.py - main refactoring target",
+      "viper/widgets/chart_renderer.py - extract X-axis, update render signature", 
+      "viper/widgets/indicator_panel.py - update to use ChartContext",
+      "viper/widgets/rsi_panel.py - minor updates for new interface",
+      "viper/app.py - remove volume toggle keybinding",
+      "viper/config.py - remove volume_enabled option",
+      "viper/widgets/help_screen.py - update documentation"
+    ],
+    "newFiles": [
+      "viper/widgets/chart_context.py - ChartContext dataclass (or add to chart_renderer.py)"
+    ],
+    "testingStrategy": [
+      "Unit tests for ChartContext creation", 
+      "Unit tests for X-axis rendering in isolation",
+      "Integration tests for all RSI on/off combinations",
+      "Visual regression: manual testing with screenshots",
+      "Test at various terminal dimensions"
+    ]
+  },
+  "outOfScope": [
+    "New indicators (MACD, Stochastic) - future feature",
+    "Candlestick chart style - separate enhancement", 
+    "Overlapping volume on price chart (semi-transparent) - would require different rendering approach",
+    "Multiple Y-axes for indicators - each indicator has own scale"
+  ],
+  "successMetrics": [
+    "All toggle combinations (RSI on/off) render correctly without occlusion",
+    "RSI indicator horizontally aligns with price chart",
+    "X-axis appears once at bottom, readable in all states", 
+    "All 678+ existing tests pass",
+    "Code coverage remains above 90%",
+    "No mypy --strict errors"
+  ]
+}
