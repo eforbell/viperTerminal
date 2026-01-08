@@ -299,6 +299,7 @@ class ChartPanel(Widget):
                 height=volume_height,
                 y_axis_width=dimensions.y_axis_width,
                 style=self._renderer.style,  # Pass the chart style for proper alignment
+                interpolated_count=rendered.interpolated_count,  # Pass interpolation info for alignment
             )
             for line in volume_lines:
                 container.mount(Label(line, classes="chart-line", markup=False))

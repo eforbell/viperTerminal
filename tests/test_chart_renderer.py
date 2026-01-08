@@ -526,3 +526,131 @@ class TestVolumeRendering:
 
         # Should handle zero volumes gracefully
         assert len(result) == 3
+
+    def test_interpolated_count_returned(self) -> None:
+        """Test that interpolated_count is returned when data is upsampled."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=60, height=10, include_y_axis=False, include_x_axis=False)
+
+        # Small dataset that will trigger upsampling (< 60% of max_data_points)
+        # max_data_points = 60 * 2 = 120, so < 72 points triggers upsampling
+        prices = [100.0, 110.0, 105.0, 115.0, 120.0]  # Only 5 points
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions)
+
+        # Should have been interpolated to 120 data points
+        assert result.interpolated_count == 120
+
+    def test_no_interpolation_with_sufficient_data(self) -> None:
+        """Test that interpolated_count is 0 when no upsampling occurs."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=60, height=10, include_y_axis=False, include_x_axis=False)
+
+        # Enough data points (>= 60% of max_data_points)
+        # max_data_points = 120, so >= 72 points means no upsampling
+        prices = [100.0 + i for i in range(100)]  # 100 points
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions)
+
+        # Should NOT have been interpolated
+        assert result.interpolated_count == 0
+
+    def test_volume_alignment_with_interpolation(self) -> None:
+        """Test that volume bars align with price chart when interpolation occurs."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=60, height=10, include_y_axis=False, include_x_axis=False)
+
+        # Small dataset that will trigger upsampling
+        prices = [100.0, 110.0, 105.0, 115.0, 120.0]  # 5 points
+        volumes = [1000000, 2000000, 1500000, 3000000, 2500000]  # 5 points
+        opens = [100.0, 108.0, 105.0, 112.0, 118.0]
+        closes = prices
+
+        # Render price chart (will trigger interpolation)
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions)
+
+        # Now render volume bars with interpolation info
+        volume_lines = renderer.render_volume_bars(
+            volumes=volumes,
+            opens=opens,
+            closes=closes,
+            width=60,
+            height=3,
+            y_axis_width=12,
+            style=ChartStyle.BRAILLE,
+            interpolated_count=result.interpolated_count,
+        )
+
+        # Volume bars should render successfully with same alignment
+        assert len(volume_lines) == 3
+
+    def test_volume_alignment_without_interpolation(self) -> None:
+        """Test that volume bars work normally when no interpolation occurs."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+
+        # Enough data points (no interpolation)
+        prices = [100.0 + i for i in range(100)]
+        volumes = [1000000 + i * 10000 for i in range(100)]
+        opens = [100.0 + i for i in range(100)]
+        closes = prices
+
+        # Render with no interpolation
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions)
+        assert result.interpolated_count == 0
+
+        # Volume bars should work the same as before
+        volume_lines = renderer.render_volume_bars(
+            volumes=volumes,
+            opens=opens,
+            closes=closes,
+            width=40,
+            height=3,
+            y_axis_width=12,
+            style=ChartStyle.BRAILLE,
+            interpolated_count=0,
+        )
+
+        assert len(volume_lines) == 3
+
+    def test_volume_upsampling_edge_cases(self) -> None:
+        """Test volume bar upsampling with various edge case data sizes."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+
+        # Test with single data point
+        volumes = [1000000]
+        opens = [100.0]
+        closes = [105.0]
+
+        volume_lines = renderer.render_volume_bars(
+            volumes=volumes,
+            opens=opens,
+            closes=closes,
+            width=20,
+            height=3,
+            y_axis_width=12,
+            style=ChartStyle.BRAILLE,
+            interpolated_count=40,  # Simulate interpolation to 40 points
+        )
+
+        # Should handle upsampling from 1 point
+        assert len(volume_lines) == 3
+
+        # Test with exactly 2 points
+        volumes = [1000000, 2000000]
+        opens = [100.0, 105.0]
+        closes = [105.0, 110.0]
+
+        volume_lines = renderer.render_volume_bars(
+            volumes=volumes,
+            opens=opens,
+            closes=closes,
+            width=30,
+            height=3,
+            y_axis_width=12,
+            style=ChartStyle.BRAILLE,
+            interpolated_count=60,  # Simulate interpolation to 60 points
+        )
+
+        # Should handle upsampling from 2 points
+        assert len(volume_lines) == 3

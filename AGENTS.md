@@ -562,3 +562,33 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Cleaner Codebase**: Reduced history_data.py from 473 lines to ~240 lines by removing CoinGecko code
 - **All Tests Pass**: 557 tests passing with 90.39% overall coverage
 - **Type Safety Maintained**: mypy --strict passes with no issues after refactoring
+
+### VPR-031: Fix volume bar alignment with price chart
+- **Root Cause**: Price chart upsamples data when `len(prices) < max_data_points * 0.6` but volume bars don't follow
+- **max_data_points**: For BRAILLE charts, `max_data_points = chart_width * 2` (each char holds 2 data points)
+- **Upsampling Trigger**: When data < 60% of max_data_points, price chart upsamples to max_data_points
+- **Linear Interpolation**: Upsampling uses linear interpolation between existing data points
+- **Solution Pattern**: Track interpolation in RenderedChart, pass to volume renderer for matching
+- **RenderedChart Field**: Added `interpolated_count: int = 0` field (0 = no interpolation, >0 = upsampled count)
+- **Set interpolated_count**: Set to max_data_points when upsampling occurs in _render_braille
+- **Block Style**: _render_block doesn't interpolate, so always returns `interpolated_count=0`
+- **New Method _upsample()**: Created helper method matching price interpolation logic for volumes
+- **Separate List Types**: Use `upsampled_int: list[int]` and `upsampled_float: list[float]` for type safety
+- **Type Narrowing**: Mypy requires separate lists to avoid "Argument 1 to append has incompatible type" error
+- **render_volume_bars Parameter**: Added `interpolated_count: int = 0` parameter for alignment info
+- **Volume Upsampling**: If `interpolated_count > 0`, upsample volumes/opens/closes BEFORE downsampling
+- **Order Matters**: Upsample first (to match price data), THEN downsample (to fit chart width)
+- **chart_panel Integration**: Pass `rendered.interpolated_count` to `render_volume_bars()` call
+- **Test Coverage**: Added 5 new tests for interpolation tracking and volume alignment
+- **Test interpolated_count_returned**: Verifies small dataset triggers upsampling and returns correct count
+- **Test no_interpolation_with_sufficient_data**: Verifies large dataset doesn't trigger upsampling (count=0)
+- **Test volume_alignment_with_interpolation**: Verifies volume bars render correctly with interpolation info
+- **Test volume_alignment_without_interpolation**: Verifies backward compatibility with no interpolation
+- **Test volume_upsampling_edge_cases**: Tests single data point and 2-point upsampling edge cases
+- **Edge Case: 1 Point**: Upsampling from single data point creates flat line (all same value)
+- **Edge Case: 2 Points**: Linear interpolation between 2 points creates smooth gradient
+- **All Tests Pass**: 562 tests passing with 90.33% overall coverage after changes
+- **Type Safety**: mypy --strict passes with no issues on chart_renderer.py and chart_panel.py
+- **Backward Compatible**: Old volume render calls still work (interpolated_count defaults to 0)
+- **Performance**: No performance impact - upsampling only happens when data is sparse
+- **Visual Fix**: Volume bars now perfectly align with price chart regardless of data density

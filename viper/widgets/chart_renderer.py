@@ -34,6 +34,7 @@ class RenderedChart:
     height: int  # Actual height of rendered chart
     min_value: float  # Data minimum
     max_value: float  # Data maximum
+    interpolated_count: int = 0  # Number of data points after interpolation (0 = no interpolation)
 
 
 class ChartRenderer:
@@ -117,7 +118,10 @@ class ChartRenderer:
         # Downsample data to fit chart width
         # Each braille char represents 2 horizontal data points
         max_data_points = chart_width * 2
-        
+
+        # Track if we interpolated (for volume alignment)
+        interpolated_count = 0
+
         # If we have significantly fewer data points, we need to upsample
         # to distribute them across the full chart width
         if len(prices) < max_data_points * 0.6:  # Less than 60% of target
@@ -135,7 +139,8 @@ class ChartRenderer:
                 value = prices[idx_low] * (1 - weight) + prices[idx_high] * weight
                 upsampled_prices.append(value)
             downsampled_prices = upsampled_prices
-            
+            interpolated_count = max_data_points  # Signal that we interpolated
+
             # Also upsample dates if present
             if dates:
                 upsampled_dates = []
@@ -192,6 +197,7 @@ class ChartRenderer:
             height=len(chart_lines),
             min_value=min_price,
             max_value=max_price,
+            interpolated_count=interpolated_count,
         )
 
     def _render_braille_line(self, scaled_values: list[int], height: int, target_width: int) -> list[str]:
@@ -375,7 +381,52 @@ class ChartRenderer:
             height=len(chart_lines),
             min_value=min_price,
             max_value=max_price,
+            interpolated_count=0,  # Block style doesn't interpolate
         )
+
+    @overload
+    def _upsample(self, data: list[float], target_size: int) -> list[float]: ...
+
+    @overload
+    def _upsample(self, data: list[int], target_size: int) -> list[int]: ...
+
+    def _upsample(self, data: list[float] | list[int], target_size: int) -> list[float] | list[int]:
+        """Upsample data using linear interpolation to reach target size.
+
+        Uses the same algorithm as the price chart interpolation.
+
+        Args:
+            data: Data to upsample
+            target_size: Target number of points
+
+        Returns:
+            Upsampled data
+        """
+        if len(data) >= target_size:
+            return data
+
+        is_int = isinstance(data[0], int)
+        upsampled_int: list[int] = []
+        upsampled_float: list[float] = []
+        for i in range(target_size):
+            # Map this output index to input space
+            input_idx = (i / target_size) * len(data)
+            # Find the two surrounding data points
+            idx_low = int(input_idx)
+            idx_high = min(idx_low + 1, len(data) - 1)
+            # Linear interpolation weight
+            weight = input_idx - idx_low
+            # Interpolate
+            value = data[idx_low] * (1 - weight) + data[idx_high] * weight
+            if is_int:
+                upsampled_int.append(int(value))
+            else:
+                upsampled_float.append(value)
+
+        if is_int:
+            return upsampled_int
+        else:
+            return upsampled_float
 
     @overload
     def _downsample(self, data: list[float], target_size: int) -> list[float]: ...
@@ -515,6 +566,7 @@ class ChartRenderer:
         height: int = 3,
         y_axis_width: int = 12,
         style: ChartStyle | None = None,
+        interpolated_count: int = 0,
     ) -> list[str]:
         """Render volume bars below the price chart.
 
@@ -526,6 +578,7 @@ class ChartRenderer:
             height: Height in characters for volume bars (default: 3)
             y_axis_width: Width of Y-axis for alignment
             style: Chart style (BRAILLE or BLOCK) - if BRAILLE, each char represents 2 data points
+            interpolated_count: If > 0, price chart was upsampled to this many points. Apply same upsampling.
 
         Returns:
             List of strings representing volume bar lines with ANSI color codes
@@ -539,6 +592,13 @@ class ChartRenderer:
             target_data_points = width * 2
         else:
             target_data_points = width
+
+        # If price chart was interpolated, apply same interpolation to volume data
+        if interpolated_count > 0:
+            # Upsample volumes/opens/closes to match interpolated price data
+            volumes = self._upsample(volumes, interpolated_count)
+            opens = self._upsample(opens, interpolated_count)
+            closes = self._upsample(closes, interpolated_count)
 
         # Downsample to target data points
         downsampled_volumes_raw = self._downsample(volumes, target_data_points)
