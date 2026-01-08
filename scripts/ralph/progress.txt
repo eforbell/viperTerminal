@@ -213,3 +213,41 @@
 
 ---
 
+## 2026-01-07 - VPR-034
+- **What was implemented**: Exponential Moving Average (EMA) indicator calculation service
+- **Files changed**:
+  - `viper/services/indicators.py`: Added calculate_ema() function with exponential smoothing formula
+  - `tests/test_indicators.py`: Added 20 comprehensive tests for EMA calculation
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-034 as complete
+  - `AGENTS.md`: Added VPR-034 learnings section with 27 detailed points
+- **Learnings**:
+  - **EMA Formula**: k = 2/(period+1), then EMA = (Price * k) + (EMA_prev * (1-k))
+  - **Smoothing factor k**: Calculate once at start, use throughout - k gives weight to current price
+  - **First EMA value**: Use SMA of first `period` prices as initial EMA (bootstrapping)
+  - **Three-branch loop logic**: (1) i < period-1 → None, (2) i == period-1 → SMA, (3) i > period-1 → EMA formula
+  - **Recursive dependency**: Each EMA calculation needs previous EMA value from result[i-1]
+  - **Window slicing for first SMA**: Use `prices[:period]` to get initial window
+  - **State tracking pattern**: Reference previous result in list to build current value
+  - **Defensive None check**: Even though prev_ema shouldn't be None, check for type safety
+  - **None count invariant**: Same as SMA - always `period - 1` None values at start
+  - **Return type consistency**: Use `list[float | None]` to match SMA interface pattern
+  - **Period 1 edge case**: k = 2/(1+1) = 1.0, so EMA equals current price (same as SMA)
+  - **Common periods tested**: 12 (MACD fast), 26 (MACD slow), 50 (trend indicator)
+  - **EMA vs SMA behavior**: EMA reacts faster to price changes due to exponential weighting
+  - **Test pattern reuse**: Mirror SMA test structure - basic, periods, edge cases, real world
+  - **Comparison test**: Verify EMA > SMA after price jump (faster reaction to changes)
+  - **Monotonicity tests**: EMA increases with upward trend, decreases with downward trend
+  - **Convergence behavior**: EMA follows trends with smoothing (exponential decay)
+  - **Known calculation test**: Hand-calculate with period=2, k=0.6667 to verify implementation
+  - **Smoothing factor test**: Dedicated test that k=2/(period+1) is correctly applied
+  - **Type ignore cleanup**: Remove unused `# type: ignore` comments to avoid mypy unused-ignore errors
+  - **Assert comparison pattern**: After `assert x is not None`, can compare x directly (mypy knows it's not None)
+  - **Formula in docstring**: Include mathematical formula and example calculation for clarity
+  - **Edge case coverage**: Empty list, single value, insufficient data, exact period size
+  - **Real world test**: Use AAPL-like prices to verify practical behavior
+  - All 601 tests passing (added 20 new EMA tests) with 90.45% overall coverage
+  - indicators.py at 97% coverage (one defensive branch unreachable)
+  - mypy --strict validates with no type errors
+
+---
+
