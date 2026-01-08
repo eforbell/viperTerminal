@@ -160,7 +160,7 @@
         "Tests: overlay rendering, multiple overlays, None handling, alignment verification"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-033"],
       "notes": "Enables displaying moving averages and other indicators on the price chart. Must reuse same interpolation/downsampling logic as main chart."

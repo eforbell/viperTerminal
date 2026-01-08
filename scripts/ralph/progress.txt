@@ -251,3 +251,53 @@
 
 ---
 
+
+## 2026-01-07 - VPR-035
+- **What was implemented**: Chart renderer support for overlay lines (moving averages, indicators)
+- **Files changed**:
+  - `viper/widgets/chart_renderer.py`: Added OverlayData dataclass, overlays parameter to render methods, _apply_overlays_braille() processing method
+  - `tests/test_chart_renderer.py`: Added TestOverlayRendering class with 14 comprehensive tests
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-035 as complete
+  - `AGENTS.md`: Added VPR-035 learnings section with 48 detailed points
+- **Learnings**:
+  - **OverlayData dataclass**: Encapsulates overlay info - values: list[float | None], color: str (ANSI), name: str
+  - **None values pattern**: Use None to skip rendering at specific positions (preserves gaps in data)
+  - **Backward compatible parameter**: overlays: list[OverlayData] | None = None (optional)
+  - **Block style limitation**: Overlays only supported in braille style, block style ignores them
+  - **Apply order critical**: Apply overlays AFTER main chart, BEFORE Y-axis (chart_lines not finalized yet)
+  - **Grid conversion pattern**: Convert immutable strings to 2D mutable grid for overlay application
+  - **Same interpolation logic**: Overlays follow exact same interpolation/downsampling as price chart
+  - **Interpolation detection**: Check if interpolated_count > 0 to know if upsampling was applied
+  - **Upsampling overlays**: Apply same linear interpolation formula as price chart upsampling
+  - **Type annotation requirement**: upsampled_overlay: list[float | None] = [] needed for mypy
+  - **Type narrowing for None**: Extract values, assert not None, then perform math (avoids mypy errors)
+  - **Don't interpolate across Nones**: Check if either value is None before interpolating
+  - **_downsample_overlay helper**: Separate method to downsample overlays while preserving None values
+  - **Same scaling**: Use same min_price/max_price from main chart for consistent vertical alignment
+  - **Flat chart check**: Skip overlay rendering if price_range == 0 (can't scale overlay)
+  - **Vertical positions**: Same as main - chart_height * 4 (4 dots per braille character row)
+  - **Scaled overlay type**: scaled_overlay: list[int | None] = [] for vertical positions
+  - **Simpler braille pattern**: Overlays use single dots (7, 8) not full vertical lines like main chart
+  - **Visual distinction**: Simpler pattern makes overlays visually separate from dense price chart
+  - **Color wrapping**: f"{color}{overlay_char}{reset}" with reset = "\033[0m"
+  - **Target row logic**: Handle 3 cases - both available (min), left only, right only
+  - **Skip both None case**: If left_row and right_row both None, continue (don't crash)
+  - **Bounds checking**: Verify 0 <= target_row < chart_height before grid access
+  - **Grid update**: grid[target_row][char_idx] = colored_char replaces existing character
+  - **Multiple overlay support**: Process each overlay in list, all applied to same grid
+  - **Overlay stacking**: Later overlays can overwrite earlier ones at same position (visual priority)
+  - **Grid to strings**: After all overlays, convert back with ["".join(line) for line in grid]
+  - **14 new tests**: Comprehensive coverage - basic, multiple, None handling, interpolation, etc.
+  - **Test None values**: All None (no crash), gaps in middle (preserved), outside price range
+  - **Test interpolation**: Verify overlay aligns when chart triggers upsampling
+  - **Test downsampling**: Verify overlay works with large datasets (> chart width)
+  - **Test backward compat**: No overlays param still works, empty list works
+  - **Test block style**: Verify overlays ignored in block style (braille only)
+  - **Test with Y-axis**: Verify overlay works when Y-axis enabled (applied before axis)
+  - **All 613 tests passing**: Added 14 new tests, all existing tests still pass
+  - **Coverage 90.34%**: Maintained overall coverage, chart_renderer.py at 94%
+  - **mypy --strict clean**: Fixed all type errors with proper annotations and narrowing
+  - **Foundation ready**: Chart renderer now ready for VPR-036 (moving average UI integration)
+
+---
+

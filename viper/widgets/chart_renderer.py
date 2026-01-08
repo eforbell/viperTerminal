@@ -855,12 +855,8 @@ class ChartRenderer:
         # Block characters for volume (8 levels)
         block_chars = [" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
 
-        # ANSI color codes
-        green = "\033[32m"
-        red = "\033[31m"
-        reset = "\033[0m"
-
-        # Build volume bar string with colors
+        # Build volume bar string with Rich markup colors
+        # Use Rich markup tags instead of ANSI codes for Textual compatibility
         volume_bars = []
         for i, vol in enumerate(downsampled_volumes):
             # Normalize to 0-1
@@ -872,9 +868,9 @@ class ChartRenderer:
             # Determine color: green if close > open, red otherwise
             if i < len(downsampled_closes) and i < len(downsampled_opens):
                 if downsampled_closes[i] > downsampled_opens[i]:
-                    volume_bars.append(f"{green}{block_char}{reset}")
+                    volume_bars.append(f"[green]{block_char}[/green]")
                 else:
-                    volume_bars.append(f"{red}{block_char}{reset}")
+                    volume_bars.append(f"[red]{block_char}[/red]")
             else:
                 volume_bars.append(block_char)
 

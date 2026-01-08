@@ -304,7 +304,8 @@ class ChartPanel(Widget):
                 interpolated_count=rendered.interpolated_count,  # Pass interpolation info for alignment
             )
             for line in volume_lines:
-                container.mount(Label(line, classes="chart-line", markup=False))
+                # Volume lines use Rich markup for colors, so markup=True (default)
+                container.mount(Label(line, classes="chart-line"))
 
     def _format_number(self, value: float, decimals: int) -> str:
         """Format a number with commas and specified decimal places.
