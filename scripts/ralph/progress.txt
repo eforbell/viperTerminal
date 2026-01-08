@@ -465,3 +465,51 @@
   - **Foundation Complete**: Ready for VPR-039 (RSI panel implementation using this framework)
 
 ---
+
+## 2026-01-08 - VPR-039
+- **What was implemented**: RSI indicator panel implementation with 'r' key toggle and comprehensive testing
+- **Files changed**:
+  - `viper/widgets/rsi_panel.py`: Created RSI-specific panel extending IndicatorPanel base class
+  - `viper/widgets/chart_panel.py`: Integrated RSI calculation, caching, panel composition, and toggle method
+  - `viper/app.py`: Added 'r' keybinding for RSI toggle with action handler
+  - `viper/widgets/help_screen.py`: Added RSI documentation in keybindings and technical indicators sections
+  - `tests/test_rsi_panel.py`: Created 14 comprehensive tests for RSI panel widget
+  - `tests/test_chart_panel.py`: Added 5 integration tests for RSI in chart panel
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-039 as complete
+  - `AGENTS.md`: Added VPR-039 learnings section with 60+ detailed points
+- **Learnings**:
+  - **RSIPanel Class**: Inherits from IndicatorPanel, configures overbought (70, red) and oversold (30, green) reference lines
+  - **Rich Markup Colors**: Use "red", "green", "cyan" color names (not ANSI codes) for Textual compatibility
+  - **RSI Configuration**: 0-100 range with height=4 lines, perfect for momentum oscillator visualization
+  - **Integration Pattern**: Create RSIPanel in chart_panel compose(), yield after chart content container
+  - **Initial Hidden State**: Call `_rsi_panel.hide()` after creation so panel starts hidden
+  - **RSI Calculation**: Call `calculate_rsi(prices, 14)` in show_chart(), cache in `_rsi_values` attribute
+  - **Minimum Data Check**: Require at least 15 prices (14 period + 1), set None if insufficient
+  - **Chart Width Tracking**: Cache `chart_area_width` after rendering for RSI panel alignment
+  - **Always Update Panel**: Update RSI data even when hidden so it's ready when toggled visible
+  - **Current Value Pattern**: Extract with `next((v for v in reversed(rsi_values) if v is not None), None)`
+  - **Toggle Method**: `toggle_rsi()` toggles visibility then calls `_render_content()` to adjust layout
+  - **Visibility Helper**: Provide `is_rsi_visible()` for external queries (tests, status checks)
+  - **Null Safety**: Check `if self._rsi_panel` before calling methods (could be None)
+  - **App Keybinding**: Add to BINDINGS: `("r", "toggle_rsi", "Toggle RSI")`
+  - **Action Handler**: `action_toggle_rsi()` checks `_chart_panel_visible` before calling toggle
+  - **Panel Query**: Use `query_one("#chart-container ChartPanel", ChartPanel)` to get instance
+  - **Help Screen**: Document 'r' key in keybindings section AND RSI details in charts section
+  - **Reference Lines Docs**: Document RSI > 70 = overbought (red), RSI < 30 = oversold (green)
+  - **14 Widget Tests**: Initialization, visibility, neutral/overbought/oversold, None handling, extremes, realistic data
+  - **Test Structure**: Create standalone test app with just RSIPanel for isolated widget testing
+  - **Test All None**: Verify "No data" displayed when insufficient data (all None values)
+  - **Test Partial None**: Verify first 14 None + valid RSI renders correctly (typical pattern)
+  - **Test Extremes**: RSI = 0 and RSI = 100 render without errors (boundary values)
+  - **Test Large Dataset**: 200+ points verify downsampling works (exceeds 140 chart capacity)
+  - **Test Crossing Thresholds**: Verify rendering when RSI crosses 30 and 70 reference lines
+  - **5 Integration Tests**: Calculation, toggle, insufficient data, panel updates, caching
+  - **Test Caching**: Verify same RSI object reference across toggles (not recalculated)
+  - **Coverage**: All 678 tests pass with 90.90% overall coverage, rsi_panel.py at 100%
+  - **Type Safety**: mypy --strict passes with no errors, all annotations correct
+  - **User Experience**: Press 'r' to toggle RSI momentum indicator with overbought/oversold zones
+  - **Visual Design**: Cyan indicator line, red dashed at 70, green dashed at 30, current value in header
+  - **Dependency Chain Complete**: VPR-037 (calculation) + VPR-038 (framework) + VPR-039 (integration)
+  - **Foundation Pattern**: RSI establishes pattern for future oscillators (MACD, Stochastic, Williams %R)
+
+---

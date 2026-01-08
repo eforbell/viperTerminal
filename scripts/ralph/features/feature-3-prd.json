@@ -243,7 +243,7 @@
         "Tests: RSI display, level markers, color logic, toggle behavior"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-037", "VPR-038"],
       "notes": "First concrete implementation of sub-panel framework. RSI is widely used and relatively simple to visualize."
