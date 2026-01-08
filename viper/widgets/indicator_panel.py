@@ -38,7 +38,7 @@ class IndicatorPanel(Widget):
 
     DEFAULT_CSS = """
     IndicatorPanel {
-        height: auto;
+        height: 7;
         width: 100%;
         padding: 0 2;
         margin-top: 1;
