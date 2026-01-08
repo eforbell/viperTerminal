@@ -134,10 +134,10 @@ async def test_indicator_panel_with_reference_lines() -> None:
             """Compose test app."""
             reference_lines = [
                 HorizontalLine(
-                    value=70.0, label="Overbought", style="dashed", color="\033[31m"
+                    value=70.0, label="Overbought", style="dashed", color="red"
                 ),
                 HorizontalLine(
-                    value=30.0, label="Oversold", style="dashed", color="\033[32m"
+                    value=30.0, label="Oversold", style="dashed", color="green"
                 ),
             ]
             yield IndicatorPanel(
@@ -395,9 +395,9 @@ async def test_indicator_panel_reference_line_styles() -> None:
         def compose(self) -> ComposeResult:
             """Compose test app."""
             reference_lines = [
-                HorizontalLine(value=80.0, label="High", style="solid", color="\033[31m"),
-                HorizontalLine(value=50.0, label="Mid", style="dashed", color="\033[33m"),
-                HorizontalLine(value=20.0, label="Low", style="dotted", color="\033[32m"),
+                HorizontalLine(value=80.0, label="High", style="solid", color="red"),
+                HorizontalLine(value=50.0, label="Mid", style="dashed", color="yellow"),
+                HorizontalLine(value=20.0, label="Low", style="dotted", color="green"),
             ]
             yield IndicatorPanel(
                 name="Custom",

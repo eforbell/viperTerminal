@@ -32,11 +32,11 @@ async def test_rsi_panel_initialization() -> None:
         assert panel._reference_lines[0].value == 70.0
         assert panel._reference_lines[0].label == "Overbought (70)"
         assert panel._reference_lines[0].style == "dashed"
-        assert panel._reference_lines[0].color == "\033[31m"  # Red
+        assert panel._reference_lines[0].color == "red"  # Rich markup color name
         assert panel._reference_lines[1].value == 30.0
         assert panel._reference_lines[1].label == "Oversold (30)"
         assert panel._reference_lines[1].style == "dashed"
-        assert panel._reference_lines[1].color == "\033[32m"  # Green
+        assert panel._reference_lines[1].color == "green"  # Rich markup color name
 
 
 @pytest.mark.asyncio

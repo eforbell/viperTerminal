@@ -19,18 +19,19 @@ class RSIPanel(IndicatorPanel):
     def __init__(self) -> None:
         """Initialize the RSI panel with standard RSI configuration."""
         # Define RSI reference lines: overbought (70) and oversold (30)
+        # Use Rich markup color names (NOT ANSI codes!)
         reference_lines = [
             HorizontalLine(
                 value=70.0,
                 label="Overbought (70)",
                 style="dashed",
-                color="\033[31m"  # Red for overbought
+                color="red"  # Red for overbought
             ),
             HorizontalLine(
                 value=30.0,
                 label="Oversold (30)",
                 style="dashed",
-                color="\033[32m"  # Green for oversold
+                color="green"  # Green for oversold
             ),
         ]
 

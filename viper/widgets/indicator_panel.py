@@ -19,7 +19,7 @@ class HorizontalLine:
     value: float  # Y-axis value where line should be drawn
     label: str  # Label for the line (e.g., "Overbought (70)")
     style: str  # Line style: "solid", "dashed", or "dotted"
-    color: str  # ANSI color code (e.g., "\033[33m" for yellow)
+    color: str  # Rich markup color name (e.g., "yellow", "red")
 
 
 class IndicatorPanel(Widget):
@@ -159,7 +159,7 @@ class IndicatorPanel(Widget):
         # Render the indicator chart
         chart_lines = self._render_indicator_chart()
         for line in chart_lines:
-            container.mount(Label(line, classes="indicator-line", markup=False))
+            container.mount(Label(line, classes="indicator-line", markup=True))
 
     def _render_indicator_chart(self) -> list[str]:
         """Render the indicator chart with braille characters.
@@ -273,7 +273,7 @@ class IndicatorPanel(Widget):
             if 0 <= target_row < self._height:
                 # Simple braille character for indicator line
                 braille_char = chr(braille_base + dot_7 + dot_8)
-                grid[target_row][char_idx] = f"\033[36m{braille_char}\033[0m"  # Cyan
+                grid[target_row][char_idx] = f"[cyan]{braille_char}[/cyan]"
 
         # Convert grid to strings
         chart_lines = ["".join(line) for line in grid]
@@ -309,7 +309,7 @@ class IndicatorPanel(Widget):
 
             # Draw line across entire width
             width = len(grid[row])
-            colored_char = f"{ref_line.color}{char}\033[0m"
+            colored_char = f"[{ref_line.color}]{char}[/{ref_line.color}]"
             for col in range(width):
                 # Only draw if space (don't overwrite data)
                 if grid[row][col] == " ":
