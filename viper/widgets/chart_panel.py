@@ -35,6 +35,12 @@ class ChartPanel(Widget):
         height: 100%;
         width: 100%;
         padding: 1 2;
+        layout: vertical;
+    }
+
+    ChartPanel #chart-content {
+        height: 1fr;
+        width: 100%;
     }
 
     ChartPanel Label {
