@@ -195,7 +195,7 @@
         "Tests: verify against known RSI calculations, edge cases (no losses, no gains)"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": [],
       "notes": "RSI is a momentum oscillator. Displayed separately from price chart (needs sub-panel)."

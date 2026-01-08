@@ -354,3 +354,56 @@
 
 ---
 
+
+## 2026-01-07 - VPR-037
+- **What was implemented**: Relative Strength Index (RSI) indicator calculation service using Wilder's smoothing
+- **Files changed**:
+  - `viper/services/indicators.py`: Added calculate_rsi() function with Wilder's smoothing method
+  - `tests/test_indicators.py`: Added 24 comprehensive tests for RSI calculation
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-037 as complete
+  - `AGENTS.md`: Added VPR-037 learnings section with 38 detailed points
+- **Learnings**:
+  - **RSI Formula**: RSI = 100 - (100 / (1 + RS)) where RS = Average Gain / Average Loss
+  - **Wilder's Smoothing Critical**: Use Wilder's smoothing for averages, NOT simple moving average
+  - **Two-stage averaging**: First avg = simple average of first period, then Wilder's smoothing for rest
+  - **Wilder's Formula**: ((prev_avg * (period-1)) + current_value) / period
+  - **Default Period 14**: Industry standard for RSI, included as default parameter
+  - **Return Type Pattern**: Use `list[float | None]` to match SMA/EMA interface consistency
+  - **None Count Difference**: RSI returns `period` Nones (not period-1 like MA indicators)
+  - **Reason for More Nones**: Need period+1 prices total (period deltas, then period for first avg)
+  - **Delta Calculation**: Pre-calculate all deltas first: `prices[i] - prices[i-1]`
+  - **Separate Gains/Losses**: Extract gains with `max(delta, 0.0)`, losses with `abs(min(delta, 0.0))`
+  - **Initial Lists**: Create separate initial_gains and initial_losses lists from first period deltas
+  - **First Averages**: Calculate avg_gain and avg_loss from initial lists using simple average
+  - **First RSI Index**: Calculate first RSI at index `period` (need period+1 prices for first RSI)
+  - **Division by Zero Handling**: Check `if avg_loss == 0.0`, return RSI = 100.0 (infinite RS)
+  - **All Losses Case**: If avg_gain == 0.0, RS = 0, RSI = 100 - (100/1) = 0.0
+  - **Flat Prices Edge Case**: All same prices → all deltas = 0 → both avgs = 0 → RSI = 100
+  - **State Variable Updates**: After each RSI calculation, update avg_gain and avg_loss for next iteration
+  - **Smoothing Loop Range**: Loop from `period` to `len(deltas)` for subsequent calculations
+  - **Extract Current Values**: For each iteration: gain = max(delta, 0.0), loss = abs(min(delta, 0.0))
+  - **Apply Smoothing**: avg_gain = ((avg_gain * (period-1)) + gain) / period
+  - **Check Zero Again**: Check avg_loss == 0.0 for each iteration (not just first)
+  - **Range Invariant**: RSI mathematically constrained to [0, 100], validate in all tests
+  - **Overbought Level**: RSI > 70 indicates overbought (strong upward momentum)
+  - **Oversold Level**: RSI < 30 indicates oversold (strong downward momentum)
+  - **Neutral Range**: RSI between 30-70 is neutral (balanced gains/losses)
+  - **Test All Gains**: Steadily increasing prices should yield RSI = 100 (no losses)
+  - **Test All Losses**: Steadily decreasing prices should yield RSI = 0 (no gains)
+  - **Test Alternating**: Mixed gains and losses should yield RSI in middle range
+  - **Edge Cases Tested**: Empty list, single value, insufficient data (< period+1)
+  - **Period Validation**: Raise ValueError if period <= 0 (must be positive)
+  - **Real World Prices**: Test with realistic stock prices to verify practical behavior
+  - **Smoothing Verification**: Consecutive RSI values should be relatively smooth (not wildly different)
+  - **Small Period Test**: Test period=7 for short-term trading analysis
+  - **Large Period Test**: Test period=21 for long-term trend analysis
+  - **Length Invariant**: Output list always same length as input, filled with Nones as needed
+  - **None Count Test**: Explicitly verify first `period` values are None (critical for correctness)
+  - **Comprehensive Coverage**: 24 tests covering basic, edge cases, periods, conditions, smoothing
+  - All 641 tests passing (added 24 new RSI tests) with 90.51% overall coverage
+  - indicators.py at 99% coverage (only defensive EMA branch unreachable)
+  - mypy --strict validates with no type errors
+  - Removed unused `# type: ignore[operator]` comments to avoid mypy warnings
+  - Foundation ready for VPR-038 (sub-panel framework) and VPR-039 (RSI visualization)
+
+---
