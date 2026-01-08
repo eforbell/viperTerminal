@@ -150,11 +150,14 @@ class IndicatorPanel(Widget):
             container.mount(Label("No data", classes="empty-state"))
             return
 
+        # Y-axis padding to align with price chart (12 chars to match chart_renderer.py)
+        y_axis_padding = " " * 12
+
         # Build header text with current value if available
         header_text = self._name
         if self._current_value is not None:
             header_text += f": {self._current_value:.2f}"
-        container.mount(Label(header_text, classes="indicator-header"))
+        container.mount(Label(y_axis_padding + header_text, classes="indicator-header"))
 
         # Render the indicator chart
         chart_lines = self._render_indicator_chart()
@@ -275,8 +278,10 @@ class IndicatorPanel(Widget):
                 braille_char = chr(braille_base + dot_7 + dot_8)
                 grid[target_row][char_idx] = f"[cyan]{braille_char}[/cyan]"
 
-        # Convert grid to strings
-        chart_lines = ["".join(line) for line in grid]
+        # Convert grid to strings with Y-axis padding for alignment with price chart
+        # Y-axis width is 12 characters to match chart_renderer.py
+        y_axis_padding = " " * 12
+        chart_lines = [y_axis_padding + "".join(line) for line in grid]
 
         return chart_lines
 
