@@ -769,3 +769,43 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **mypy --strict Clean**: No type errors after implementation
 - **Import Pattern**: Import OverlayData from chart_renderer along with other types
 - **Import Indicators**: Import calculate_sma from services.indicators module
+
+### VPR-037: Relative Strength Index (RSI) indicator service
+- **RSI Formula**: RSI = 100 - (100 / (1 + RS)) where RS = Average Gain / Average Loss
+- **Wilder's Smoothing**: Use Wilder's smoothing method, NOT simple moving average for gains/losses
+- **First Average**: First avg = sum(gains/losses over period) / period (simple average)
+- **Subsequent Averages**: ((previous avg * (period-1)) + current value) / period (Wilder's smoothing)
+- **Default Period 14**: RSI uses period=14 by default (industry standard)
+- **Return Type**: Use `list[float | None]` matching SMA/EMA pattern
+- **None Count**: RSI returns `period` None values (not period-1 like MA)
+- **Reason for Period Nones**: Need period+1 prices to calculate first RSI (period deltas, then period for first avg)
+- **Price Deltas**: Calculate deltas first: `delta = prices[i] - prices[i-1]` for all prices
+- **Separate Gains/Losses**: gains = max(delta, 0.0), losses = abs(min(delta, 0.0))
+- **Initial Averages**: Calculate avg_gain and avg_loss from first `period` deltas using simple average
+- **First RSI Calculation**: Use initial averages to calculate first RSI at index `period` (not period-1)
+- **Division by Zero**: Check if avg_loss == 0.0, return RSI = 100.0 (no losses = infinite RS)
+- **No Gains Case**: If avg_gain == 0.0 (all losses), RS = 0, RSI = 100 - (100/1) = 0
+- **Flat Prices Edge Case**: All same prices means all deltas = 0, avg_gain and avg_loss both 0, triggers RSI = 100
+- **Update State Variables**: After calculating each RSI, update avg_gain and avg_loss for next iteration
+- **Smoothing Loop**: Loop from `period` to `len(deltas)` for subsequent RSI calculations
+- **Range Invariant**: RSI always in [0, 100] range - validate in tests
+- **Overbought**: RSI > 70 indicates overbought (strong upward momentum)
+- **Oversold**: RSI < 30 indicates oversold (strong downward momentum)
+- **Test All Gains**: Steadily increasing prices should yield RSI = 100
+- **Test All Losses**: Steadily decreasing prices should yield RSI = 0
+- **Test Alternating**: Mixed gains/losses should yield RSI between 0 and 100
+- **Edge Case Tests**: Empty list, single value, insufficient data (< period+1 prices)
+- **Period Validation**: Raise ValueError if period <= 0
+- **Real World Test**: Test with realistic stock prices with mixed gains/losses
+- **Wilder's Smoothing Test**: Verify consecutive RSI values are smooth (not wildly different)
+- **Small/Large Periods**: Test with period=7 (short-term) and period=21 (long-term)
+- **Length Matches Input**: Output list always same length as input, regardless of period
+- **None Count Test**: Verify first `period` values are None (not period-1)
+- **24 Comprehensive Tests**: Added extensive test coverage for all RSI behaviors
+- **All 641 Tests Pass**: Added 24 new RSI tests, all existing tests still pass
+- **Coverage 90.51%**: Overall coverage maintained above 90% threshold
+- **indicators.py 99% Coverage**: Only one defensive branch unreachable (EMA prev_ema None check)
+- **mypy --strict Clean**: No type errors with proper return type annotations
+- **Test Import**: Added calculate_rsi to imports in test_indicators.py
+- **Removed Unused Ignores**: Removed `# type: ignore[operator]` comments that mypy didn't need
+- **Foundation for VPR-038**: RSI calculation ready for sub-panel visualization implementation

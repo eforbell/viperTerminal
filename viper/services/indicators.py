@@ -105,3 +105,92 @@ def calculate_ema(prices: list[float], period: int) -> list[float | None]:
                 result.append(ema_value)
 
     return result
+
+
+def calculate_rsi(prices: list[float], period: int = 14) -> list[float | None]:
+    """Calculate Relative Strength Index (RSI) using Wilder's smoothing method.
+
+    RSI is a momentum oscillator that measures the speed and magnitude of price changes.
+    It ranges from 0-100, with values above 70 indicating overbought conditions
+    and values below 30 indicating oversold conditions.
+
+    Formula:
+        RSI = 100 - (100 / (1 + RS))
+        where RS = Average Gain / Average Loss
+
+    Wilder's smoothing (used for averaging):
+        First avg = sum(gains/losses over period) / period
+        Subsequent avg = ((previous avg * (period-1)) + current value) / period
+
+    Args:
+        prices: List of price values to calculate RSI over
+        period: Number of periods for RSI calculation (default: 14)
+
+    Returns:
+        List of RSI values with same length as prices.
+        First 'period' values are None since RSI can't be calculated.
+        RSI values range from 0 to 100.
+
+    Examples:
+        >>> prices = [44, 44.34, 44.09, 43.61, 44.33, 44.83, 45.10, 45.42,
+        ...           45.84, 46.08, 45.89, 46.03, 45.61, 46.28, 46.28]
+        >>> rsi = calculate_rsi(prices, 14)
+        >>> # First 14 values are None, last value ~70.46
+    """
+    if period <= 0:
+        raise ValueError("Period must be positive")
+
+    if not prices:
+        return []
+
+    # Need at least period+1 data points to calculate RSI
+    if len(prices) <= period:
+        return [None] * len(prices)
+
+    result: list[float | None] = []
+
+    # Calculate price changes (deltas)
+    deltas: list[float] = []
+    for i in range(1, len(prices)):
+        delta = prices[i] - prices[i - 1]
+        deltas.append(delta)
+
+    # First 'period' values are None (need period+1 prices for first RSI)
+    for _ in range(period):
+        result.append(None)
+
+    # Calculate initial average gain and loss using simple average
+    initial_gains = [max(d, 0.0) for d in deltas[:period]]
+    initial_losses = [abs(min(d, 0.0)) for d in deltas[:period]]
+
+    avg_gain = sum(initial_gains) / period
+    avg_loss = sum(initial_losses) / period
+
+    # Calculate first RSI
+    if avg_loss == 0.0:
+        # No losses means infinite RS, RSI = 100
+        result.append(100.0)
+    else:
+        rs = avg_gain / avg_loss
+        rsi_value = 100.0 - (100.0 / (1.0 + rs))
+        result.append(rsi_value)
+
+    # Calculate subsequent RSI values using Wilder's smoothing
+    for i in range(period, len(deltas)):
+        delta = deltas[i]
+        gain = max(delta, 0.0)
+        loss = abs(min(delta, 0.0))
+
+        # Wilder's smoothing: ((prev_avg * (period-1)) + current) / period
+        avg_gain = ((avg_gain * (period - 1)) + gain) / period
+        avg_loss = ((avg_loss * (period - 1)) + loss) / period
+
+        if avg_loss == 0.0:
+            # No losses means RSI = 100
+            result.append(100.0)
+        else:
+            rs = avg_gain / avg_loss
+            rsi_value = 100.0 - (100.0 / (1.0 + rs))
+            result.append(rsi_value)
+
+    return result
