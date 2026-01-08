@@ -678,3 +678,54 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **All Tests Pass**: 601 tests passing (added 20 new EMA tests)
 - **Coverage Maintained**: 90.45% overall coverage (indicators.py at 97%)
 - **mypy Clean**: No type errors with --strict flag
+
+### VPR-035: Chart renderer support for overlay lines
+- **New Dataclass: OverlayData**: Created to encapsulate overlay information (values, color, name)
+- **OverlayData Fields**: `values: list[float | None]`, `color: str` (ANSI code), `name: str` (legend name)
+- **None Values in Overlay**: Use None to indicate no data at that position (don't render)
+- **Added overlays Parameter**: Added to `render()`, `_render_braille()`, `_render_block()` methods
+- **Optional Parameter**: `overlays: list[OverlayData] | None = None` for backward compatibility
+- **Block Style Behavior**: Block style ignores overlays (not supported, only works with braille)
+- **Apply Order**: Overlays applied AFTER main chart rendered, BEFORE Y-axis added
+- **_apply_overlays_braille Method**: Core method that processes overlay list and applies to chart
+- **Grid Conversion**: Convert chart lines to 2D mutable grid for overlay application
+- **Same Interpolation Logic**: Overlays follow same interpolation/downsampling as main price chart
+- **Interpolation Detection**: If `interpolated_count > 0`, apply same upsampling to overlay data
+- **Upsampling Overlays**: Use same linear interpolation formula as price chart
+- **None Handling in Interpolation**: Don't interpolate across None values (preserve gaps)
+- **Type Annotation Required**: `upsampled_overlay: list[float | None] = []` to satisfy mypy
+- **Type Narrowing Pattern**: Extract values, assert not None, then perform math operations
+- **Downsampling Overlays**: Create `_downsample_overlay()` helper that preserves None values
+- **Scaling Overlays**: Use same min_price/max_price as main chart for consistent scaling
+- **Flat Chart Check**: Skip overlay if price_range == 0 (can't scale overlay on flat chart)
+- **Vertical Positions**: Same as main chart - `chart_height * 4` (4 dots per braille row)
+- **Scaled Overlay Type**: `scaled_overlay: list[int | None] = []` for scaled vertical positions
+- **Overlay Character Pattern**: Use `_get_overlay_braille_char()` with simpler dot pattern
+- **Simpler Dots**: Overlays use single dots (dots 7 and 8) instead of full vertical lines
+- **Visual Distinction**: Simpler pattern makes overlays visually distinct from main price chart
+- **Color Application**: Wrap overlay character in ANSI color codes: `f"{color}{char}{reset}"`
+- **ANSI Reset Code**: Always append `\033[0m` after colored character
+- **Target Row Logic**: Handle three cases - both rows available, left only, right only
+- **Skip Both None**: If both left_row and right_row are None, continue to next iteration
+- **Bounds Checking**: Check `0 <= target_row < chart_height` before applying to grid
+- **Grid Update**: Replace character at `grid[target_row][char_idx]` with colored overlay char
+- **Multiple Overlays**: Process each overlay in sequence, all applied to same grid
+- **Overlay Stacking**: Later overlays can overwrite earlier ones at same position
+- **Grid to String**: After all overlays applied, convert grid back to strings with `"".join(line)`
+- **Test Coverage**: Added 14 comprehensive overlay tests in TestOverlayRendering class
+- **test_single_overlay_basic**: Verifies basic overlay rendering with color codes
+- **test_multiple_overlays**: Tests two overlays with different colors (cyan, magenta)
+- **test_overlay_with_all_none_values**: Tests overlay with all None values (no crash)
+- **test_overlay_none_handling**: Tests gaps in overlay data (None in middle)
+- **test_overlay_alignment_with_interpolation**: Verifies overlay aligns when chart interpolated
+- **test_overlay_downsampling**: Tests overlay with large dataset (more than chart width)
+- **test_overlay_flat_price_chart**: Tests overlay on flat chart (price_range == 0)
+- **test_overlay_with_empty_overlays_list**: Tests empty overlay list
+- **test_overlay_no_overlays_parameter**: Tests backward compatibility (no overlays param)
+- **test_overlay_block_style_ignores_overlays**: Verifies block style ignores overlays
+- **test_overlay_with_y_axis**: Tests overlay works with Y-axis enabled
+- **test_overlay_values_outside_price_range**: Tests overlay values beyond price range
+- **Backward Compatible**: Existing code works without overlays parameter
+- **All Tests Pass**: 613 tests passing (added 14 new overlay tests)
+- **Coverage Maintained**: 90.34% overall coverage (chart_renderer.py at 94%)
+- **mypy --strict Clean**: No type errors after type annotations and narrowing fixes

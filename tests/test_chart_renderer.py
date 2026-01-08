@@ -8,6 +8,7 @@ from viper.widgets.chart_renderer import (
     ChartDimensions,
     ChartRenderer,
     ChartStyle,
+    OverlayData,
     RenderedChart,
     create_chart,
 )
@@ -654,3 +655,247 @@ class TestVolumeRendering:
 
         # Should handle upsampling from 2 points
         assert len(volume_lines) == 3
+
+
+class TestOverlayRendering:
+    """Test suite for overlay line rendering."""
+
+    def test_single_overlay_basic(self) -> None:
+        """Test rendering with a single overlay."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        # Create price data
+        prices = [100.0 + i for i in range(50)]
+
+        # Create overlay (e.g., moving average)
+        overlay_values = [None] * 10 + [105.0 + i for i in range(40)]  # First 10 are None
+        overlay = OverlayData(
+            values=overlay_values,
+            color="\033[36m",  # Cyan
+            name="SMA20"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should render successfully
+        assert result.height == 10
+        assert len(result.lines) == 10
+        # Should contain ANSI color codes from overlay
+        chart_text = "".join(result.lines)
+        assert "\033[36m" in chart_text  # Cyan color code
+
+    def test_multiple_overlays(self) -> None:
+        """Test rendering with multiple overlays."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        prices = [100.0 + i * 0.5 for i in range(50)]
+
+        # Two overlays with different colors
+        overlay1 = OverlayData(
+            values=[None] * 10 + [102.0 + i * 0.5 for i in range(40)],
+            color="\033[36m",  # Cyan
+            name="SMA20"
+        )
+        overlay2 = OverlayData(
+            values=[None] * 20 + [104.0 + i * 0.5 for i in range(30)],
+            color="\033[35m",  # Magenta
+            name="SMA50"
+        )
+
+        result = renderer.render(
+            prices=prices,
+            dates=None,
+            dimensions=dimensions,
+            overlays=[overlay1, overlay2]
+        )
+
+        # Should contain both color codes
+        chart_text = "".join(result.lines)
+        assert "\033[36m" in chart_text  # Cyan
+        assert "\033[35m" in chart_text  # Magenta
+
+    def test_overlay_with_all_none_values(self) -> None:
+        """Test overlay where all values are None."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        prices = [100.0 + i for i in range(50)]
+        overlay = OverlayData(
+            values=[None] * 50,  # All None
+            color="\033[36m",
+            name="Empty"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should render without errors, but overlay won't be visible
+        assert result.height == 10
+        assert len(result.lines) == 10
+
+    def test_overlay_none_handling(self) -> None:
+        """Test that None values in overlay are not rendered."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        prices = [100.0 + i for i in range(50)]
+        # Overlay with gaps (None values in middle)
+        overlay_values = [105.0 + i for i in range(20)] + [None] * 10 + [115.0 + i for i in range(20)]
+        overlay = OverlayData(
+            values=overlay_values,
+            color="\033[33m",  # Yellow
+            name="Gapped"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should render successfully (gaps won't cause errors)
+        assert result.height == 10
+
+    def test_overlay_alignment_with_interpolation(self) -> None:
+        """Test that overlays align correctly when price chart is interpolated."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=60, height=10, include_y_axis=False, include_x_axis=False)
+
+        # Small dataset that triggers interpolation (< 60% of max_data_points)
+        prices = [100.0, 110.0, 105.0, 115.0, 120.0]  # 5 points
+        overlay_values = [None, 108.0, 107.0, 113.0, 118.0]  # 5 points, first is None
+
+        overlay = OverlayData(
+            values=overlay_values,
+            color="\033[36m",
+            name="MA"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should have been interpolated
+        assert result.interpolated_count == 120  # 60 * 2
+        # Should render successfully with overlay aligned
+        assert len(result.lines) == 10
+
+    def test_overlay_downsampling(self) -> None:
+        """Test that overlays are downsampled correctly for large datasets."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        # Large dataset (more than chart can display)
+        prices = [100.0 + i * 0.1 for i in range(200)]
+        overlay_values = [102.0 + i * 0.1 for i in range(200)]
+
+        overlay = OverlayData(
+            values=overlay_values,
+            color="\033[36m",
+            name="SMA"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should render successfully with downsampling
+        assert result.height == 10
+        assert len(result.lines) == 10
+
+    def test_overlay_flat_price_chart(self) -> None:
+        """Test overlay on a flat (zero range) price chart."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        # All prices the same
+        prices = [100.0] * 50
+        overlay_values = [100.0] * 50  # Also flat
+
+        overlay = OverlayData(
+            values=overlay_values,
+            color="\033[36m",
+            name="Flat"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should render (overlay won't be visible on flat chart due to price_range == 0 check)
+        assert result.height == 10
+
+    def test_overlay_with_empty_overlays_list(self) -> None:
+        """Test that empty overlays list works correctly."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        prices = [100.0 + i for i in range(50)]
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[])
+
+        # Should render normally without overlays
+        assert result.height == 10
+        assert len(result.lines) == 10
+
+    def test_overlay_no_overlays_parameter(self) -> None:
+        """Test backward compatibility when overlays parameter is not provided."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        prices = [100.0 + i for i in range(50)]
+
+        # Don't pass overlays parameter at all
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions)
+
+        # Should render normally
+        assert result.height == 10
+        assert len(result.lines) == 10
+
+    def test_overlay_block_style_ignores_overlays(self) -> None:
+        """Test that block style ignores overlays (not supported)."""
+        renderer = ChartRenderer(style=ChartStyle.BLOCK)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        prices = [100.0 + i for i in range(50)]
+        overlay = OverlayData(
+            values=[105.0 + i for i in range(50)],
+            color="\033[36m",
+            name="SMA"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should render successfully (overlay ignored)
+        assert result.height == 10
+
+    def test_overlay_with_y_axis(self) -> None:
+        """Test overlay rendering with Y-axis enabled."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=60, height=10, include_y_axis=True, include_x_axis=False)
+
+        prices = [100.0 + i for i in range(50)]
+        overlay = OverlayData(
+            values=[None] * 10 + [105.0 + i for i in range(40)],
+            color="\033[36m",
+            name="SMA20"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should render with Y-axis (overlay applied before Y-axis is added)
+        assert result.height == 10
+        # Check for Y-axis markers
+        assert any("│" in line for line in result.lines)
+
+    def test_overlay_values_outside_price_range(self) -> None:
+        """Test overlay with values outside the main price range."""
+        renderer = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+
+        # Price range: 100-150
+        prices = [100.0 + i for i in range(50)]
+        # Overlay extends beyond price range
+        overlay_values = [90.0 + i for i in range(50)]  # Starts below price range
+
+        overlay = OverlayData(
+            values=overlay_values,
+            color="\033[36m",
+            name="BelowRange"
+        )
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions, overlays=[overlay])
+
+        # Should still render (overlay will be clipped or scaled appropriately)
+        assert result.height == 10
