@@ -809,3 +809,58 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Test Import**: Added calculate_rsi to imports in test_indicators.py
 - **Removed Unused Ignores**: Removed `# type: ignore[operator]` comments that mypy didn't need
 - **Foundation for VPR-038**: RSI calculation ready for sub-panel visualization implementation
+
+### VPR-038: Sub-panel framework for indicators
+- **IndicatorPanel Base Class**: Created generic widget for oscillator indicators (RSI, MACD, Stochastic, etc.)
+- **Purpose**: Display indicators that don't overlay on price chart (need separate Y-axis scale)
+- **HorizontalLine Dataclass**: Encapsulates reference line config with value, label, style, color fields
+- **Configurable Height**: Panel accepts height parameter (default 4, supports 3-5 lines for flexibility)
+- **Configurable Range**: min_value and max_value define Y-axis scale (default 0-100 for RSI)
+- **Reference Lines Support**: Can display horizontal markers (e.g., RSI overbought 70, oversold 30)
+- **Line Styles**: Support "solid", "dashed", "dotted" styles using Unicode box-drawing characters
+- **Unicode Box Chars**: "─" (solid U+2500), "┄" (dashed U+2504), "┈" (dotted U+2508)
+- **Visibility Control**: hide(), show(), toggle_visibility(), is_visible() methods for display management
+- **Display Toggle**: Use `styles.display = "block"/"none"` for showing/hiding panel
+- **Data Interface**: show_indicator(values, current_value) method to update display with new data
+- **None Values Support**: Handle None in data list by filtering out (for initial values in RSI, etc.)
+- **Header Display**: Show indicator name and latest value in header (e.g., "RSI: 55.00")
+- **Braille Chart Rendering**: Use same braille pattern approach as main price chart for consistency
+- **Downsampling Logic**: Automatically downsample if data exceeds chart_width * 2 points
+- **Downsampling Method**: Chunk-based averaging preserves general shape of data without losing trends
+- **2 Points Per Char**: Braille characters support 2 data points each (left and right dot positions)
+- **Vertical Scaling**: Map indicator values to (height * 4) vertical positions (4 braille dots per row)
+- **Dot Pattern**: Use dots 7+8 (bottom half of braille char) for indicator line (simpler than price chart)
+- **Braille Base**: braille_base = 0x2800, dot_7 = 0x40, dot_8 = 0x80 for braille character construction
+- **Color Coding**: Cyan (\033[36m) for indicator line by default, customizable for reference lines
+- **Reference Line Drawing**: Draw reference lines before data line so indicator renders on top
+- **Grid-based Rendering**: Use 2D mutable grid (list[list[str]]) for overlaying elements before final render
+- **Type Annotations Critical**: Must add explicit type hints to all attributes for mypy --strict
+- **Attribute Type Pattern**: `self._name: str = name` not just `self._name = name`
+- **Empty State Handling**: Display "No data" message when indicator_values is None or all None
+- **Flat Line Edge Case**: When value_range == 0, render horizontal line at middle height
+- **Bounds Clamping**: Clamp vertical positions to [0, height*4-1] before grid access to prevent errors
+- **Container Pattern**: Use Container with #indicator-content id for dynamic content mounting
+- **CSS Classes**: indicator-header (bold, accent), indicator-line (no margin), empty-state (dimmed)
+- **can_focus = False**: Indicators are display-only widgets, no user interaction needed
+- **Margin Pattern**: margin-top: 1 to separate from chart above, margin-bottom: 0 for compact layout
+- **Test Pattern**: Follow existing Textual widget test patterns (async with app.run_test() as pilot)
+- **17 Comprehensive Tests**: Cover initialization, visibility, data display, edge cases, reference lines
+- **Test Edge Cases**: Empty data, all None values, flat values, extreme values, large datasets
+- **Test Custom Config**: Custom height (5 for MACD), custom range (-10 to +10 for MACD-like indicators)
+- **Test Reference Lines**: Multiple lines with different styles, verify rendering without errors
+- **Test Downsampling**: Verify downsampled data preserves min/max range and general shape
+- **Test Visibility States**: Verify hidden panel doesn't render when data updates, shows when toggled
+- **Generic Design**: Can support any oscillator indicator by changing min/max range and reference lines
+- **RSI Configuration**: Default config (0-100 range, height 4) is perfect for RSI implementation
+- **MACD Configuration**: Can configure with range -10 to +10, height 5 for future MACD panel
+- **All 658 Tests Pass**: Added 17 new comprehensive tests, all existing tests still pass
+- **Coverage 90.81%**: Maintained above 90% threshold, indicator_panel.py at 96% coverage
+- **mypy --strict Clean**: All type annotations correct, no type errors in strict mode
+- **Module Imports**: Import Container from textual.containers, Label from textual.widgets
+- **Widget Inheritance**: Inherit from Widget, implement compose() yielding Container
+- **Foundation Complete**: Ready for VPR-039 (RSI panel implementation) using this framework
+- **Extensible Design**: Future indicators (Stochastic, Williams %R) can reuse this framework
+- **Positioning Note**: Panel designed to appear below price chart, above volume bars in layout
+- **Dynamic Content**: Use container.remove_children() + container.mount() pattern for updates
+- **No Focus**: Set can_focus = False since panels are informational, not interactive
+- **Color Reset**: Always reset color with \033[0m after colored characters to avoid bleed
