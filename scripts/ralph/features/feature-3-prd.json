@@ -108,7 +108,7 @@
         "Tests: verify default state, config override, toggle behavior"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-031"],
       "notes": "Only enable after VPR-031 fixes alignment issues. Volume adds important context to price movements."

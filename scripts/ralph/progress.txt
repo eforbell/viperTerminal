@@ -134,3 +134,42 @@
 
 ---
 
+## 2026-01-07 - VPR-032
+- **What was implemented**: Enabled volume bars by default with config support and status indicator
+- **Files changed**:
+  - `viper/config.py`: Changed volume_enabled default from False to True, updated validation message
+  - `viper/widgets/chart_panel.py`: Added volume_enabled parameter to __init__, added status indicator to header
+  - `viper/app.py`: Pass config.volume_enabled to ChartPanel constructor
+  - `viper/widgets/help_screen.py`: Removed "experimental" label, changed to "enabled by default"
+  - `tests/test_config.py`: Updated default assertions, added test_volume_enabled_false
+  - `tests/test_chart_panel.py`: Updated all volume tests, added 2 new tests for config override and status indicator
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-032 as complete
+  - `AGENTS.md`: Added VPR-032 learnings section with 27 detailed points
+- **Learnings**:
+  - **Config default change**: Changed from `volume_enabled: bool = False` to `True` in dataclass
+  - **Constructor parameter**: Added `volume_enabled: bool = True` to ChartPanel.__init__ for flexibility
+  - **Parameter default True**: Ensures volume enabled even without config (fail-safe default)
+  - **App integration**: Pass `config.volume_enabled` to ChartPanel in compose() method
+  - **Status indicator pattern**: Show state in header with bracket notation: `[Vol: ON]` or `[Vol: OFF]`
+  - **Ternary operator**: `volume_status = "Vol: ON" if self._volume_enabled else "Vol: OFF"`
+  - **Header format**: Append status to existing header with spacing for readability
+  - **Help screen updates**: Remove experimental warnings when feature is production-ready
+  - **Help text consistency**: Update all mentions - keybindings section AND charts section
+  - **Removed CoinGecko reference**: Help text updated to reflect yfinance-only crypto support
+  - **Test update pattern**: When changing defaults, update ALL tests checking that default
+  - **Reversed toggle test**: test_chart_panel_volume_toggle now starts enabled, toggles off, then on
+  - **Remove redundant setup**: Tests that relied on toggling ON first can skip that step
+  - **New test for False override**: test_volume_enabled_false verifies config can set to False
+  - **New test for constructor**: test_chart_panel_volume_disabled_via_config tests parameter
+  - **Status indicator test**: test_chart_panel_volume_status_indicator validates header text
+  - **Query pattern for header**: Use `[label for label in labels if "Chart" in str(label.render())]`
+  - **Assert in header text**: Use `any("[Vol: ON]" in str(label.render()) for label in header_labels)`
+  - **Config backward compatible**: Existing configs without volume_enabled get new True default
+  - **User can override**: Set `volume_enabled = false` in ~/.config/viper/config.toml to disable
+  - **Dependency on VPR-031**: Only enabled after alignment issues fixed - important sequence
+  - **User experience**: Volume provides context for price movements - worth default ON
+  - All 565 tests passing with 90.34% overall coverage
+  - mypy --strict validates with no type errors
+
+---
+
