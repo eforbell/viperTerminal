@@ -125,7 +125,7 @@
         "Comprehensive tests: various periods, edge cases (empty, single value, exactly period size)"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": [],
       "notes": "Foundation for technical indicators. SMA is the simplest: sum of last N prices / N."

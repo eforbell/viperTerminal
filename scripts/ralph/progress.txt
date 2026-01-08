@@ -173,3 +173,43 @@
 
 ---
 
+## 2026-01-07 - VPR-033
+- **What was implemented**: Simple Moving Average (SMA) indicator calculation service
+- **Files changed**:
+  - `viper/services/indicators.py`: Created new module with calculate_sma() pure function
+  - `tests/test_indicators.py`: Created comprehensive test suite with 16 tests
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-033 as complete
+  - `AGENTS.md`: Added VPR-033 learnings section with 28 detailed points
+- **Learnings**:
+  - **New Module Pattern**: Created dedicated `viper/services/indicators.py` for all technical indicators
+  - **Pure Functions Only**: No external dependencies (yfinance, pandas), just pure Python math
+  - **Return Type Pattern**: Use `list[float | None]` for indicators that can't always calculate
+  - **None for Initial Values**: Return None for first (period-1) values where SMA unavailable
+  - **SMA Formula**: For position i: `sum(prices[i-period+1:i+1]) / period`
+  - **Window Slicing**: `prices[i - period + 1 : i + 1]` gets last N prices ending at i
+  - **Input Validation**: Raise ValueError for period <= 0 (must be positive)
+  - **Empty List Handling**: Return [] when input is []
+  - **Length Preservation**: Output list always same length as input list
+  - **None Count Invariant**: Number of None values always equals `period - 1`
+  - **Period 1 Edge Case**: SMA with period=1 is identity function (returns original prices)
+  - **Insufficient Data**: When `len(prices) < period`, all values are None
+  - **Exact Period Size**: When `len(prices) == period`, only last value has SMA
+  - **Test Coverage**: 16 comprehensive tests covering all edge cases and common periods
+  - **Common Periods**: Tested 20, 50, 200 day (industry standard moving averages)
+  - **Real World Test**: Included test with realistic stock price data (AAPL-like)
+  - **Flat Prices Test**: SMA of constant prices equals that constant value
+  - **Volatile Prices Test**: SMA smooths price swings (alternating high/low values)
+  - **Float Comparison**: Use `pytest.approx(value, abs=0.01)` for float assertions
+  - **Type Safety**: mypy --strict validates `list[float | None]` union type correctly
+  - **Docstring Examples**: Include usage examples in docstring for clarity
+  - **Module Docstring**: Explain the None-return pattern at module level
+  - **Foundation Pattern**: This establishes pattern for EMA, RSI, MACD calculations
+  - **No numpy/pandas**: Deliberately avoided heavy dependencies for simple calculations
+  - **Performance**: O(n) complexity with simple arithmetic - very fast
+  - **Integration Ready**: Function signature designed for easy chart overlay integration
+  - All 581 tests passing (added 16 new tests) with 90.40% overall coverage
+  - mypy --strict validates with no type errors
+  - indicators.py at 100% test coverage
+
+---
+
