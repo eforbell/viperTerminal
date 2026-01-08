@@ -537,3 +537,28 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Unified API**: Stock and crypto now use identical yfinance code path - single data source
 - **Test Coverage**: Achieved 93% coverage on crypto.py with 30 comprehensive tests
 - **Remove respx**: No longer need respx or httpx for crypto tests - pure object mocking sufficient
+
+### VPR-030: Unify crypto historical data with yfinance
+- **Single Data Source**: Completely unified on yfinance - removed all CoinGecko historical data code
+- **Import Update**: Changed from `SYMBOL_TO_ID` to `SYMBOL_TO_PAIR` import (legacy alias exists for compatibility)
+- **Crypto Detection Enhanced**: Updated `_is_crypto_ticker()` to check both SYMBOL_TO_PAIR and -USD suffix
+- **Auto-conversion in fetch_historical_data**: Crypto symbols auto-converted to SYMBOL-USD before yfinance call
+- **Handle Explicit Suffix**: If symbol already ends with -USD, use as-is without double conversion
+- **Fallback Pattern**: Use `SYMBOL_TO_PAIR.get(symbol, f"{symbol}-USD")` for unmapped crypto symbols
+- **Unified Code Path**: Both stocks and crypto now use `_fetch_stock_historical()` - no separate crypto function
+- **Removed Functions**: Deleted `_fetch_crypto_historical()`, `_fetch_crypto_with_timeout()`, `_parse_coingecko_chart()`
+- **Removed Imports**: Removed `httpx` import and `COINGECKO_DAYS_MAP` mapping dict
+- **Docstring Updates**: Updated all docstrings to reflect yfinance-only approach
+- **Test Conversion**: Replaced all respx HTTP mocks with yfinance Ticker mocks
+- **Removed respx Import**: No longer need `respx` or `httpx.Response` imports in test_history_data.py
+- **Simplified Test Helpers**: Removed `create_mock_coingecko_response()` helper function
+- **New Test Coverage**: Added test for explicit -USD suffix handling
+- **Test Ticker Assertions**: Updated assertions to expect "BTC-USD" ticker instead of "BTC"
+- **yfinance Call Verification**: Tests verify yfinance.Ticker called with correct converted symbol (e.g., "BTC-USD")
+- **Same OHLCV Data**: yfinance provides full OHLCV data for crypto (unlike CoinGecko which only had Close)
+- **Consistent Intervals**: Crypto historical data now uses same interval logic as stocks (1d, 1wk, 1mo)
+- **No Rate Limits**: Eliminated CoinGecko rate limiting issues - yfinance has no aggressive rate limits
+- **No Retry Logic Needed**: Removed exponential backoff and retry logic - not needed with yfinance
+- **Cleaner Codebase**: Reduced history_data.py from 473 lines to ~240 lines by removing CoinGecko code
+- **All Tests Pass**: 557 tests passing with 90.39% overall coverage
+- **Type Safety Maintained**: mypy --strict passes with no issues after refactoring

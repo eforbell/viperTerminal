@@ -153,6 +153,25 @@
       "notes": "yfinance supports crypto with format SYMBOL-USD. Benefits: (1) No rate limits, (2) Single unified API, (3) Consistent data format.",
       "status": "IN_PROGRESS_FEATURE_3",
       "assignedStories": ["VPR-029", "VPR-030"]
+    },
+    {
+      "id": "FE-014",
+      "title": "In-app article reader mode",
+      "description": "Fetch and display news article content directly in terminal instead of opening browser. Reader mode strips ads/chrome and renders clean text.",
+      "priority": "Medium",
+      "relatedFeature": "feature-2",
+      "effort": "Medium",
+      "notes": "Essential for headless/server environments without display. Avoids eye strain from bright browser. Libraries: newspaper3k, readability-lxml, or trafilatura for article extraction. Render with Rich/Textual markdown support.",
+      "implementation": {
+        "libraries": ["newspaper3k", "readability-lxml", "trafilatura"],
+        "features": [
+          "Fetch article HTML from URL",
+          "Extract main content (strip ads, nav, sidebars)",
+          "Convert to markdown/plain text",
+          "Display in scrollable panel with word wrap",
+          "Keybinding: Enter on news item opens reader instead of browser"
+        ]
+      }
     }
   ]
 }
