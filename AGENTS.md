@@ -592,3 +592,31 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **Backward Compatible**: Old volume render calls still work (interpolated_count defaults to 0)
 - **Performance**: No performance impact - upsampling only happens when data is sparse
 - **Visual Fix**: Volume bars now perfectly align with price chart regardless of data density
+
+### VPR-032: Enable Volume Bars by Default
+- **Config Default Change**: Changed `volume_enabled: bool = False` to `True` in config.py
+- **Config Validation Update**: Updated validation error message from "default False" to "default True"
+- **ChartPanel Constructor**: Added `volume_enabled: bool = True` parameter to `__init__`
+- **Constructor Default**: Parameter defaults to True, maintaining new behavior even without config
+- **App Integration**: Pass `config.volume_enabled` to ChartPanel in app.py compose()
+- **Status Indicator**: Added volume status to chart header: `[Vol: ON]` or `[Vol: OFF]`
+- **Header Format**: `f"{data.ticker} - {data.period} Chart  [{volume_status}]"`
+- **Help Screen Updates**: Removed "(experimental)" from volume toggle description
+- **Help Text Change**: Changed "disabled by default" to "enabled by default"
+- **Help Chart Section**: Updated to say "enabled by default" and removed CoinGecko reference
+- **Test Updates**: Changed all volume default assertions from False to True
+- **test_chart_panel_volume_toggle**: Reversed toggle order - start enabled, toggle off, toggle on
+- **test_chart_panel_volume_bars_displayed**: Updated comments - volume enabled by default
+- **test_chart_panel_volume_stats_displayed**: Removed redundant toggle - already enabled
+- **test_chart_panel_volume_empty_data**: Removed redundant toggle - already enabled
+- **test_config Default Test**: Changed assertion from `assert config.volume_enabled is False` to True
+- **test_config Invalid Test**: Changed invalid type correction from False to True
+- **New Test: test_volume_enabled_false**: Added test to verify config can override to False
+- **New Test: test_chart_panel_volume_disabled_via_config**: Tests ChartPanel(volume_enabled=False)
+- **New Test: test_chart_panel_volume_status_indicator**: Tests [Vol: ON]/[Vol: OFF] in header
+- **Config Override Works**: Users can set `volume_enabled = false` in config.toml to disable
+- **Backward Compatible**: Existing configs without volume_enabled get new True default
+- **All Tests Pass**: 565 tests passing with 90.34% overall coverage
+- **mypy --strict Clean**: No type errors after adding volume_enabled parameter
+- **User Experience**: Volume adds context to price movements, worth showing by default
+- **VPR-031 Dependency**: Only enabled after VPR-031 fixed alignment issues

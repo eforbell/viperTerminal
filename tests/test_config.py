@@ -278,17 +278,22 @@ class TestConfigChartOptions:
     def test_default_volume_enabled(self) -> None:
         """Test default volume_enabled value."""
         config = Config()
-        assert config.volume_enabled is False
+        assert config.volume_enabled is True
 
     def test_volume_enabled_true(self) -> None:
         """Test setting volume_enabled to True."""
         config = Config(volume_enabled=True)
         assert config.volume_enabled is True
 
+    def test_volume_enabled_false(self) -> None:
+        """Test setting volume_enabled to False."""
+        config = Config(volume_enabled=False)
+        assert config.volume_enabled is False
+
     def test_invalid_volume_enabled_corrected(self) -> None:
         """Test that invalid volume_enabled is corrected."""
         config = Config(volume_enabled="not a bool")  # type: ignore[arg-type]
-        assert config.volume_enabled is False
+        assert config.volume_enabled is True
 
     def test_load_chart_options_from_file(self, tmp_path: Path) -> None:
         """Test loading chart options from config file."""

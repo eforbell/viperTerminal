@@ -93,11 +93,12 @@ class ChartPanel(Widget):
     }
     """
 
-    def __init__(self, style: ChartStyle = ChartStyle.BRAILLE) -> None:
+    def __init__(self, style: ChartStyle = ChartStyle.BRAILLE, volume_enabled: bool = True) -> None:
         """Initialize the chart panel.
 
         Args:
             style: Chart rendering style (BRAILLE or BLOCK)
+            volume_enabled: Whether volume bars are shown by default
         """
         super().__init__()
         self._state: str = "empty"
@@ -106,7 +107,7 @@ class ChartPanel(Widget):
         self._current_ticker: str | None = None
         self._current_period: str = "1M"  # Default period
         self._renderer = ChartRenderer(style=style)
-        self._volume_enabled: bool = False  # Volume bars toggle state
+        self._volume_enabled: bool = volume_enabled  # Volume bars toggle state
         # Timeframe mappings
         self._timeframes = {
             "1": "1W",
@@ -202,7 +203,8 @@ class ChartPanel(Widget):
             stats: Calculated statistics for the period (optional)
         """
         # Header with ticker and timeframe
-        header_text = f"{data.ticker} - {data.period} Chart"
+        volume_status = "Vol: ON" if self._volume_enabled else "Vol: OFF"
+        header_text = f"{data.ticker} - {data.period} Chart  [{volume_status}]"
         container.mount(Label(header_text, classes="chart-header"))
 
         # Timeframe selector bar with active indicator

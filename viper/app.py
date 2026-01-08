@@ -224,7 +224,7 @@ class ViperApp(App[None]):
                 with Container(id="info-container"):
                     yield InfoPanel()
                 with Container(id="chart-container"):
-                    yield ChartPanel()
+                    yield ChartPanel(volume_enabled=self.config.volume_enabled)
                 with Container(id="news-container"):
                     yield NewsPanel()
         yield TickerInput(history_manager=self.history_manager)

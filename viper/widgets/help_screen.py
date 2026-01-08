@@ -114,7 +114,7 @@ class HelpScreen(ModalScreen[None]):
                 yield Static("i                    Toggle info panel", classes="help-item")
                 yield Static("c                    Toggle chart panel", classes="help-item")
                 yield Static("n                    Toggle news panel", classes="help-item")
-                yield Static("v                    Toggle volume bars (experimental)", classes="help-item")
+                yield Static("v                    Toggle volume bars", classes="help-item")
                 yield Static("e                    Expand news item (show summary)", classes="help-item")
                 yield Static("1-7                  Select timeframe (chart)", classes="help-item")
                 yield Static("? / F1               Show this help screen", classes="help-item")
@@ -135,11 +135,11 @@ class HelpScreen(ModalScreen[None]):
                     classes="help-item",
                 )
                 yield Static(
-                    "Press 'v' to toggle volume bars (experimental - disabled by default).",
+                    "Press 'v' to toggle volume bars (enabled by default).",
                     classes="help-item",
                 )
                 yield Static(
-                    "Charts support both stocks (yfinance) and crypto (CoinGecko).",
+                    "Charts support both stocks and crypto via yfinance.",
                     classes="help-item",
                 )
 
