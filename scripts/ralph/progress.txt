@@ -419,7 +419,7 @@
   - `viper/widgets/indicator_panel.py`: Created new base class for indicator sub-panels
   - `tests/test_indicator_panel.py`: Created comprehensive test suite with 17 tests
   - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-038 as complete
-  - `AGENTS.md`: (to be updated) VPR-038 learnings section
+  - `AGENTS.md`: Added VPR-038 learnings section with 54 detailed points
 - **Learnings**:
   - **IndicatorPanel Base Class**: Generic widget for oscillator indicators (RSI, MACD, Stochastic, etc.)
   - **HorizontalLine Dataclass**: Encapsulates reference line config - value, label, style, color
