@@ -1,0 +1,204 @@
+{
+  "branchName": "viper/feature-5-chart-architecture",
+  "projectName": "Viper Terminal - Feature 5",
+  "description": "Chart Architecture Refactoring: Introduce ChartContext shared data structure, perfect indicator alignment, and extracted X-axis. Builds on Feature 4 bug fixes to establish clean, extensible architecture for future indicators (MACD, Stochastic).",
+  "principles": [
+    "Rock-solid quality over speed - every feature must be bulletproof before moving on",
+    "Comprehensive test coverage - unit tests, integration tests, edge cases", 
+    "All tests must pass before a story is marked complete",
+    "No story is done until it's documented and tested",
+    "INCREMENTAL REFACTORING - each story must leave the codebase in a working state",
+    "BACKWARD COMPATIBILITY - old interfaces work during transition",
+    "Apply learnings from AGENTS.md - no ANSI codes in Textual, use Rich markup, explicit heights"
+  ],
+  "CRITICAL_RENDERING_NOTES": {
+    "warning": "⚠️ READ THIS BEFORE ANY WIDGET/RENDERING WORK ⚠️",
+    "textual_colors": "Textual uses Rich markup, NOT ANSI escape codes!",
+    "correct_syntax": "[green]text[/green], [cyan]char[/cyan], [red]value[/red]",
+    "wrong_syntax": "\\033[32m (ANSI codes will BREAK rendering in Textual widgets)",
+    "label_markup": "When Label contains Rich markup, you MUST set markup=True",
+    "volume_bars_note": "Volume bars in chart_renderer.py use Rich markup [green][/green] and [red][/red]",
+    "indicator_panel_note": "IndicatorPanel uses [cyan] for data and reference line colors via Rich markup"
+  },
+  "techStack": {
+    "language": "Python 3.11+",
+    "tui": "Textual (built on Rich)",
+    "stockData": "yfinance (already integrated)",
+    "cryptoData": "yfinance with SYMBOL-USD format",
+    "charting": "Custom Unicode/Braille renderer (already working)",
+    "testing": "pytest + pytest-asyncio + pytest-cov",
+    "mocking": "pytest-mock",
+    "typecheck": "mypy --strict",
+    "linting": "ruff"
+  },
+  "background": {
+    "prerequisite": "Feature 4 must be complete and merged. Feature 4 fixes the core layout bugs (volume/RSI occlusion, RSI stale data) and removes volume toggle complexity.",
+    "startingState": [
+      "Volume bars always visible (no toggle) - from Feature 4",
+      "RSI panel toggles without occluding volume/X-axis - from Feature 4",
+      "RSI updates correctly on ticker change - from Feature 4",
+      "Height calculations work correctly - from Feature 4"
+    ],
+    "goals": [
+      "Introduce ChartContext as single source of truth for dimensions",
+      "Perfect pixel alignment between price chart and indicators",
+      "Extract X-axis to be rendered once at bottom",
+      "Establish clean architecture for future indicators (MACD, Stochastic)"
+    ],
+    "targetArchitecture": {
+      "model": "TradingView-style: Price chart with embedded volume at bottom, then stacked indicator panels",
+      "overview": "ChartPanel (orchestrator) → ChartContext (shared data) → Price+Volume section → IndicatorPanel[] → Shared X-Axis",
+      "ChartPanel_role": "Orchestrates layout: creates ChartContext, calculates heights, renders components in order",
+      "ChartContext_role": "Immutable dataclass holding ticker, period, dates, prices, volumes, and calculated dimensions",
+      "price_section": "Fixed proportion of available space, volume permanently attached at bottom (always visible)",
+      "indicator_section": "RSI (and future MACD, Stochastic) stacked below with fixed heights, receive ChartContext for alignment",
+      "x_axis": "Rendered ONCE at very bottom via render_x_axis(context), shared by all components",
+      "height_management": "ChartPanel calculates total layout, passes dimensions via ChartContext, children render within bounds",
+      "alignment_guarantee": "All components use context.chart_area_width and context.y_axis_width for perfect horizontal alignment"
+    },
+    "knownIssuesFromFeature4": [
+      "rsi-defect-1-width-mismatch.md - RSI panel hardcoded 70 chars vs dynamic chart width (fixed by VPR-051)",
+      "Hardcoded y_axis_padding in indicator_panel.py (fixed by VPR-051)",
+      "X-axis rendered inside #chart-content (extracted by VPR-052)"
+    ]
+  },
+  "userStories": [
+    {
+      "id": "VPR-050",
+      "title": "Create ChartContext dataclass for shared dimensions",
+      "acceptanceCriteria": [
+        "New file: viper/widgets/chart_context.py",
+        "ChartContext dataclass with frozen=True for immutability",
+        "Fields: ticker, period, dates, prices, volumes, opens, closes",
+        "Fields: total_width, total_height, y_axis_width (default 12)",
+        "Computed property: chart_area_width = total_width - y_axis_width",
+        "Factory classmethod: from_historical_data(data: HistoricalData, width: int, height: int)",
+        "DO NOT integrate yet - just create the dataclass with unit tests",
+        "100% test coverage on the new module"
+      ],
+      "priority": 1,
+      "passes": false,
+      "estimatedEffort": "Small",
+      "dependencies": [],
+      "notes": "Foundation dataclass created in isolation. Simple, testable, no side effects."
+    },
+    {
+      "id": "VPR-051",
+      "title": "Integrate ChartContext into ChartPanel and IndicatorPanel",
+      "acceptanceCriteria": [
+        "ChartPanel creates ChartContext once at start of _render_chart()",
+        "Pass ChartContext to _renderer.render() instead of individual parameters",
+        "Update ChartRenderer.render() signature to accept ChartContext (keep old signature as deprecated)",
+        "ChartPanel stores self._chart_context for RSI panel updates",
+        "IndicatorPanel.show_indicator() accepts optional ChartContext parameter",
+        "If ChartContext provided, extract chart_area_width and y_axis_width from it",
+        "Remove hardcoded y_axis_padding = ' ' * 12 - use context.y_axis_width",
+        "RSIPanel receives chart_context from ChartPanel",
+        "Test: RSI indicator line starts at same X position as price chart data",
+        "Test: RSI panel width matches price chart width exactly",
+        "Backward compatible - old call signatures still work",
+        "All existing tests still pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-050"],
+      "notes": "Combines former VPR-045 and VPR-046. ChartContext becomes the contract between components. Fixes rsi-defect-1-width-mismatch."
+    },
+    {
+      "id": "VPR-052",
+      "title": "Extract X-axis rendering to shared component",
+      "acceptanceCriteria": [
+        "New function: render_x_axis(context: ChartContext) -> list[str] in chart_renderer.py",
+        "Extracts X-axis rendering logic from _render_braille() and _render_block()",
+        "Returns 1-2 lines: optional border line (└───) and date labels",
+        "ChartPanel renders X-axis ONCE at bottom, after all panels",
+        "ChartDimensions.include_x_axis=False becomes the default for panel renders",
+        "X-axis dates align with price chart data points",
+        "Test: X-axis rendered only once regardless of visible indicators",
+        "Test: Date labels align with chart data correctly"
+      ],
+      "priority": 3,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-051"],
+      "notes": "Ensures X-axis is always visible at bottom regardless of which indicators are shown. Future-proofs for MACD panel stacking."
+    },
+    {
+      "id": "VPR-053",
+      "title": "Visual polish and comprehensive testing",
+      "acceptanceCriteria": [
+        "Manual testing: verify all toggle combinations look correct",
+        "Test at minimum terminal size (80x24) - all elements visible",
+        "Test at large terminal size - layout scales properly",
+        "Test all timeframes (1W through MAX) with RSI on/off",
+        "Test with crypto tickers (BTC, ETH) - same layout behavior",
+        "Fix any edge cases discovered during testing",
+        "Update AGENTS.md with learnings from Feature 4 and 5",
+        "All 678+ existing tests pass",
+        "Coverage remains above 90%"
+      ],
+      "priority": 4,
+      "passes": false,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-051", "VPR-052"],
+      "notes": "Final verification pass. All the structural work is done, this is polish and documentation."
+    }
+  ],
+  "technicalNotes": {
+    "criticalLearningsFromAgentsMd": [
+      "NEVER use ANSI escape codes for colors in Textual widgets - use Rich markup ([green]text[/green])",
+      "Label widgets need markup=True to render Rich markup colors", 
+      "Use styles.display = 'block'/'none' for visibility toggling",
+      "Textual CSS height: auto and 1fr can conflict - prefer explicit heights for predictable layout",
+      "Widget compose() defines structure, _render_content() updates dynamic content",
+      "Use container.remove_children() + mount() pattern for dynamic updates",
+      "RSI panel uses [cyan] Rich markup for indicator line, reference lines use [red]/[green]"
+    ],
+    "architecturePrinciples": [
+      "Single source of truth: ChartContext holds all shared dimensions",
+      "Parent orchestrates: ChartPanel calculates total layout, children render within bounds",
+      "Immutable data: ChartContext is frozen, safe to pass around",
+      "Consistent interface: All indicators extend IndicatorPanel with same contract",
+      "Explicit heights: Don't rely on CSS auto-sizing for predictable layouts"
+    ],
+    "filesToModify": [
+      "viper/widgets/chart_panel.py - integrate ChartContext",
+      "viper/widgets/chart_renderer.py - extract X-axis, accept ChartContext", 
+      "viper/widgets/indicator_panel.py - use ChartContext for alignment",
+      "viper/widgets/rsi_panel.py - pass ChartContext from parent"
+    ],
+    "newFiles": [
+      "viper/widgets/chart_context.py - ChartContext dataclass",
+      "tests/test_chart_context.py - unit tests for ChartContext"
+    ],
+    "testingStrategy": [
+      "Unit tests for ChartContext creation and immutability",
+      "Unit tests for X-axis rendering in isolation",
+      "Integration tests for RSI alignment with price chart",
+      "Visual testing: manual verification with screenshots",
+      "Dimension testing: 80x24 minimum, large terminals"
+    ]
+  },
+  "outOfScope": [
+    "New indicators (MACD, Stochastic) - future feature, but this architecture enables them",
+    "Candlestick chart style - separate enhancement", 
+    "Overlapping volume on price chart (semi-transparent) - would require different rendering",
+    "Multiple Y-axes for indicators - each indicator has own scale",
+    "Horizontal scrolling/panning - complex feature for later"
+  ],
+  "successMetrics": [
+    "RSI indicator horizontally aligns PERFECTLY with price chart data points",
+    "X-axis appears once at bottom, readable in all toggle states", 
+    "ChartContext is the single source of truth for dimensions",
+    "All 678+ existing tests pass",
+    "Code coverage remains above 90%",
+    "No mypy --strict errors",
+    "Layout works correctly at 80x24 minimum terminal size",
+    "Architecture is documented and ready for MACD implementation"
+  ],
+  "storyDependencyGraph": {
+    "description": "Simple linear dependency for this feature",
+    "flow": "VPR-050 → VPR-051 → VPR-052 → VPR-053"
+  }
+}

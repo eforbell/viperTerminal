@@ -1,153 +1,162 @@
 {
-  "branchName": "viper/feature-4-chart-layout-refactoring",
+  "branchName": "viper/feature-4-chart-bug-fixes",
   "projectName": "Viper Terminal - Feature 4",
-  "description": "Chart Layout Architecture Refactoring: Establish consistent sub-panel architecture with shared X-axis and proper indicator alignment. Address layout bugs where volume and RSI panels occlude each other.",
+  "description": "Chart Layout Bug Fixes: Fix volume/RSI occlusion bug, RSI stale data bug, and simplify by making volume always-on. This feature delivers working chart functionality; architectural improvements follow in Feature 5.",
   "principles": [
     "Rock-solid quality over speed - every feature must be bulletproof before moving on",
     "Comprehensive test coverage - unit tests, integration tests, edge cases", 
     "All tests must pass before a story is marked complete",
     "No story is done until it's documented and tested",
     "Fail fast, fail loudly - errors should be obvious and actionable",
-    "Consistent architecture - establish patterns for future indicator additions",
-    "Apply learnings from AGENTS.md - no ANSI codes, use Rich markup, explicit heights"
+    "TEST BEFORE FIX - characterization tests capture current behavior before changes",
+    "Apply learnings from AGENTS.md - no ANSI codes in Textual, use Rich markup, explicit heights",
+    "FIX FIRST, REFACTOR LATER - get it working, then make it pretty (Feature 5)"
   ],
+  "CRITICAL_RENDERING_NOTES": {
+    "warning": "⚠️ READ THIS BEFORE ANY WIDGET/RENDERING WORK ⚠️",
+    "textual_colors": "Textual uses Rich markup, NOT ANSI escape codes!",
+    "correct_syntax": "[green]text[/green], [cyan]char[/cyan], [red]value[/red]",
+    "wrong_syntax": "\\033[32m (ANSI codes will BREAK rendering in Textual widgets)",
+    "label_markup": "When Label contains Rich markup, you MUST set markup=True",
+    "volume_bars_note": "Volume bars in chart_renderer.py use Rich markup [green][/green] and [red][/red]",
+    "indicator_panel_note": "IndicatorPanel uses [cyan] for data and reference line colors via Rich markup",
+    "affected_features": ["volume bars", "moving average overlays", "RSI indicators", "any colored chart elements"]
+  },
   "techStack": {
     "language": "Python 3.11+",
     "tui": "Textual (built on Rich)",
     "stockData": "yfinance (already integrated)",
-    "cryptoData": "CoinGecko API (already integrated)",
+    "cryptoData": "yfinance with SYMBOL-USD format",
     "charting": "Custom Unicode/Braille renderer (already working)",
     "testing": "pytest + pytest-asyncio + pytest-cov",
-    "mocking": "pytest-mock, respx (for HTTP mocking)",
+    "mocking": "pytest-mock",
     "typecheck": "mypy --strict",
     "linting": "ruff"
   },
   "background": {
-    "problemStatement": "The current ChartPanel has an inconsistent architecture: volume bars are rendered as inline Labels within #chart-content while RSI is a separate IndicatorPanel widget. This causes layout conflicts where toggling RSI visibility occludes volume bars and X-axis labels.",
-    "currentState": [
-      "Volume bars rendered inline as Labels in _render_chart()",
-      "RSI panel is a sibling widget to #chart-content container", 
-      "X-axis rendered as part of price chart, not shared",
-      "Height calculations scattered across multiple methods",
-      "Toggle interactions cause visual occlusion bugs"
+    "problemStatement": "The current ChartPanel has layout bugs: (1) toggling RSI visibility causes volume bars and X-axis to be pushed out of view, (2) RSI panel shows stale data when switching tickers, (3) volume toggle adds unnecessary complexity.",
+    "rootCause": "The bug is in _render_chart() height calculation. When RSI is visible, code does: available_height = self.size.height - 7 - volume_height - rsi_height. But RSI is NOT inside #chart-content - it's yielded separately in compose(). So the chart area shrinks but RSI panel then ADDS 7 more rows below it, causing overflow.",
+    "currentArchitecture": {
+      "ChartPanel_compose": "yields Container(id='chart-content') + RSIPanel (sibling)",
+      "chart_content_contains": "Header, timeframe bar, stats, price chart lines, X-axis, volume bars (all as Labels)",
+      "RSIPanel_is": "A sibling Widget with its own Container, NOT inside chart-content",
+      "height_calculation": "Incorrectly subtracts RSI height from chart area when RSI is actually ADDED as sibling"
+    },
+    "knownBugs": [
+      "volume-bar-occlusion-with-RSI-loaded.png - CORE BUG: volume and x-axis hidden when RSI visible",
+      "rsi-defect-2-same-data-different-tickers.md - RSI shows stale data on ticker switch",
+      "rsi-defect-3-stale-on-ticker-switch.md - RSI panel not re-rendered when ticker changes"
     ],
-    "desiredState": [
-      "Clean separation: PriceSubPanel (with embedded volume) + IndicatorPanels + SharedXAxis",
-      "Single ChartContext dataclass shared by all sub-panels",
-      "X-axis rendered once at bottom, after all panels",
-      "Volume always visible (no toggle), tightly coupled with price",
-      "Perfect alignment between price chart and indicators"
+    "deferredToFeature5": [
+      "rsi-defect-1-width-mismatch.md - RSI panel hardcoded 70 chars vs dynamic chart width",
+      "chart-6m-plot-area-not-full-width.md - 6M timeframe chart doesn't use full width",
+      "ChartContext shared data structure",
+      "X-axis extraction to shared component"
     ]
   },
   "userStories": [
     {
       "id": "VPR-040",
-      "title": "Create ChartContext shared data structure",
+      "title": "Add characterization tests for current layout behavior",
       "acceptanceCriteria": [
-        "ChartContext dataclass with frozen=True for immutability",
-        "Fields: dates, prices, volumes, opens, closes, highs, lows",
-        "Fields: chart_width, y_axis_width, period, ticker",
-        "Factory method to create from HistoricalData + calculated dimensions",
-        "Unit tests for ChartContext creation and immutability"
+        "Test ChartPanel._render_chart() with RSI hidden - captures current height calculation",
+        "Test ChartPanel._render_chart() with RSI visible - documents current (buggy) behavior",
+        "Test that toggling RSI calls _render_content() and changes available_height",
+        "Test IndicatorPanel receives chart_width parameter correctly",
+        "Test RSI panel refresh on ticker change (documents current bug)",
+        "Tests use mocked data to be deterministic",
+        "All tests PASS with current code (characterize, don't fix yet)"
       ],
       "priority": 1,
-      "passes": true,
-      "estimatedEffort": "Small",
+      "passes": false,
+      "estimatedEffort": "Medium",
       "dependencies": [],
-      "notes": "Foundation dataclass - single source of truth for all sub-panels"
+      "notes": "CRITICAL: Must capture current behavior before fixing. These tests document the bugs. Mark tests with @pytest.mark.characterization so we can update them as bugs are fixed."
     },
     {
       "id": "VPR-041",
-      "title": "Extract X-axis rendering to standalone component",
+      "title": "Fix RSI panel stale data bug",
       "acceptanceCriteria": [
-        "New render_x_axis() function or XAxisRenderer class",
-        "Accepts ChartContext for dates, chart_width, y_axis_width",
-        "Returns list of strings (typically 2 lines: border + labels)",
-        "Remove X-axis rendering from main chart render path",
-        "ChartDimensions.include_x_axis still works but defaults to False",
-        "Unit tests for X-axis rendering in isolation"
+        "When ticker changes, RSI panel MUST re-render with new data",
+        "Fix: IndicatorPanel.show_indicator() must call _render_content() even when panel is hidden",
+        "Alternative fix: ChartPanel.show_chart() must explicitly refresh RSI panel after state change",
+        "Test: Switch from AAPL to MSFT, verify RSI panel shows different data",
+        "Test: RSI panel updates immediately, not requiring toggle",
+        "Update characterization test from VPR-040 to expect correct behavior"
       ],
       "priority": 2,
-      "passes": true,
-      "estimatedEffort": "Medium",
+      "passes": false,
+      "estimatedEffort": "Small",
       "dependencies": ["VPR-040"],
-      "notes": "X-axis will be rendered once at bottom of all chart content"
+      "notes": "Quick bug fix that improves user experience immediately. Low risk change - just ensure refresh happens."
     },
     {
       "id": "VPR-042",
-      "title": "Lock volume as always-on and clean up rendering",
+      "title": "Lock volume as always-on (remove toggle complexity)",
       "acceptanceCriteria": [
-        "Remove 'v' keybinding for volume toggle from app.py",
-        "Remove volume_enabled config option",
-        "Remove toggle_volume() method and is_volume_enabled()",
-        "Remove [Vol: ON/OFF] from chart header",
-        "Volume stats always shown in stats line",
-        "Update help screen to remove volume toggle references",
-        "Volume renders in bottom portion of price chart area",
-        "All existing volume rendering tests updated"
+        "Remove 'v' keybinding for volume toggle from app.py BINDINGS",
+        "Remove action_toggle_volume() method from app.py",
+        "Remove _volume_enabled state variable from ChartPanel",
+        "Remove toggle_volume() and is_volume_enabled() methods from ChartPanel",
+        "Remove volume_enabled parameter from ChartPanel.__init__()",
+        "Remove volume_enabled from config.py Config dataclass",
+        "Remove [Vol: ON/OFF] from chart header - just show ticker/period",
+        "Volume stats always shown in stats line (remove conditional)",
+        "Update help_screen.py to remove volume toggle documentation",
+        "Update ALL tests that reference volume toggle to remove those assertions",
+        "Volume rendering code stays the same, just always runs"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "estimatedEffort": "Small",
       "dependencies": [],
-      "notes": "Simplifies logic, matches traditional charting UX where volume is always visible"
+      "notes": "Pure removal/simplification - makes the core fix easier by removing a toggle state. Matches TradingView where volume is always visible below price."
     },
     {
       "id": "VPR-043",
-      "title": "Refactor IndicatorPanel to use ChartContext",
+      "title": "Fix height calculation for RSI panel (core bug fix)",
       "acceptanceCriteria": [
-        "IndicatorPanel.show_indicator() accepts ChartContext",
-        "Panel extracts chart_width, y_axis_width from context",
-        "Y-axis padding matches price chart exactly",
-        "RSIPanel updated to work with new interface",
-        "Indicator chart aligns perfectly with price chart above",
-        "Unit tests verify alignment calculations"
+        "UNDERSTAND THE BUG: RSI panel is a SIBLING to #chart-content, not a child",
+        "When RSI visible: available_height should NOT subtract rsi_height because RSI is separate widget",
+        "RECOMMENDED FIX: Remove rsi_height from calculation, let Textual stack RSI below naturally",
+        "Alternative: Move RSI panel INSIDE #chart-content as a mounted child (more complex)",
+        "Test: Toggle RSI on/off, verify volume bars and X-axis remain visible",
+        "Test: Price chart height adjusts correctly when RSI toggled",
+        "Update characterization tests to expect correct behavior",
+        "Manual verification: screenshot with RSI on shows volume bars and X-axis"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "estimatedEffort": "Medium",
-      "dependencies": ["VPR-040"],
-      "notes": "Ensures all indicators use consistent dimensions for perfect alignment"
+      "dependencies": ["VPR-040", "VPR-042"],
+      "notes": "This is THE core bug fix. The fix is likely just removing 'rsi_height' from the calculation since RSI stacks as a sibling naturally."
     },
     {
       "id": "VPR-044",
-      "title": "Refactor ChartPanel layout orchestration",
+      "title": "Verification and cleanup",
       "acceptanceCriteria": [
-        "ChartPanel builds ChartContext once per render",
-        "Price+volume section gets calculated height",
-        "Each visible indicator panel gets its fixed height",
-        "X-axis rendered last, always at bottom",
-        "No more height calculation duplication",
-        "Toggling RSI does not affect price/volume visibility",
-        "Container heights set explicitly, not relying on CSS auto/1fr",
-        "Integration tests verify all toggle combinations work"
+        "Manual testing: verify RSI toggle works without occluding volume/X-axis",
+        "Test at minimum terminal size (80x24) - all elements visible",
+        "Test all timeframes (1W through MAX) with RSI on/off",
+        "Test with crypto tickers (BTC, ETH) - same layout behavior",
+        "Fix any edge cases discovered during testing",
+        "All 678+ existing tests pass",
+        "Coverage remains above 90%",
+        "Remove or update @pytest.mark.characterization tests"
       ],
       "priority": 5,
-      "passes": true,
-      "estimatedEffort": "Large",
-      "dependencies": ["VPR-041", "VPR-042", "VPR-043"],
-      "notes": "Main orchestration refactoring - most complex story"
-    },
-    {
-      "id": "VPR-045",
-      "title": "Visual polish and alignment verification",
-      "acceptanceCriteria": [
-        "RSI indicator line aligns with price chart data points",
-        "X-axis date labels align with chart data",
-        "Y-axis labels don't shift when indicators toggle",
-        "Layout works at minimum terminal size (80x24)",
-        "Layout scales properly to large terminals", 
-        "Manual verification with multiple tickers and timeframes",
-        "Update AGENTS.md with learnings from this refactoring"
-      ],
-      "priority": 6,
-      "passes": true,
+      "passes": false,
       "estimatedEffort": "Small",
-      "dependencies": ["VPR-044"],
-      "notes": "Final verification and documentation of refactoring"
+      "dependencies": ["VPR-041", "VPR-043"],
+      "notes": "Final verification that all bugs are fixed. After this story, Feature 4 is complete and ready to merge."
     }
   ],
   "technicalNotes": {
+    "criticalBugAnalysis": {
+      "occlusion_root_cause": "In _render_chart(), line ~295: 'rsi_height = 7 if self.is_rsi_visible() else 0' then 'available_height = self.size.height - 7 - volume_height - rsi_height'. But RSI panel is yielded from compose() as a SIBLING to #chart-content, not inside it. So shrinking chart-content doesn't make room - Textual just stacks RSI below, causing overflow.",
+      "fix_approach": "Remove rsi_height from the calculation. RSI panel stacks naturally as a sibling via Textual's layout model.",
+      "expected_fix": "Change: available_height = self.size.height - 7 - volume_height (remove - rsi_height)"
+    },
     "criticalLearningsFromAgentsMd": [
       "NEVER use ANSI escape codes for colors in Textual widgets - use Rich markup ([green]text[/green])",
       "Label widgets need markup=True to render Rich markup colors", 
@@ -156,44 +165,52 @@
       "Widget compose() defines structure, _render_content() updates dynamic content",
       "Use container.remove_children() + mount() pattern for dynamic updates"
     ],
-    "architecturePrinciples": [
-      "Single source of truth: ChartContext holds all shared data",
-      "Parent orchestrates: ChartPanel calculates heights, children render within bounds", 
-      "Immutable data: ChartContext is frozen, passed by reference safely",
-      "Consistent interface: All indicators extend IndicatorPanel with same contract"
-    ],
+    "textualLayoutModel": {
+      "compose_yields": "Creates persistent widget tree, siblings stack vertically by default",
+      "key_insight": "RSI panel yielded from compose() is a SIBLING that stacks BELOW, not space reserved inside",
+      "height_management": "Don't subtract sibling heights - Textual handles stacking automatically"
+    },
     "filesToModify": [
-      "viper/widgets/chart_panel.py - main refactoring target",
-      "viper/widgets/chart_renderer.py - extract X-axis, update render signature", 
-      "viper/widgets/indicator_panel.py - update to use ChartContext",
-      "viper/widgets/rsi_panel.py - minor updates for new interface",
+      "viper/widgets/chart_panel.py - fix height calculation, remove volume toggle",
+      "viper/widgets/indicator_panel.py - ensure refresh on show_indicator()",
       "viper/app.py - remove volume toggle keybinding",
       "viper/config.py - remove volume_enabled option",
       "viper/widgets/help_screen.py - update documentation"
     ],
-    "newFiles": [
-      "viper/widgets/chart_context.py - ChartContext dataclass (or add to chart_renderer.py)"
-    ],
     "testingStrategy": [
-      "Unit tests for ChartContext creation", 
-      "Unit tests for X-axis rendering in isolation",
-      "Integration tests for all RSI on/off combinations",
-      "Visual regression: manual testing with screenshots",
-      "Test at various terminal dimensions"
+      "VPR-040: Characterization tests FIRST to capture current behavior",
+      "Each story: Unit tests for modifications",
+      "Integration tests: Toggle RSI on/off, verify no occlusion",
+      "Visual testing: Manual verification with screenshots",
+      "Dimension testing: 80x24 minimum"
     ]
   },
   "outOfScope": [
-    "New indicators (MACD, Stochastic) - future feature",
-    "Candlestick chart style - separate enhancement", 
-    "Overlapping volume on price chart (semi-transparent) - would require different rendering approach",
-    "Multiple Y-axes for indicators - each indicator has own scale"
+    "ChartContext shared data structure - Feature 5",
+    "X-axis extraction to shared component - Feature 5",
+    "Perfect pixel alignment - Feature 5 (good enough alignment achieved here)",
+    "New indicators (MACD, Stochastic) - Future feature",
+    "Candlestick chart style - separate enhancement"
   ],
   "successMetrics": [
-    "All toggle combinations (RSI on/off) render correctly without occlusion",
-    "RSI indicator horizontally aligns with price chart",
-    "X-axis appears once at bottom, readable in all states", 
+    "Volume bars and X-axis ALWAYS visible regardless of RSI toggle state",
+    "RSI panel updates immediately when ticker changes (no stale data)",
+    "Volume is always on (no toggle, simpler UX)",
     "All 678+ existing tests pass",
     "Code coverage remains above 90%",
-    "No mypy --strict errors"
-  ]
+    "No mypy --strict errors",
+    "Layout works correctly at 80x24 minimum terminal size"
+  ],
+  "storyDependencyGraph": {
+    "description": "Dependency flow for bug fix stories",
+    "parallel_start": ["VPR-040 (characterization)", "VPR-042 (remove volume toggle)"],
+    "after_characterization": "VPR-041 (RSI stale fix) depends on VPR-040",
+    "core_fix": "VPR-043 (height calc fix) depends on VPR-040, VPR-042",
+    "final": "VPR-044 (verification) depends on VPR-041, VPR-043"
+  },
+  "nextFeature": {
+    "name": "Feature 5: Chart Architecture Refactoring",
+    "description": "After Feature 4 is merged, Feature 5 introduces ChartContext, perfect alignment, and X-axis extraction",
+    "stories": ["VPR-050", "VPR-051", "VPR-052", "VPR-053"]
+  }
 }
