@@ -14,13 +14,14 @@ from viper.services.history_data import (
     calculate_stats,
     fetch_historical_data,
 )
-from viper.services.indicators import calculate_sma
+from viper.services.indicators import calculate_rsi, calculate_sma
 from viper.widgets.chart_renderer import (
     ChartDimensions,
     ChartRenderer,
     ChartStyle,
     OverlayData,
 )
+from viper.widgets.rsi_panel import RSIPanel
 
 
 class ChartPanel(Widget):
@@ -128,10 +129,17 @@ class ChartPanel(Widget):
         self._ma_mode: str = "off"  # Cycle: off -> sma20 -> sma50 -> both -> off
         self._sma20: list[float | None] | None = None  # Cached SMA20 values
         self._sma50: list[float | None] | None = None  # Cached SMA50 values
+        # RSI indicator state
+        self._rsi_values: list[float | None] | None = None  # Cached RSI values
+        self._rsi_panel: RSIPanel | None = None  # RSI panel widget
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
         yield Container(id="chart-content")
+        # RSI panel starts hidden
+        self._rsi_panel = RSIPanel()
+        self._rsi_panel.hide()
+        yield self._rsi_panel
 
     def show_loading(self, ticker: str, period: str) -> None:
         """Display loading state with spinner.
@@ -159,6 +167,8 @@ class ChartPanel(Widget):
         self._current_period = data.period
         # Calculate moving averages when chart loads (cache for toggles)
         self._calculate_moving_averages(data.prices)
+        # Calculate RSI when chart loads (cache for toggles)
+        self._calculate_rsi(data.prices)
         self._render_content()
 
     def show_error(self, error: HistoricalDataError) -> None:
@@ -312,13 +322,13 @@ class ChartPanel(Widget):
         if self._ma_mode in ("sma20", "both") and self._sma20:
             overlays.append(OverlayData(
                 values=self._sma20,
-                color="\033[36m",  # Cyan for SMA20
+                color="cyan",  # Cyan for SMA20
                 name="SMA20"
             ))
         if self._ma_mode in ("sma50", "both") and self._sma50:
             overlays.append(OverlayData(
                 values=self._sma50,
-                color="\033[35m",  # Magenta for SMA50
+                color="magenta",  # Magenta for SMA50
                 name="SMA50"
             ))
 
@@ -331,8 +341,10 @@ class ChartPanel(Widget):
         )
 
         # Mount each line of the chart
+        # Enable markup when overlays are present (they use Rich markup for colors)
+        has_overlays = bool(overlays)
         for line in rendered.lines:
-            container.mount(Label(line, classes="chart-line", markup=False))
+            container.mount(Label(line, classes="chart-line", markup=has_overlays))
 
         # Render volume bars if enabled
         if self._volume_enabled and len(data.volumes) > 0:
@@ -436,6 +448,21 @@ class ChartPanel(Widget):
         self._sma20 = calculate_sma(prices, 20) if len(prices) >= 20 else None
         self._sma50 = calculate_sma(prices, 50) if len(prices) >= 50 else None
 
+    def _calculate_rsi(self, prices: list[float]) -> None:
+        """Calculate and cache RSI for the current chart data.
+
+        Args:
+            prices: List of price values
+        """
+        # Calculate RSI (requires at least 15 prices: 14 for period + 1 for first calculation)
+        self._rsi_values = calculate_rsi(prices, 14) if len(prices) >= 15 else None
+
+        # Update RSI panel if visible
+        if self._rsi_panel and self._rsi_values:
+            # Get latest non-None RSI value
+            current_rsi = next((v for v in reversed(self._rsi_values) if v is not None), None)
+            self._rsi_panel.show_indicator(self._rsi_values, current_rsi)
+
     def cycle_ma_display(self) -> None:
         """Cycle through moving average display modes: off -> sma20 -> sma50 -> both -> off."""
         # Define cycle order
@@ -453,3 +480,20 @@ class ChartPanel(Widget):
             Current mode: 'off', 'sma20', 'sma50', or 'both'
         """
         return self._ma_mode
+
+    def toggle_rsi(self) -> None:
+        """Toggle RSI indicator panel visibility."""
+        if self._rsi_panel:
+            self._rsi_panel.toggle_visibility()
+            # If panel is now visible and we have RSI data, update it
+            if self._rsi_panel.is_visible() and self._rsi_values:
+                current_rsi = next((v for v in reversed(self._rsi_values) if v is not None), None)
+                self._rsi_panel.show_indicator(self._rsi_values, current_rsi)
+
+    def is_rsi_visible(self) -> bool:
+        """Check if RSI panel is currently visible.
+
+        Returns:
+            True if RSI is visible, False otherwise
+        """
+        return self._rsi_panel.is_visible() if self._rsi_panel else False

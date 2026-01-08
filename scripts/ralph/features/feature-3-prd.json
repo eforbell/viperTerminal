@@ -11,6 +11,16 @@
     "Reuse existing patterns from MVP - consistent architecture",
     "Performance matters - data fetching should not block the UI"
   ],
+  "CRITICAL_RENDERING_NOTES": {
+    "warning": "⚠️ READ THIS BEFORE ANY WIDGET/RENDERING WORK ⚠️",
+    "textual_colors": "Textual uses Rich markup, NOT ANSI escape codes!",
+    "correct_syntax": "[green]text[/green], [cyan]char[/cyan], [red]value[/red]",
+    "wrong_syntax": "\\033[32m (ANSI codes will break rendering and screenshots)",
+    "label_markup": "When Label contains Rich markup, you MUST set markup=True",
+    "example_correct": "Label(f'[green]{char}[/green]', markup=True)",
+    "example_wrong": "Label(f'\\033[32m{char}\\033[0m', markup=False)",
+    "affected_features": ["volume bars", "moving average overlays", "RSI indicators", "any colored chart elements"]
+  },
   "techStack": {
     "language": "Python 3.11+",
     "tui": "Textual (built on Rich)",

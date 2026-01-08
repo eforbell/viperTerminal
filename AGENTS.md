@@ -2,6 +2,40 @@
 
 This file documents patterns, best practices, and gotchas discovered during development.
 
+## ⚠️ CRITICAL: Textual Color Rendering ⚠️
+
+**NEVER USE ANSI ESCAPE CODES** for colors in Textual widgets!
+
+Textual uses **Rich markup** (`[green]text[/green]`), NOT ANSI codes (`\033[32m`).
+
+ANSI escape codes will:
+1. Be treated as literal characters (not interpreted)
+2. Break widget rendering and layout
+3. Cause screenshots to fail
+4. Display garbage like `[0m` or escape sequences
+
+**CORRECT (Rich markup):**
+```python
+volume_bars.append(f"[green]{char}[/green]")  # ✅ Works!
+overlay_char = f"[cyan]{char}[/cyan]"          # ✅ Works!
+```
+
+**WRONG (ANSI codes):**
+```python
+volume_bars.append(f"\033[32m{char}\033[0m")  # ❌ BROKEN!
+overlay_char = f"\033[36m{char}\033[0m"        # ❌ BROKEN!
+```
+
+**ALSO CRITICAL:** When using Rich markup in Label widgets, you MUST set `markup=True`:
+```python
+Label(line_with_colors, markup=True)   # ✅ Renders colors
+Label(line_with_colors, markup=False)  # ❌ Shows literal [green] tags
+```
+
+This applies to: volume bars, moving average overlays, RSI indicators, any colored text.
+
+---
+
 ## Codebase Patterns
 
 ### Python Project Setup

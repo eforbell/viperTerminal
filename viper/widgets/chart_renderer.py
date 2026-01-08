@@ -18,7 +18,7 @@ class OverlayData:
     """Data for a single overlay line on the chart."""
 
     values: list[float | None]  # Overlay values (same length as prices), None = no render
-    color: str  # ANSI color code (e.g., "\033[36m" for cyan)
+    color: str  # Rich markup color name (e.g., "cyan", "magenta")
     name: str  # Display name for legend (e.g., "SMA20")
 
 
@@ -535,8 +535,9 @@ class ChartRenderer:
         # Process each overlay
         for overlay in overlays:
             overlay_values = overlay.values
-            color = overlay.color
-            reset = "\033[0m"
+            # Use Rich markup for Textual compatibility
+            color_open = f"[{overlay.color}]"
+            color_close = f"[/{overlay.color}]"
 
             # Apply same interpolation/downsampling as main chart
             if interpolated_count > 0:
@@ -622,9 +623,9 @@ class ChartRenderer:
                     else:
                         continue  # Both None, skip this iteration
 
-                    # Apply colored overlay character
+                    # Apply colored overlay character with Rich markup
                     if 0 <= target_row < chart_height and 0 <= char_idx < chart_width:
-                        grid[target_row][char_idx] = f"{color}{overlay_char}{reset}"
+                        grid[target_row][char_idx] = f"{color_open}{overlay_char}{color_close}"
 
         # Convert grid back to strings
         return ["".join(line) for line in grid]

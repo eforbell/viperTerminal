@@ -672,7 +672,7 @@ class TestOverlayRendering:
         overlay_values = [None] * 10 + [105.0 + i for i in range(40)]  # First 10 are None
         overlay = OverlayData(
             values=overlay_values,
-            color="\033[36m",  # Cyan
+            color="cyan",  # Rich cyan markup
             name="SMA20"
         )
 
@@ -683,7 +683,7 @@ class TestOverlayRendering:
         assert len(result.lines) == 10
         # Should contain ANSI color codes from overlay
         chart_text = "".join(result.lines)
-        assert "\033[36m" in chart_text  # Cyan color code
+        assert "[cyan]" in chart_text  # Rich cyan markup
 
     def test_multiple_overlays(self) -> None:
         """Test rendering with multiple overlays."""
@@ -695,12 +695,12 @@ class TestOverlayRendering:
         # Two overlays with different colors
         overlay1 = OverlayData(
             values=[None] * 10 + [102.0 + i * 0.5 for i in range(40)],
-            color="\033[36m",  # Cyan
+            color="cyan",  # Rich cyan markup
             name="SMA20"
         )
         overlay2 = OverlayData(
             values=[None] * 20 + [104.0 + i * 0.5 for i in range(30)],
-            color="\033[35m",  # Magenta
+            color="magenta",  # Rich magenta markup
             name="SMA50"
         )
 
@@ -713,8 +713,8 @@ class TestOverlayRendering:
 
         # Should contain both color codes
         chart_text = "".join(result.lines)
-        assert "\033[36m" in chart_text  # Cyan
-        assert "\033[35m" in chart_text  # Magenta
+        assert "[cyan]" in chart_text  # Rich cyan markup
+        assert "[magenta]" in chart_text  # Rich magenta markup
 
     def test_overlay_with_all_none_values(self) -> None:
         """Test overlay where all values are None."""
@@ -724,7 +724,7 @@ class TestOverlayRendering:
         prices = [100.0 + i for i in range(50)]
         overlay = OverlayData(
             values=[None] * 50,  # All None
-            color="\033[36m",
+            color="cyan",
             name="Empty"
         )
 
@@ -764,7 +764,7 @@ class TestOverlayRendering:
 
         overlay = OverlayData(
             values=overlay_values,
-            color="\033[36m",
+            color="cyan",
             name="MA"
         )
 
@@ -786,7 +786,7 @@ class TestOverlayRendering:
 
         overlay = OverlayData(
             values=overlay_values,
-            color="\033[36m",
+            color="cyan",
             name="SMA"
         )
 
@@ -807,7 +807,7 @@ class TestOverlayRendering:
 
         overlay = OverlayData(
             values=overlay_values,
-            color="\033[36m",
+            color="cyan",
             name="Flat"
         )
 
@@ -851,7 +851,7 @@ class TestOverlayRendering:
         prices = [100.0 + i for i in range(50)]
         overlay = OverlayData(
             values=[105.0 + i for i in range(50)],
-            color="\033[36m",
+            color="cyan",
             name="SMA"
         )
 
@@ -868,7 +868,7 @@ class TestOverlayRendering:
         prices = [100.0 + i for i in range(50)]
         overlay = OverlayData(
             values=[None] * 10 + [105.0 + i for i in range(40)],
-            color="\033[36m",
+            color="cyan",
             name="SMA20"
         )
 
@@ -891,7 +891,7 @@ class TestOverlayRendering:
 
         overlay = OverlayData(
             values=overlay_values,
-            color="\033[36m",
+            color="cyan",
             name="BelowRange"
         )
 

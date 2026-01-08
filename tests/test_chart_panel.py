@@ -1364,3 +1364,220 @@ async def test_chart_panel_ma_toggle_preserves_state() -> None:
         # MA values should still be cached (not recalculated on toggle)
         assert panel._sma20 is initial_sma20
         assert panel._sma50 is initial_sma50
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_rsi_calculation() -> None:
+    """Test that RSI is calculated when chart loads."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data with enough points for RSI (requires 15+ points)
+        dates = [datetime(2024, 1, i + 1) for i in range(30)]
+        prices = [float(100 + i % 10) for i in range(30)]
+        volumes = [int(1000000 + i * 10000) for i in range(30)]
+        opens = [float(100 + (i + 0.5) % 10) for i in range(30)]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=sum(volumes) / len(volumes),
+        )
+
+        # Show chart
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # RSI should be calculated
+        assert panel._rsi_values is not None
+        assert len(panel._rsi_values) == len(prices)
+        # First 14 values should be None (RSI period)
+        assert all(v is None for v in panel._rsi_values[:14])
+        # Remaining values should be floats between 0 and 100
+        assert all(
+            v is None or (isinstance(v, float) and 0 <= v <= 100)
+            for v in panel._rsi_values
+        )
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_rsi_toggle() -> None:
+    """Test that RSI panel can be toggled on and off."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # RSI panel should start hidden
+        assert panel._rsi_panel is not None
+        assert panel.is_rsi_visible() is False
+
+        # Load chart data
+        dates = [datetime(2024, 1, i + 1) for i in range(30)]
+        prices = [float(100 + i % 10) for i in range(30)]
+        volumes = [int(1000000) for _ in range(30)]
+        opens = [float(100) for _ in range(30)]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+        )
+
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Toggle RSI on
+        panel.toggle_rsi()
+        await pilot.pause()
+        assert panel.is_rsi_visible() is True
+
+        # Toggle RSI off
+        panel.toggle_rsi()
+        await pilot.pause()
+        assert panel.is_rsi_visible() is False
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_rsi_insufficient_data() -> None:
+    """Test that RSI is not calculated when data is insufficient."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data with too few points for RSI (< 15)
+        dates = [datetime(2024, 1, i + 1) for i in range(10)]
+        prices = [float(100 + i) for i in range(10)]
+        volumes = [int(1000000) for _ in range(10)]
+        opens = [float(100) for _ in range(10)]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1W",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+        )
+
+        # Show chart
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # RSI should be None due to insufficient data
+        assert panel._rsi_values is None
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_rsi_panel_updates() -> None:
+    """Test that RSI panel receives data updates when visible."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data
+        dates = [datetime(2024, 1, i + 1) for i in range(30)]
+        prices = [float(100 + i % 10) for i in range(30)]
+        volumes = [int(1000000) for _ in range(30)]
+        opens = [float(100) for _ in range(30)]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+        )
+
+        # Show chart and toggle RSI on
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        panel.toggle_rsi()
+        await pilot.pause()
+
+        # RSI panel should have received the data
+        assert panel._rsi_panel is not None
+        assert panel._rsi_panel.is_visible() is True
+        assert panel._rsi_panel._indicator_values == panel._rsi_values
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_rsi_caching() -> None:
+    """Test that RSI values are cached and not recalculated on toggle."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data
+        dates = [datetime(2024, 1, i + 1) for i in range(30)]
+        prices = [float(100 + i % 10) for i in range(30)]
+        volumes = [int(1000000) for _ in range(30)]
+        opens = [float(100) for _ in range(30)]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+        )
+
+        # Show chart
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Store initial RSI values
+        initial_rsi = panel._rsi_values
+
+        # Toggle RSI on and off
+        panel.toggle_rsi()
+        await pilot.pause()
+        panel.toggle_rsi()
+        await pilot.pause()
+
+        # RSI values should still be cached (not recalculated on toggle)
+        assert panel._rsi_values is initial_rsi
