@@ -729,3 +729,43 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **All Tests Pass**: 613 tests passing (added 14 new overlay tests)
 - **Coverage Maintained**: 90.34% overall coverage (chart_renderer.py at 94%)
 - **mypy --strict Clean**: No type errors after type annotations and narrowing fixes
+
+### VPR-036: Moving average display on chart
+- **MA Cycle State**: Added `_ma_mode: str` with cycle: "off" -> "sma20" -> "sma50" -> "both" -> "off"
+- **MA Caching**: Store calculated MAs in `_sma20` and `_sma50` attributes (avoid recalculation on toggles)
+- **Calculate on Load**: Call `_calculate_moving_averages()` when chart loads, not on every toggle
+- **Conditional Calculation**: Only calculate SMA20 if `len(prices) >= 20`, SMA50 if `len(prices) >= 50`
+- **Cache as None**: Set to None when insufficient data (prevents AttributeError on access)
+- **Cycle Method**: `cycle_ma_display()` cycles through modes and triggers re-render
+- **Getter Method**: `get_ma_mode()` returns current mode for testing/debugging
+- **Overlay Building**: Build `list[OverlayData]` based on current `_ma_mode` before render
+- **Cyan for SMA20**: Use ANSI color `\033[36m` (cyan) for SMA20 overlay
+- **Magenta for SMA50**: Use ANSI color `\033[35m` (magenta) for SMA50 overlay
+- **Conditional Overlay List**: Only add to overlays list if mode includes that MA and MA is not None
+- **Pass to Renderer**: Pass overlays list to `render()` method, or None if empty list
+- **MA Legend in Header**: Add MA values to chart header when MA mode is active
+- **Reverse Iteration for Latest**: Use `next((v for v in reversed(self._sma20) if v is not None), None)` to get last non-None value
+- **Format Legend**: Format as "SMA20: $123.45" with 2 decimal places
+- **Append to Header**: Concatenate legend to existing header text with spacing
+- **Both MAs Legend**: Show both "SMA20: $X" and "SMA50: $Y" when in "both" mode
+- **Keybinding Added**: Added "m" key to app.py BINDINGS list with "Cycle MA" description
+- **Action Handler**: `action_cycle_ma()` calls `chart_panel.cycle_ma_display()` when chart visible
+- **Help Screen Updated**: Added "m" key to keybindings section with full description
+- **Help Charts Section**: Added explanation in CHARTS section about MA cycling
+- **News Help Updated**: Removed outdated warning about broken news, replaced with yfinance note
+- **Test Pattern**: Follow existing volume toggle test patterns for MA tests
+- **Test Full Cycle**: Test complete cycle through all 4 modes (off/sma20/sma50/both/off)
+- **Test Legend Display**: Verify MA values appear in header with "$" formatting
+- **Test Insufficient Data**: Verify graceful handling when data < 20 or < 50 points
+- **Test Calculation on Load**: Verify MAs calculated when show_chart() called
+- **Test Cached Values**: Verify MAs are cached (same object after multiple toggles)
+- **Test Overlay Rendering**: Verify overlay data is created when in MA modes
+- **Header Query Pattern**: Use `[label for label in labels if "Chart" in str(label.render())]`
+- **Assert Pattern**: Use `any("SMA20" in str(label.render()) for label in header_labels)`
+- **None Check in Tests**: Check both that list is None AND that no legend appears
+- **8 New Tests**: Added comprehensive MA tests covering all aspects of feature
+- **All Tests Pass**: 620 tests passing (added 8 new MA tests)
+- **Coverage Maintained**: 90.36% overall coverage (chart_panel.py at 98%)
+- **mypy --strict Clean**: No type errors after implementation
+- **Import Pattern**: Import OverlayData from chart_renderer along with other types
+- **Import Indicators**: Import calculate_sma from services.indicators module

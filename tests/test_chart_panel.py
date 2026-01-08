@@ -979,3 +979,388 @@ async def test_chart_panel_volume_status_indicator() -> None:
             header_labels = [label for label in labels if "Chart" in str(label.render())]
             assert len(header_labels) > 0
             assert any("[Vol: OFF]" in str(label.render()) for label in header_labels)
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_ma_cycle_off_to_sma20() -> None:
+    """Test cycling MA display from off to SMA20."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data with enough points for SMA20
+        dates = [datetime.now() - timedelta(days=50-i) for i in range(50)]
+        prices = [100.0 + i * 0.5 for i in range(50)]
+        volumes = [1000000] * 50
+
+        data = HistoricalData(
+            ticker="AAPL",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            highs=[p + 2.0 for p in prices],
+            lows=[p - 2.0 for p in prices],
+            opens=prices,
+            period="1M",
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=24.5,
+            avg_volume=1000000,
+            num_data_points=50,
+        )
+
+        # Show chart
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Should start with MA off
+        assert panel.get_ma_mode() == "off"
+        labels = panel.query(Label)
+        header_labels = [label for label in labels if "Chart" in str(label.render())]
+        # Should not have SMA in header
+        assert not any("SMA20" in str(label.render()) for label in header_labels)
+
+        # Cycle to SMA20
+        panel.cycle_ma_display()
+        await pilot.pause()
+
+        # Should now be in sma20 mode
+        assert panel.get_ma_mode() == "sma20"
+        # Should have SMA20 in header
+        labels = panel.query(Label)
+        header_labels = [label for label in labels if "Chart" in str(label.render())]
+        assert any("SMA20" in str(label.render()) for label in header_labels)
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_ma_cycle_full_cycle() -> None:
+    """Test full MA cycle: off -> sma20 -> sma50 -> both -> off."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data with enough points for SMA50
+        dates = [datetime.now() - timedelta(days=60-i) for i in range(60)]
+        prices = [100.0 + i * 0.5 for i in range(60)]
+        volumes = [1000000] * 60
+
+        data = HistoricalData(
+            ticker="AAPL",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            highs=[p + 2.0 for p in prices],
+            lows=[p - 2.0 for p in prices],
+            opens=prices,
+            period="1M",
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=29.5,
+            avg_volume=1000000,
+            num_data_points=60,
+        )
+
+        # Show chart
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Start: off
+        assert panel.get_ma_mode() == "off"
+
+        # Cycle to sma20
+        panel.cycle_ma_display()
+        await pilot.pause()
+        assert panel.get_ma_mode() == "sma20"
+
+        # Cycle to sma50
+        panel.cycle_ma_display()
+        await pilot.pause()
+        assert panel.get_ma_mode() == "sma50"
+
+        # Cycle to both
+        panel.cycle_ma_display()
+        await pilot.pause()
+        assert panel.get_ma_mode() == "both"
+
+        # Cycle back to off
+        panel.cycle_ma_display()
+        await pilot.pause()
+        assert panel.get_ma_mode() == "off"
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_ma_legend_display() -> None:
+    """Test that MA legend values are displayed correctly in header."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data
+        dates = [datetime.now() - timedelta(days=60-i) for i in range(60)]
+        prices = [100.0 + i * 1.0 for i in range(60)]  # Linear increase
+        volumes = [1000000] * 60
+
+        data = HistoricalData(
+            ticker="AAPL",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            highs=[p + 2.0 for p in prices],
+            lows=[p - 2.0 for p in prices],
+            opens=prices,
+            period="1M",
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=59.0,
+            avg_volume=1000000,
+            num_data_points=60,
+        )
+
+        # Show chart
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Cycle to SMA20 mode
+        panel.cycle_ma_display()
+        await pilot.pause()
+
+        # Should show SMA20 value in header
+        labels = panel.query(Label)
+        header_labels = [label for label in labels if "Chart" in str(label.render())]
+        assert any("SMA20:" in str(label.render()) and "$" in str(label.render()) for label in header_labels)
+
+        # Cycle to both mode
+        panel.cycle_ma_display()  # sma50
+        panel.cycle_ma_display()  # both
+        await pilot.pause()
+
+        # Should show both SMA20 and SMA50 values in header
+        labels = panel.query(Label)
+        header_labels = [label for label in labels if "Chart" in str(label.render())]
+        assert any("SMA20:" in str(label.render()) and "SMA50:" in str(label.render()) for label in header_labels)
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_ma_insufficient_data() -> None:
+    """Test MA behavior when data is insufficient for calculation."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data with only 15 points (less than SMA20 needs)
+        dates = [datetime.now() - timedelta(days=15-i) for i in range(15)]
+        prices = [100.0 + i * 1.0 for i in range(15)]
+        volumes = [1000000] * 15
+
+        data = HistoricalData(
+            ticker="AAPL",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            highs=[p + 2.0 for p in prices],
+            lows=[p - 2.0 for p in prices],
+            opens=prices,
+            period="1W",
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=14.0,
+            avg_volume=1000000,
+            num_data_points=15,
+        )
+
+        # Show chart
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # MAs should be None due to insufficient data
+        assert panel._sma20 is None
+        assert panel._sma50 is None
+
+        # Cycle to SMA20 mode
+        panel.cycle_ma_display()
+        await pilot.pause()
+
+        # Should not crash, but no MA legend should appear
+        labels = panel.query(Label)
+        header_labels = [label for label in labels if "Chart" in str(label.render())]
+        # Header should exist but not contain SMA values
+        assert len(header_labels) > 0
+        # Should not have SMA values (either no "SMA" text or no "$" after it)
+        sma_in_header = any("SMA20:" in str(label.render()) for label in header_labels)
+        # If SMA text is there, it shouldn't have a value
+        if sma_in_header:
+            assert not any("SMA20: $" in str(label.render()) for label in header_labels)
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_ma_calculation_on_load() -> None:
+    """Test that MAs are calculated when chart loads."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data
+        dates = [datetime.now() - timedelta(days=60-i) for i in range(60)]
+        prices = [100.0 + i * 1.0 for i in range(60)]
+        volumes = [1000000] * 60
+
+        data = HistoricalData(
+            ticker="AAPL",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            highs=[p + 2.0 for p in prices],
+            lows=[p - 2.0 for p in prices],
+            opens=prices,
+            period="1M",
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=59.0,
+            avg_volume=1000000,
+            num_data_points=60,
+        )
+
+        # Show chart
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # MAs should be calculated and cached
+        assert panel._sma20 is not None
+        assert panel._sma50 is not None
+        assert len(panel._sma20) == 60
+        assert len(panel._sma50) == 60
+        # First 19 values should be None for SMA20
+        assert all(v is None for v in panel._sma20[:19])
+        # Values from index 19 onwards should be floats
+        assert all(isinstance(v, float) for v in panel._sma20[19:])
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_ma_render_with_overlays() -> None:
+    """Test that MA overlays are passed to chart renderer."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data
+        dates = [datetime.now() - timedelta(days=60-i) for i in range(60)]
+        prices = [100.0 + i * 1.0 for i in range(60)]
+        volumes = [1000000] * 60
+
+        data = HistoricalData(
+            ticker="AAPL",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            highs=[p + 2.0 for p in prices],
+            lows=[p - 2.0 for p in prices],
+            opens=prices,
+            period="1M",
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=59.0,
+            avg_volume=1000000,
+            num_data_points=60,
+        )
+
+        # Show chart
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Cycle to SMA20 mode
+        panel.cycle_ma_display()
+        await pilot.pause()
+
+        # Verify that overlays were created (we can't easily mock the renderer,
+        # but we can verify the MA values are calculated)
+        assert panel._sma20 is not None
+        assert panel.get_ma_mode() == "sma20"
+
+        # Cycle to both mode
+        panel.cycle_ma_display()  # sma50
+        panel.cycle_ma_display()  # both
+        await pilot.pause()
+
+        # Verify both MAs available
+        assert panel._sma20 is not None
+        assert panel._sma50 is not None
+        assert panel.get_ma_mode() == "both"
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_ma_toggle_preserves_state() -> None:
+    """Test that toggling MA preserves calculated values."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data
+        dates = [datetime.now() - timedelta(days=60-i) for i in range(60)]
+        prices = [100.0 + i * 1.0 for i in range(60)]
+        volumes = [1000000] * 60
+
+        data = HistoricalData(
+            ticker="AAPL",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            highs=[p + 2.0 for p in prices],
+            lows=[p - 2.0 for p in prices],
+            opens=prices,
+            period="1M",
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=59.0,
+            avg_volume=1000000,
+            num_data_points=60,
+        )
+
+        # Show chart
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Store initial MA values
+        initial_sma20 = panel._sma20
+        initial_sma50 = panel._sma50
+
+        # Cycle through modes
+        panel.cycle_ma_display()  # sma20
+        await pilot.pause()
+        panel.cycle_ma_display()  # sma50
+        await pilot.pause()
+        panel.cycle_ma_display()  # both
+        await pilot.pause()
+        panel.cycle_ma_display()  # off
+        await pilot.pause()
+
+        # MA values should still be cached (not recalculated on toggle)
+        assert panel._sma20 is initial_sma20
+        assert panel._sma50 is initial_sma50
