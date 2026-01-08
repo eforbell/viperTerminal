@@ -898,3 +898,74 @@ This applies to: volume bars, moving average overlays, RSI indicators, any color
 - **Dynamic Content**: Use container.remove_children() + container.mount() pattern for updates
 - **No Focus**: Set can_focus = False since panels are informational, not interactive
 - **Color Reset**: Always reset color with \033[0m after colored characters to avoid bleed
+- **Color Reset**: Always reset color with \033[0m after colored characters to avoid bleed
+
+## VPR-039: RSI Indicator Panel Implementation
+
+**Story**: Integrate RSI indicator panel with chart panel, add 'r' keybinding toggle, and comprehensive testing
+
+**Files Changed**:
+- `viper/widgets/rsi_panel.py`: Created RSI-specific panel extending IndicatorPanel base
+- `viper/widgets/chart_panel.py`: Integrated RSI calculation, caching, panel composition, and toggle
+- `viper/app.py`: Added 'r' keybinding for RSI toggle
+- `viper/widgets/help_screen.py`: Added RSI documentation in keybindings and charts sections
+- `tests/test_rsi_panel.py`: Created 14 comprehensive tests for RSI panel widget
+- `tests/test_chart_panel.py`: Added 5 integration tests for RSI in chart panel
+
+**Learnings**:
+- **RSIPanel Extension**: Inherit from IndicatorPanel, configure with RSI-specific params in __init__
+- **Reference Lines Setup**: Define overbought (70, red, dashed) and oversold (30, green, dashed) in constructor
+- **Rich Markup Colors**: Use color names ("red", "green", "cyan") not ANSI codes for Textual compatibility
+- **RSI Range**: Default 0-100 range with min_value=0.0, max_value=100.0 passed to super().__init__
+- **Panel Height**: RSI uses height=4 (4 lines of chart area) which is standard for oscillators
+- **Integration Pattern**: Import RSIPanel in chart_panel, create in compose(), yield after chart content
+- **Initial State**: RSI panel starts hidden via `self._rsi_panel.hide()` in compose() method
+- **State Tracking**: Store RSI panel instance as `self._rsi_panel: RSIPanel | None` attribute
+- **RSI Calculation**: Call `calculate_rsi(prices, 14)` in show_chart() to cache values for toggles
+- **Cache Pattern**: Store calculated RSI as `self._rsi_values: list[float | None] | None`
+- **Minimum Data**: RSI requires at least 15 prices (14 period + 1 for calculation), check `len(prices) >= 15`
+- **Insufficient Data**: Set `self._rsi_values = None` when not enough data (no error, graceful degradation)
+- **Chart Width Caching**: Store `self._chart_area_width: int` after chart rendering for RSI updates
+- **Chart Width Calculation**: `chart_area_width = available_width - dimensions.y_axis_width`
+- **RSI Update Always**: Update RSI panel data even when hidden so it's ready when toggled visible
+- **Current Value Extract**: Use `next((v for v in reversed(self._rsi_values) if v is not None), None)`
+- **show_indicator Call**: Pass values, current_value, and chart_width for proper alignment with chart
+- **Toggle Method**: `toggle_rsi()` calls `self._rsi_panel.toggle_visibility()` then `_render_content()`
+- **Re-render After Toggle**: Must call `_render_content()` to adjust layout for panel visibility change
+- **Visibility Check**: Provide `is_rsi_visible()` helper method for external queries (e.g., tests, status)
+- **Null Safety**: Check `if self._rsi_panel` before calling methods (panel could be None)
+- **Conditional Update**: Only update RSI data on toggle if `is_visible() and self._rsi_values` both true
+- **App Keybinding**: Add to BINDINGS list: `("r", "toggle_rsi", "Toggle RSI")`
+- **Action Handler**: Create `action_toggle_rsi()` method that checks `_chart_panel_visible` first
+- **Panel Query**: Use `query_one("#chart-container ChartPanel", ChartPanel)` to get panel instance
+- **Help Screen Updates**: Add RSI to both keybindings section AND technical indicators section
+- **Help Format**: "r - Toggle RSI indicator" in keybindings, detail RSI 0-100 range in charts section
+- **Overbought/Oversold Docs**: Document RSI > 70 = overbought (red), RSI < 30 = oversold (green)
+- **Test Structure**: Create standalone test app with just RSIPanel for isolated widget tests
+- **14 Widget Tests**: Initialization, visibility, neutral/overbought/oversold values, None handling, extremes
+- **Test Reference Lines**: Verify 2 lines configured at 70 (red) and 30 (green) with correct properties
+- **Test All None**: Verify "No data" displayed when all values are None (insufficient data case)
+- **Test Partial None**: Verify first 14 None values + valid RSI renders correctly (typical RSI pattern)
+- **Test Extremes**: Verify RSI = 0 and RSI = 100 render without errors (edge values)
+- **Test Large Dataset**: Verify downsampling works with 200+ data points (more than 140 chart capacity)
+- **Test Realistic Values**: Use realistic RSI trend from oversold (28) through neutral to overbought (71)
+- **Test Crossing Threshold**: Verify rendering when RSI crosses 30 and 70 thresholds
+- **Test Empty Data**: Verify `show_indicator(None)` displays "No data" gracefully
+- **Test Hidden No Render**: Verify hidden panel stores data but doesn't re-render until shown
+- **5 Integration Tests**: RSI calculation, toggle, insufficient data, panel updates, caching
+- **Test Calculation**: Verify `calculate_rsi()` called in show_chart(), cached in `_rsi_values`
+- **Test Toggle**: Verify panel starts hidden, becomes visible on first toggle, hidden on second
+- **Test Insufficient Data**: Verify `_rsi_values = None` when fewer than 15 prices
+- **Test Panel Updates**: Verify RSI panel receives correct data and chart_width on render
+- **Test Caching**: Verify same RSI object reference across multiple toggles (not recalculated)
+- **Coverage Impact**: Added 14 widget tests + 5 integration tests = 19 new tests total
+- **All 678 Tests Pass**: Comprehensive test suite passes with RSI implementation
+- **Coverage 90.90%**: Maintained above 90% threshold, rsi_panel.py at 100% coverage
+- **chart_panel.py 99%**: Integration increased chart_panel coverage to 99%
+- **mypy --strict Pass**: No type errors with RSI implementation, all annotations correct
+- **User Experience**: RSI provides momentum analysis - press 'r' to toggle, see overbought/oversold zones
+- **Visual Clarity**: Red dashed line at 70 (exit signal), green dashed line at 30 (buy signal)
+- **Cyan Indicator Line**: RSI line rendered in cyan to distinguish from reference lines
+- **Header Value**: Current RSI value displayed as "RSI: 52.00" format in panel header
+- **Dependency Chain**: VPR-037 (RSI calc) + VPR-038 (framework) → VPR-039 (integration) complete
+- **Foundation Pattern**: RSI implementation establishes pattern for future oscillators (MACD, Stochastic)
