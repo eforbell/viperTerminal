@@ -620,3 +620,33 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **mypy --strict Clean**: No type errors after adding volume_enabled parameter
 - **User Experience**: Volume adds context to price movements, worth showing by default
 - **VPR-031 Dependency**: Only enabled after VPR-031 fixed alignment issues
+
+### VPR-033: Simple Moving Average (SMA) indicator service
+- **New Service Module**: Created `viper/services/indicators.py` for technical indicator calculations
+- **Pure Functions**: All indicator functions are pure - no external dependencies, just math
+- **Return Type**: Use `list[float | None]` to handle cases where calculation isn't possible
+- **None for Initial Values**: Return None for first (period-1) values where SMA can't be calculated
+- **SMA Formula**: `sum(prices[i-period+1:i+1]) / period` for each position i
+- **Window Slicing**: Use `prices[i - period + 1 : i + 1]` to get last N prices
+- **Period Validation**: Raise ValueError for period <= 0
+- **Empty List Handling**: Return empty list when input is empty list
+- **Period 1 Edge Case**: SMA with period=1 returns original prices (identity function)
+- **Insufficient Data**: When `len(prices) < period`, all values are None
+- **Exact Period Size**: When `len(prices) == period`, only last value has SMA
+- **Length Preservation**: Output list always has same length as input list
+- **None Count Pattern**: Number of None values always equals `period - 1`
+- **Test Coverage**: 16 comprehensive tests covering all edge cases
+- **Real World Test**: Include test with realistic stock price data (AAPL-like)
+- **Flat Prices Test**: SMA of constant prices equals that constant
+- **Volatile Prices Test**: SMA smooths price swings (alternating high/low)
+- **Common Periods Tested**: 20, 50, 200 day periods (industry standard)
+- **Type Safety**: mypy --strict validates with no issues on union type `float | None`
+- **pytest.approx**: Use for float comparisons in tests (e.g., `pytest.approx(152.2, abs=0.01)`)
+- **Docstring Examples**: Include examples in docstring showing expected behavior
+- **Module Docstring**: Explain pattern - all functions return None where calc not possible
+- **Foundation for Indicators**: This is foundation for EMA, RSI, MACD, etc.
+- **No External Dependencies**: Pure Python, no numpy/pandas needed for calculations
+- **Performance**: Simple arithmetic, O(n) complexity for n prices
+- **All Tests Pass**: 581 tests passing (added 16 new tests)
+- **Coverage Maintained**: 90.40% overall coverage (indicators.py at 100%)
+- **mypy Clean**: No type errors with --strict flag
