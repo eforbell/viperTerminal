@@ -23,6 +23,11 @@
 - **yfinance Crypto**: Use SYMBOL-USD format (BTC-USD, ETH-USD) for crypto via yfinance
 - **Chart Interpolation**: When data < 60% of chart width, price chart upsamples - volume must match
 - **Technical Indicators**: Pure calculation functions, return None for initial values where calculation not possible
+- **Indicator Panels**: Use IndicatorPanel base class for oscillator indicators (RSI, MACD, etc.)
+- **Reference Lines**: HorizontalLine dataclass with value, label, style, color for level markers
+- **Explicit Type Hints**: Always add explicit type annotations to attributes (self._name: str = name)
+- **Braille Indicators**: Use dots 7+8 for simpler indicator line vs full vertical lines for price chart
+- **Unicode Box Drawing**: "─" (solid), "┄" (dashed), "┈" (dotted) for reference lines
 
 ---
 
@@ -405,5 +410,58 @@
   - mypy --strict validates with no type errors
   - Removed unused `# type: ignore[operator]` comments to avoid mypy warnings
   - Foundation ready for VPR-038 (sub-panel framework) and VPR-039 (RSI visualization)
+
+---
+
+## 2026-01-07 - VPR-038
+- **What was implemented**: Sub-panel framework for technical indicators with braille chart rendering
+- **Files changed**:
+  - `viper/widgets/indicator_panel.py`: Created new base class for indicator sub-panels
+  - `tests/test_indicator_panel.py`: Created comprehensive test suite with 17 tests
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-038 as complete
+  - `AGENTS.md`: (to be updated) VPR-038 learnings section
+- **Learnings**:
+  - **IndicatorPanel Base Class**: Generic widget for oscillator indicators (RSI, MACD, Stochastic, etc.)
+  - **HorizontalLine Dataclass**: Encapsulates reference line config - value, label, style, color
+  - **Configurable Height**: Panel accepts height parameter (default 4, supports 3-5 lines)
+  - **Configurable Range**: min_value and max_value define Y-axis scale (default 0-100 for RSI)
+  - **Reference Lines**: Support horizontal markers (e.g., RSI overbought 70, oversold 30)
+  - **Line Styles**: Support "solid", "dashed", "dotted" styles using Unicode box-drawing chars
+  - **Show/Hide Pattern**: hide(), show(), toggle_visibility(), is_visible() methods
+  - **Display Control**: styles.display = "block"/"none" for visibility toggle
+  - **Data Interface**: show_indicator(values, current_value) method to update display
+  - **None Values Support**: Handle None in data list (filter out for rendering)
+  - **Current Value Header**: Display indicator name and latest value in header (e.g., "RSI: 55.00")
+  - **Braille Chart Rendering**: Use same braille pattern approach as main price chart
+  - **Downsampling Logic**: Automatically downsample if data exceeds chart width * 2 points
+  - **Downsampling Method**: Chunk-based averaging preserves general shape of data
+  - **2 Points Per Char**: Braille supports 2 data points per character (left and right dots)
+  - **Vertical Scaling**: Map indicator values to (height * 4) positions (4 dots per row)
+  - **Dot Pattern Choice**: Use dots 7+8 (bottom half) for indicator line (simpler than price chart)
+  - **Color Coding**: Cyan (\033[36m) for indicator line, customizable for reference lines
+  - **Reference Line Drawing**: Draw before data line so data renders on top
+  - **Unicode Box Chars**: "─" (solid), "┄" (dashed), "┈" (dotted) for reference lines
+  - **Grid-based Rendering**: 2D mutable grid pattern for overlaying elements
+  - **Type Annotations Critical**: Explicit type hints needed for all attributes (self._name: str)
+  - **Empty State Handling**: Display "No data" when indicator_values is None or all None
+  - **Flat Line Edge Case**: When value_range == 0, render middle-height horizontal line
+  - **Bounds Clamping**: Clamp vertical positions to valid range before grid access
+  - **Container Pattern**: Use Container with #indicator-content id for dynamic content
+  - **CSS Classes**: indicator-header, indicator-line, empty-state for styling
+  - **can_focus = False**: Indicators are display-only, no user interaction needed
+  - **Margin Pattern**: margin-top: 1 to separate from chart above, margin-bottom: 0 for compact layout
+  - **Test Pattern**: Follow existing widget test patterns (async with app.run_test())
+  - **17 Comprehensive Tests**: Cover initialization, visibility, data display, edge cases, reference lines
+  - **Test Edge Cases**: Empty data, all None, flat values, extreme values, large datasets
+  - **Test Custom Config**: Custom height (5), custom range (-10 to +10 for MACD-like)
+  - **Test Reference Lines**: Multiple lines with different styles, verify rendering
+  - **Test Downsampling**: Verify preservation of data shape after downsampling
+  - **Generic Design**: Can support any oscillator indicator by changing min/max and reference lines
+  - **RSI Ready**: Default config (0-100 range, height 4) perfect for RSI in VPR-039
+  - **MACD Ready**: Can configure with range -10 to +10, height 5 for future MACD implementation
+  - **All 658 tests passing**: Added 17 new tests, all existing tests still pass
+  - **Coverage 90.81%**: Maintained above 90% threshold, indicator_panel.py at 96%
+  - **mypy --strict clean**: All type annotations correct, no type errors
+  - **Foundation Complete**: Ready for VPR-039 (RSI panel implementation using this framework)
 
 ---
