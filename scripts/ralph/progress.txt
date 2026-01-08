@@ -100,3 +100,37 @@
 
 ---
 
+## 2026-01-07 - VPR-031
+- **What was implemented**: Fixed volume bar alignment with price chart by tracking and applying interpolation
+- **Files changed**:
+  - `viper/widgets/chart_renderer.py`: Added interpolated_count to RenderedChart, created _upsample() method, updated render_volume_bars to accept and use interpolated_count
+  - `viper/widgets/chart_panel.py`: Pass rendered.interpolated_count to render_volume_bars() call
+  - `tests/test_chart_renderer.py`: Added 5 comprehensive tests for interpolation tracking and volume alignment
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-031 as complete
+  - `AGENTS.md`: Added VPR-031 learnings section with 28 detailed points
+- **Learnings**:
+  - **Root cause diagnosed**: Price chart upsamples when data < 60% of max_data_points, but volume bars didn't follow
+  - **max_data_points formula**: For BRAILLE charts, max_data_points = chart_width * 2 (2 points per character)
+  - **Upsampling threshold**: Triggers when `len(prices) < max_data_points * 0.6`
+  - **Solution pattern**: Add metadata to return value to communicate interpolation state downstream
+  - **RenderedChart enhancement**: Added `interpolated_count: int = 0` field (0=no interpolation, >0=count)
+  - **Block style**: Doesn't interpolate, always returns interpolated_count=0
+  - **Created _upsample() method**: Mirrors price chart interpolation logic for volumes
+  - **Type safety challenge**: Mypy requires separate `upsampled_int` and `upsampled_float` lists to avoid type errors
+  - **Can't append to generic list**: `upsampled.append(int(value))` fails because list type is `list[float] | list[int]`
+  - **Solution**: Create separate typed lists, populate one based on is_int flag, return correct one
+  - **Parameter addition**: render_volume_bars() now accepts `interpolated_count: int = 0` (backward compatible)
+  - **Conditional upsampling**: Only upsample volumes if interpolated_count > 0
+  - **Order matters**: Upsample FIRST (to match price data), THEN downsample (to fit chart width)
+  - **Integration point**: chart_panel passes `rendered.interpolated_count` to volume renderer
+  - **Test coverage**: Added tests for interpolation detection, alignment, no-interpolation, edge cases
+  - **Edge case 1 point**: Upsampling from single point creates flat line (all same value)
+  - **Edge case 2 points**: Linear interpolation creates smooth gradient between 2 values
+  - **Backward compatible**: Existing calls work (interpolated_count defaults to 0)
+  - **No performance cost**: Upsampling only occurs when data is sparse (< 60% threshold)
+  - **Visual fix confirmed**: Volume bars now perfectly align regardless of data density
+  - All 562 tests passing with 90.33% overall coverage
+  - mypy --strict validates with no type errors
+
+---
+
