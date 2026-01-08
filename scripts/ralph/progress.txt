@@ -301,3 +301,56 @@
 
 ---
 
+## 2026-01-07 - VPR-036
+- **What was implemented**: Moving average display on chart with interactive 'm' key cycling
+- **Files changed**:
+  - `viper/widgets/chart_panel.py`: Added MA cycle state, caching, overlay building, legend display
+  - `viper/app.py`: Added 'm' keybinding and action_cycle_ma() handler
+  - `viper/widgets/help_screen.py`: Updated keybindings and charts sections with MA info
+  - `tests/test_chart_panel.py`: Added 8 comprehensive MA tests
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-036 as complete
+  - `AGENTS.md`: Added VPR-036 learnings section with 38 detailed points
+- **Learnings**:
+  - **Cycle Pattern**: Use list of modes and modulo to cycle: `(current_idx + 1) % len(modes)`
+  - **State Tracking**: Store current mode in `_ma_mode` attribute (off/sma20/sma50/both)
+  - **Caching Strategy**: Calculate MAs once on chart load, store in attributes for fast toggle
+  - **Cache Attributes**: `_sma20: list[float | None] | None` and `_sma50` for cached values
+  - **Cache as None**: Set to None when insufficient data (avoids AttributeError on access)
+  - **Conditional Calculation**: Check `len(prices) >= period` before calculating each MA
+  - **Calculate Helper**: `_calculate_moving_averages(prices)` called from `show_chart()`
+  - **Cycle Method**: `cycle_ma_display()` updates mode and calls `_render_content()`
+  - **Getter for Testing**: `get_ma_mode()` returns current mode string for assertions
+  - **Overlay Building**: Create `list[OverlayData]` based on mode before calling renderer
+  - **Conditional Add**: Only add overlay if mode includes it AND cached MA is not None
+  - **Color Coding**: Cyan `\033[36m` for SMA20, Magenta `\033[35m` for SMA50
+  - **Pass to Renderer**: Pass overlays list or None to `render()` method
+  - **Legend in Header**: Append MA values to header text when mode is active
+  - **Latest Value Pattern**: Use `next((v for v in reversed(sma) if v is not None), None)`
+  - **Format Legend**: Format as "SMA20: $123.45" with .2f precision
+  - **String Building**: Build parts list and join with spacing for clean formatting
+  - **Both Mode Legend**: Shows both "SMA20: $X  SMA50: $Y" when mode is "both"
+  - **App Integration**: Added "m" key to BINDINGS with "Cycle MA" description
+  - **Action Handler**: `action_cycle_ma()` checks `_chart_panel_visible` before calling method
+  - **Query Pattern**: Use `query_one("#chart-container ChartPanel", ChartPanel)` to get panel
+  - **Help Screen Updates**: Added 'm' key to two sections (keybindings and charts)
+  - **Help Text Format**: "Cycle moving averages (Off/SMA20/SMA50/Both)" for clarity
+  - **Charts Section**: "Off -> SMA20 -> SMA50 -> Both" shows cycle direction
+  - **News Help Fix**: Removed outdated warning, replaced with "News powered by yfinance"
+  - **Test Pattern**: Follow volume toggle test patterns for consistency
+  - **Test Data Size**: Use 50 points for SMA20 tests, 60 points for SMA50/both tests
+  - **Test Full Cycle**: Verify all 4 transitions work correctly and return to start
+  - **Test Legend Format**: Check for "SMA20:" and "$" in header text
+  - **Test Insufficient Data**: Verify graceful handling when data < 20 or < 50 points
+  - **Test None Caching**: Verify _sma20 and _sma50 are None when data insufficient
+  - **Test Calculation**: Verify MAs calculated on load with correct length and None values
+  - **Test Caching**: Verify same object reference after multiple toggles (not recalculated)
+  - **Test Overlay Creation**: Verify overlay data created when in active MA mode
+  - **Header Query**: `[label for label in labels if "Chart" in str(label.render())]`
+  - **Assert Contains**: Use `any("SMA20" in str(label.render()) for label in labels)`
+  - **8 Comprehensive Tests**: Cover all aspects - cycle, legend, data, caching, overlays
+  - All 620 tests passing (added 8 new MA tests) with 90.36% overall coverage
+  - mypy --strict validates with no type errors
+  - chart_panel.py at 98% coverage
+
+---
+

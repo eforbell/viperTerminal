@@ -178,7 +178,7 @@
         "Tests: toggle behavior, MA calculation, legend display, insufficient data handling"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-033", "VPR-035"],
       "notes": "Integrates MA indicators into the UI. Cycle pattern keeps single key for multiple options."
