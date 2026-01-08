@@ -49,31 +49,6 @@
   ],
   "futureEnhancements": [
     {
-      "id": "FE-001",
-      "title": "Fix volume bar overlay",
-      "description": "Volume bars currently marked as experimental and disabled by default. Need to fix alignment and visual rendering issues.",
-      "priority": "High",
-      "relatedFeature": "feature-2",
-      "effort": "Medium",
-      "notes": "Braille chart uses 2 data points per character causing alignment issues with volume bars",
-      "status": "COMPLETED_FEATURE_3",
-      "assignedStories": ["VPR-031", "VPR-032"],
-      "completedAt": "2026-01-08"
-    },
-    {
-      "id": "FE-002",
-      "title": "Replace Yahoo RSS news feed (BROKEN)",
-      "description": "Yahoo Finance RSS feeds have been discontinued (returns 404). SOLUTION FOUND: yfinance has built-in .news attribute!",
-      "priority": "Critical",
-      "relatedFeature": "feature-2",
-      "effort": "Small",
-      "notes": "yfinance ticker.news returns rich news data - title, summary, source, URL. No API key needed!",
-      "status": "COMPLETED_FEATURE_3",
-      "assignedStories": ["VPR-028"],
-      "solution": "yfinance .news attribute",
-      "completedAt": "2026-01-08"
-    },
-    {
       "id": "FE-003",
       "title": "Technical indicators",
       "description": "Add moving averages (SMA, EMA), RSI, MACD, Bollinger Bands overlays on charts",
@@ -166,18 +141,6 @@
       "relatedFeature": "feature-1",
       "effort": "Large",
       "notes": "Requires paid API (Alpaca, Polygon.io) or complex websocket setup with free sources"
-    },
-    {
-      "id": "FE-013",
-      "title": "Replace CoinGecko with yfinance for crypto",
-      "description": "Switch crypto data from CoinGecko to yfinance using USD pair format (e.g., BTC-USD, ETH-USD). Eliminates rate limit issues and simplifies codebase to single data source.",
-      "priority": "High",
-      "relatedFeature": "feature-2",
-      "effort": "Medium",
-      "notes": "yfinance supports crypto with format SYMBOL-USD. Benefits: (1) No rate limits, (2) Single unified API, (3) Consistent data format.",
-      "status": "COMPLETED_FEATURE_3",
-      "assignedStories": ["VPR-029", "VPR-030"],
-      "completedAt": "2026-01-08"
     },
     {
       "id": "FE-014",
