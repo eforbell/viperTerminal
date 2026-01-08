@@ -68,3 +68,35 @@
   - All 547 existing non-crypto-history tests still pass (history tests fixed in VPR-030)
 
 ---
+## 2026-01-07 - VPR-030
+- **What was implemented**: Unified crypto historical data source to use yfinance instead of CoinGecko
+- **Files changed**:
+  - `viper/services/history_data.py`: Removed CoinGecko code, unified crypto/stock paths via yfinance
+  - `tests/test_history_data.py`: Converted all CoinGecko HTTP mocks to yfinance object mocks
+  - `scripts/ralph/features/feature-3-prd.json`: Marked VPR-030 as complete
+  - `AGENTS.md`: Added VPR-030 learnings section
+- **Learnings**:
+  - Changed import from `SYMBOL_TO_ID` to `SYMBOL_TO_PAIR` (legacy alias exists in crypto.py)
+  - Enhanced `_is_crypto_ticker()` to check both SYMBOL_TO_PAIR dict and -USD suffix
+  - Auto-convert crypto symbols: BTC → BTC-USD, ETH → ETH-USD before yfinance call
+  - Handle explicit -USD suffix: if already present, pass through without double conversion
+  - Fallback pattern: `SYMBOL_TO_PAIR.get(symbol, f"{symbol}-USD")` for unmapped symbols
+  - Unified code path: both stocks and crypto use `_fetch_stock_historical()` function
+  - Removed 3 functions: `_fetch_crypto_historical()`, `_fetch_crypto_with_timeout()`, `_parse_coingecko_chart()`
+  - Removed imports: httpx (no longer needed), COINGECKO_DAYS_MAP constant
+  - Updated all docstrings to reflect yfinance-only implementation
+  - Test conversion: replaced respx HTTP mocking with simple yfinance Ticker mocking
+  - Removed `respx` and `httpx.Response` imports from test file
+  - Removed helper: `create_mock_coingecko_response()` no longer needed
+  - Added test coverage for explicit -USD suffix handling
+  - Test assertions updated: expect "BTC-USD" ticker (converted format) not "BTC"
+  - yfinance provides full OHLCV data for crypto (vs CoinGecko Close-only)
+  - Same interval logic applies: 1d, 1wk, 1mo based on period
+  - No rate limits with yfinance - removed exponential backoff/retry logic
+  - Code reduction: history_data.py from 473 lines to ~240 lines (49% smaller)
+  - Cleaner tests: yfinance object mocking simpler than HTTP route mocking
+  - All 557 tests passing with 90.39% overall coverage
+  - mypy --strict validates with no issues after refactoring
+
+---
+

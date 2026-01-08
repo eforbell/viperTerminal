@@ -74,7 +74,7 @@
         "Tests: crypto historical data fetch, all timeframes, volume data verification"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-029"],
       "notes": "Natural follow-on from VPR-029. Once crypto.py uses yfinance, historical data should use same source."
