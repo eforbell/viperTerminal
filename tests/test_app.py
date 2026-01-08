@@ -386,10 +386,9 @@ async def test_watchlist_enter_selects_item() -> None:
     """Test that pressing Enter on a watchlist item triggers quote lookup."""
     app = ViperApp()
 
-    # Clear any persisted watchlist items and add test items
-    app.watchlist_manager._items.clear()
-    app.watchlist_manager.add("AAPL")
-    app.watchlist_manager.add("TSLA")
+    # Set test items directly without persisting to disk
+    # (Using add() would write to ~/.config/viper/watchlist.json)
+    app.watchlist_manager._items = ["AAPL", "TSLA"]
 
     # Mock quote for watchlist refresh
     mock_quote = StockQuote(
