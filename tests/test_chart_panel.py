@@ -1379,6 +1379,9 @@ async def test_chart_panel_rsi_calculation() -> None:
         volumes = [int(1000000 + i * 10000) for i in range(30)]
         opens = [float(100 + (i + 0.5) % 10) for i in range(30)]
 
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
         data = HistoricalData(
             ticker="AAPL",
             period="1M",
@@ -1386,6 +1389,9 @@ async def test_chart_panel_rsi_calculation() -> None:
             prices=prices,
             volumes=volumes,
             opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
         )
 
         stats = HistoricalStats(
@@ -1393,6 +1399,7 @@ async def test_chart_panel_rsi_calculation() -> None:
             period_low=min(prices),
             change_percent=5.0,
             avg_volume=sum(volumes) / len(volumes),
+            num_data_points=len(prices),
         )
 
         # Show chart
@@ -1427,6 +1434,8 @@ async def test_chart_panel_rsi_toggle() -> None:
         prices = [float(100 + i % 10) for i in range(30)]
         volumes = [int(1000000) for _ in range(30)]
         opens = [float(100) for _ in range(30)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
 
         data = HistoricalData(
             ticker="AAPL",
@@ -1435,6 +1444,9 @@ async def test_chart_panel_rsi_toggle() -> None:
             prices=prices,
             volumes=volumes,
             opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
         )
 
         stats = HistoricalStats(
@@ -1442,6 +1454,7 @@ async def test_chart_panel_rsi_toggle() -> None:
             period_low=min(prices),
             change_percent=5.0,
             avg_volume=1000000,
+            num_data_points=len(prices),
         )
 
         panel.show_chart(data, stats)
@@ -1470,6 +1483,8 @@ async def test_chart_panel_rsi_insufficient_data() -> None:
         prices = [float(100 + i) for i in range(10)]
         volumes = [int(1000000) for _ in range(10)]
         opens = [float(100) for _ in range(10)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
 
         data = HistoricalData(
             ticker="AAPL",
@@ -1478,6 +1493,9 @@ async def test_chart_panel_rsi_insufficient_data() -> None:
             prices=prices,
             volumes=volumes,
             opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
         )
 
         stats = HistoricalStats(
@@ -1485,6 +1503,7 @@ async def test_chart_panel_rsi_insufficient_data() -> None:
             period_low=min(prices),
             change_percent=5.0,
             avg_volume=1000000,
+            num_data_points=len(prices),
         )
 
         # Show chart
@@ -1507,6 +1526,8 @@ async def test_chart_panel_rsi_panel_updates() -> None:
         prices = [float(100 + i % 10) for i in range(30)]
         volumes = [int(1000000) for _ in range(30)]
         opens = [float(100) for _ in range(30)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
 
         data = HistoricalData(
             ticker="AAPL",
@@ -1515,6 +1536,9 @@ async def test_chart_panel_rsi_panel_updates() -> None:
             prices=prices,
             volumes=volumes,
             opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
         )
 
         stats = HistoricalStats(
@@ -1522,6 +1546,7 @@ async def test_chart_panel_rsi_panel_updates() -> None:
             period_low=min(prices),
             change_percent=5.0,
             avg_volume=1000000,
+            num_data_points=len(prices),
         )
 
         # Show chart and toggle RSI on
@@ -1549,6 +1574,8 @@ async def test_chart_panel_rsi_caching() -> None:
         prices = [float(100 + i % 10) for i in range(30)]
         volumes = [int(1000000) for _ in range(30)]
         opens = [float(100) for _ in range(30)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
 
         data = HistoricalData(
             ticker="AAPL",
@@ -1557,6 +1584,9 @@ async def test_chart_panel_rsi_caching() -> None:
             prices=prices,
             volumes=volumes,
             opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
         )
 
         stats = HistoricalStats(
@@ -1564,6 +1594,7 @@ async def test_chart_panel_rsi_caching() -> None:
             period_low=min(prices),
             change_percent=5.0,
             avg_volume=1000000,
+            num_data_points=len(prices),
         )
 
         # Show chart

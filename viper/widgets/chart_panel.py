@@ -138,6 +138,7 @@ class ChartPanel(Widget):
         # RSI indicator state
         self._rsi_values: list[float | None] | None = None  # Cached RSI values
         self._rsi_panel: RSIPanel | None = None  # RSI panel widget
+        self._chart_area_width: int = 70  # Cached for RSI panel updates
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -305,8 +306,10 @@ class ChartPanel(Widget):
         # Calculate available dimensions for chart
         # Reserve space for header (2 lines), timeframe bar (1 line), stats (2 lines), and padding
         # If volume is enabled, reserve additional 3 lines for volume bars
+        # If RSI is visible, reserve additional 7 lines for RSI panel
         volume_height = 3 if self._volume_enabled else 0
-        available_height = self.size.height - 7 - volume_height
+        rsi_height = 7 if self.is_rsi_visible() else 0
+        available_height = self.size.height - 7 - volume_height - rsi_height
         available_width = self.size.width - 4  # Account for padding
 
         # Ensure minimum dimensions
@@ -352,10 +355,12 @@ class ChartPanel(Widget):
         for line in rendered.lines:
             container.mount(Label(line, classes="chart-line", markup=has_overlays))
 
+        # Calculate chart area width (used by volume and RSI)
+        chart_area_width = available_width - dimensions.y_axis_width
+        self._chart_area_width = chart_area_width  # Cache for RSI toggle
+
         # Render volume bars if enabled
         if self._volume_enabled and len(data.volumes) > 0:
-            # Calculate chart area width (must match the price chart area)
-            chart_area_width = available_width - dimensions.y_axis_width
             volume_lines = self._renderer.render_volume_bars(
                 volumes=data.volumes,
                 opens=data.opens,
@@ -369,6 +374,11 @@ class ChartPanel(Widget):
             for line in volume_lines:
                 # Volume lines use Rich markup for colors, so markup=True (default)
                 container.mount(Label(line, classes="chart-line"))
+
+        # Update RSI panel with correct width (even if hidden, so it's ready when toggled)
+        if self._rsi_panel and self._rsi_values:
+            current_rsi = next((v for v in reversed(self._rsi_values) if v is not None), None)
+            self._rsi_panel.show_indicator(self._rsi_values, current_rsi, chart_width=chart_area_width)
 
     def _format_number(self, value: float, decimals: int) -> str:
         """Format a number with commas and specified decimal places.
@@ -462,12 +472,7 @@ class ChartPanel(Widget):
         """
         # Calculate RSI (requires at least 15 prices: 14 for period + 1 for first calculation)
         self._rsi_values = calculate_rsi(prices, 14) if len(prices) >= 15 else None
-
-        # Update RSI panel if visible
-        if self._rsi_panel and self._rsi_values:
-            # Get latest non-None RSI value
-            current_rsi = next((v for v in reversed(self._rsi_values) if v is not None), None)
-            self._rsi_panel.show_indicator(self._rsi_values, current_rsi)
+        # Note: RSI panel is updated in _render_chart() where we have the correct chart width
 
     def cycle_ma_display(self) -> None:
         """Cycle through moving average display modes: off -> sma20 -> sma50 -> both -> off."""
@@ -491,10 +496,14 @@ class ChartPanel(Widget):
         """Toggle RSI indicator panel visibility."""
         if self._rsi_panel:
             self._rsi_panel.toggle_visibility()
-            # If panel is now visible and we have RSI data, update it
+            # If panel is now visible and we have RSI data, update it with correct width
             if self._rsi_panel.is_visible() and self._rsi_values:
                 current_rsi = next((v for v in reversed(self._rsi_values) if v is not None), None)
-                self._rsi_panel.show_indicator(self._rsi_values, current_rsi)
+                self._rsi_panel.show_indicator(
+                    self._rsi_values, current_rsi, chart_width=self._chart_area_width
+                )
+            # Re-render chart to adjust height for RSI panel
+            self._render_content()
 
     def is_rsi_visible(self) -> bool:
         """Check if RSI panel is currently visible.

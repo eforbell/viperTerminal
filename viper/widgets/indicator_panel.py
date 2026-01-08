@@ -88,22 +88,28 @@ class IndicatorPanel(Widget):
         self._visible: bool = True
         self._indicator_values: list[float | None] | None = None
         self._current_value: float | None = None
+        self._chart_width: int = 70  # Default, updated by show_indicator()
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
         yield Container(id="indicator-content")
 
     def show_indicator(
-        self, values: list[float | None], current_value: float | None = None
+        self, values: list[float | None], current_value: float | None = None,
+        chart_width: int | None = None
     ) -> None:
         """Display indicator values.
 
         Args:
             values: List of indicator values to display (None = no data at that point)
             current_value: Optional current/latest value for header display
+            chart_width: Width of the chart area in characters (for alignment with price chart)
         """
         self._indicator_values = values
         self._current_value = current_value
+        if chart_width is not None:
+            self._chart_width = chart_width
+        # Always re-render content when data changes (if visible)
         if self._visible:
             self._render_content()
 
@@ -178,12 +184,18 @@ class IndicatorPanel(Widget):
         if not data_points:
             return ["No data"]
 
-        # Get chart width from container (default to 80 if not available)
-        chart_width = 70  # Reserve space for padding
+        # Use the chart width passed from the parent (matches price chart)
+        chart_width = self._chart_width
 
-        # Apply same downsampling logic as price chart if needed
-        if len(data_points) > chart_width * 2:  # Braille: 2 data points per character
-            data_points = self._downsample(data_points, chart_width * 2)
+        # Calculate target data points (2 per character for braille)
+        target_data_points = chart_width * 2
+
+        # Downsample or upsample to match chart width exactly
+        if len(data_points) > target_data_points:
+            data_points = self._downsample(data_points, target_data_points)
+        elif len(data_points) < target_data_points:
+            # Upsample using linear interpolation to fill chart width
+            data_points = self._upsample(data_points, target_data_points)
 
         # Create braille chart
         chart_lines = self._render_braille_chart(data_points, chart_width)
@@ -214,6 +226,34 @@ class IndicatorPanel(Widget):
                 downsampled.append(sum(chunk) / len(chunk))
 
         return downsampled
+
+    def _upsample(self, values: list[float], target_count: int) -> list[float]:
+        """Upsample data to target count using linear interpolation.
+
+        Args:
+            values: List of values to upsample
+            target_count: Target number of data points
+
+        Returns:
+            Upsampled list of values
+        """
+        if len(values) >= target_count or len(values) < 2:
+            return values
+
+        upsampled: list[float] = []
+        step = (len(values) - 1) / (target_count - 1)
+
+        for i in range(target_count):
+            pos = i * step
+            lower_idx = int(pos)
+            upper_idx = min(lower_idx + 1, len(values) - 1)
+            fraction = pos - lower_idx
+
+            # Linear interpolation
+            value = values[lower_idx] + (values[upper_idx] - values[lower_idx]) * fraction
+            upsampled.append(value)
+
+        return upsampled
 
     def _render_braille_chart(self, values: list[float], width: int) -> list[str]:
         """Render indicator values as a braille chart.
