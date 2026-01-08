@@ -650,3 +650,31 @@ This file documents patterns, best practices, and gotchas discovered during deve
 - **All Tests Pass**: 581 tests passing (added 16 new tests)
 - **Coverage Maintained**: 90.40% overall coverage (indicators.py at 100%)
 - **mypy Clean**: No type errors with --strict flag
+
+### VPR-034: Exponential Moving Average (EMA) indicator service
+- **EMA Formula**: `k = 2/(period+1)`, then `EMA = (Price * k) + (EMA_prev * (1-k))`
+- **Smoothing Factor**: Calculate once at function start: `k = 2.0 / (period + 1)`
+- **First EMA Value**: Use SMA of first `period` prices as the initial EMA value
+- **Recursive Calculation**: Each subsequent EMA depends on previous EMA value
+- **Three-Branch Logic**: Handle three cases in loop: (1) insufficient data (None), (2) first value (SMA), (3) subsequent values (EMA formula)
+- **i == period - 1**: This is the index where first EMA is calculated (using SMA)
+- **Window for First SMA**: Use `prices[:period]` to get first N prices for initial SMA
+- **State Tracking**: Reference `result[i-1]` to get previous EMA for current calculation
+- **Defensive None Check**: Check if `prev_ema is None` even though it shouldn't happen (type safety)
+- **None Count Invariant**: Same as SMA - number of None values always equals `period - 1`
+- **Return Type Consistency**: Same as SMA - `list[float | None]` for uniform indicator interface
+- **Period 1 Edge Case**: With period=1, k=1.0, so EMA equals current price (same as SMA)
+- **Common Periods**: 12 (MACD fast), 26 (MACD slow), 50 (trend indicator)
+- **EMA vs SMA Behavior**: EMA reacts faster to price changes (more weight on recent prices)
+- **Test Pattern Reuse**: Mirror SMA test structure - basic, periods, edge cases, real world
+- **Comparison Test**: Test that EMA > SMA after price jump (EMA reacts faster)
+- **Monotonicity Tests**: Verify EMA increases with upward trend, decreases with downward trend
+- **Convergence Behavior**: EMA follows price trends but with smoothing (exponential weighting)
+- **Known Calculation Test**: Hand-calculate example with period=2, k=0.6667 to verify formula
+- **Smoothing Factor Test**: Dedicated test to verify k is correctly applied in formula
+- **Type Ignore Cleanup**: Remove `# type: ignore` comments if mypy doesn't need them (avoid unused-ignore errors)
+- **Assert Comparison Pattern**: After asserting `is not None`, can directly compare values
+- **Documentation**: Include formula in docstring with example calculation
+- **All Tests Pass**: 601 tests passing (added 20 new EMA tests)
+- **Coverage Maintained**: 90.45% overall coverage (indicators.py at 97%)
+- **mypy Clean**: No type errors with --strict flag
