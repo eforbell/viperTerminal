@@ -458,9 +458,9 @@ class TestVolumeRendering:
             y_axis_width=12,
         )
 
-        # Check that ANSI color codes are present
+        # Check that Rich markup color tags are present
         volume_line = result[1]  # Middle line has the volume bars
-        assert "\033[32m" in volume_line or "\033[31m" in volume_line  # Green or red color code
+        assert "[green]" in volume_line or "[red]" in volume_line  # Rich markup tags
 
     def test_render_volume_bars_normalization(self) -> None:
         """Test that volume bars are normalized to max volume."""

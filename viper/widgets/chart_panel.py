@@ -14,7 +14,13 @@ from viper.services.history_data import (
     calculate_stats,
     fetch_historical_data,
 )
-from viper.widgets.chart_renderer import ChartDimensions, ChartRenderer, ChartStyle
+from viper.services.indicators import calculate_sma
+from viper.widgets.chart_renderer import (
+    ChartDimensions,
+    ChartRenderer,
+    ChartStyle,
+    OverlayData,
+)
 
 
 class ChartPanel(Widget):
@@ -118,6 +124,10 @@ class ChartPanel(Widget):
             "6": "5Y",
             "7": "MAX",
         }
+        # Moving average display state
+        self._ma_mode: str = "off"  # Cycle: off -> sma20 -> sma50 -> both -> off
+        self._sma20: list[float | None] | None = None  # Cached SMA20 values
+        self._sma50: list[float | None] | None = None  # Cached SMA50 values
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -147,6 +157,8 @@ class ChartPanel(Widget):
         self._stats = stats
         self._current_ticker = data.ticker
         self._current_period = data.period
+        # Calculate moving averages when chart loads (cache for toggles)
+        self._calculate_moving_averages(data.prices)
         self._render_content()
 
     def show_error(self, error: HistoricalDataError) -> None:
@@ -205,6 +217,23 @@ class ChartPanel(Widget):
         # Header with ticker and timeframe
         volume_status = "Vol: ON" if self._volume_enabled else "Vol: OFF"
         header_text = f"{data.ticker} - {data.period} Chart  [{volume_status}]"
+
+        # Add MA legend if MAs are displayed
+        if self._ma_mode != "off":
+            ma_legend_parts = []
+            if self._ma_mode in ("sma20", "both") and self._sma20:
+                # Get last non-None value from SMA20
+                sma20_value = next((v for v in reversed(self._sma20) if v is not None), None)
+                if sma20_value:
+                    ma_legend_parts.append(f"SMA20: ${sma20_value:.2f}")
+            if self._ma_mode in ("sma50", "both") and self._sma50:
+                # Get last non-None value from SMA50
+                sma50_value = next((v for v in reversed(self._sma50) if v is not None), None)
+                if sma50_value:
+                    ma_legend_parts.append(f"SMA50: ${sma50_value:.2f}")
+            if ma_legend_parts:
+                header_text += "  " + "  ".join(ma_legend_parts)
+
         container.mount(Label(header_text, classes="chart-header"))
 
         # Timeframe selector bar with active indicator
@@ -278,11 +307,27 @@ class ChartPanel(Widget):
             include_x_axis=True,
         )
 
+        # Build overlay list based on MA mode
+        overlays: list[OverlayData] = []
+        if self._ma_mode in ("sma20", "both") and self._sma20:
+            overlays.append(OverlayData(
+                values=self._sma20,
+                color="\033[36m",  # Cyan for SMA20
+                name="SMA20"
+            ))
+        if self._ma_mode in ("sma50", "both") and self._sma50:
+            overlays.append(OverlayData(
+                values=self._sma50,
+                color="\033[35m",  # Magenta for SMA50
+                name="SMA50"
+            ))
+
         rendered = self._renderer.render(
             prices=data.prices,
             dates=data.dates,
             dimensions=dimensions,
             period=self._current_period,
+            overlays=overlays if overlays else None,
         )
 
         # Mount each line of the chart
@@ -380,3 +425,31 @@ class ChartPanel(Widget):
             True if volume is enabled, False otherwise
         """
         return self._volume_enabled
+
+    def _calculate_moving_averages(self, prices: list[float]) -> None:
+        """Calculate and cache moving averages for the current chart data.
+
+        Args:
+            prices: List of price values
+        """
+        # Calculate SMA20 and SMA50 for overlay display
+        self._sma20 = calculate_sma(prices, 20) if len(prices) >= 20 else None
+        self._sma50 = calculate_sma(prices, 50) if len(prices) >= 50 else None
+
+    def cycle_ma_display(self) -> None:
+        """Cycle through moving average display modes: off -> sma20 -> sma50 -> both -> off."""
+        # Define cycle order
+        cycle_order = ["off", "sma20", "sma50", "both"]
+        current_idx = cycle_order.index(self._ma_mode)
+        next_idx = (current_idx + 1) % len(cycle_order)
+        self._ma_mode = cycle_order[next_idx]
+        # Re-render to show/hide MAs
+        self._render_content()
+
+    def get_ma_mode(self) -> str:
+        """Get current MA display mode.
+
+        Returns:
+            Current mode: 'off', 'sma20', 'sma50', or 'both'
+        """
+        return self._ma_mode
