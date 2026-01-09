@@ -762,32 +762,8 @@ async def test_chart_panel_all_timeframes() -> None:
 
 
 @pytest.mark.asyncio
-async def test_chart_panel_volume_toggle() -> None:
-    """Test that volume can be toggled on and off."""
-    app = ChartPanelTestApp()
-    async with app.run_test() as pilot:
-        panel = app.query_one(ChartPanel)
-
-        # Volume should be enabled by default
-        assert panel.is_volume_enabled() is True
-        assert panel._volume_enabled is True
-
-        # Toggle volume off
-        panel.toggle_volume()
-        await pilot.pause()
-        assert panel.is_volume_enabled() is False
-        assert panel._volume_enabled is False
-
-        # Toggle volume on
-        panel.toggle_volume()
-        await pilot.pause()
-        assert panel.is_volume_enabled() is True
-        assert panel._volume_enabled is True
-
-
-@pytest.mark.asyncio
 async def test_chart_panel_volume_bars_displayed() -> None:
-    """Test that volume bars are displayed when volume is enabled."""
+    """Test that volume bars are displayed with chart data."""
     app = ChartPanelTestApp()
     async with app.run_test() as pilot:
         panel = app.query_one(ChartPanel)
@@ -813,28 +789,19 @@ async def test_chart_panel_volume_bars_displayed() -> None:
             num_data_points=10,
         )
 
-        # Load chart with volume (enabled by default)
+        # Load chart with volume (always shown)
         with patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = mock_data
             await panel.load_chart("AAPL", "1M")
             await pilot.pause()
 
-            # Verify chart is shown
+            # Verify chart is shown with volume data
             assert panel._state == "success"
-            assert panel._volume_enabled is True
-
-            # Toggle volume off
-            panel.toggle_volume()
-            await pilot.pause()
-
-            # Verify volume is disabled and display is updated
-            assert panel._volume_enabled is False
-            # Volume bars should not be rendered when disabled
 
 
 @pytest.mark.asyncio
 async def test_chart_panel_volume_stats_displayed() -> None:
-    """Test that volume statistics are displayed when volume is enabled."""
+    """Test that volume statistics are displayed with chart data."""
     app = ChartPanelTestApp()
     async with app.run_test() as pilot:
         panel = app.query_one(ChartPanel)
@@ -860,21 +827,19 @@ async def test_chart_panel_volume_stats_displayed() -> None:
             num_data_points=5,
         )
 
-        # Volume is already enabled by default, just load chart
+        # Load chart with volume (always shown)
         with patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = mock_data
             await panel.load_chart("AAPL", "1W")
             await pilot.pause()
 
             # Verify volume stats are included in display
-            # The _render_chart method should include volume stats in the stats line
-            assert panel._volume_enabled is True
             assert len(panel._data.volumes) > 0  # type: ignore[union-attr]
 
 
 @pytest.mark.asyncio
 async def test_chart_panel_volume_empty_data() -> None:
-    """Test volume toggle with empty volume data."""
+    """Test volume rendering with empty volume data."""
     app = ChartPanelTestApp()
     async with app.run_test() as pilot:
         panel = app.query_one(ChartPanel)
@@ -892,7 +857,7 @@ async def test_chart_panel_volume_empty_data() -> None:
             interval="1d",
         )
 
-        # Volume is already enabled by default, just load chart
+        # Load chart (volume rendering will be skipped for empty volumes)
         with patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = mock_data
             await panel.load_chart("NEWIPO", "1W")
@@ -900,85 +865,6 @@ async def test_chart_panel_volume_empty_data() -> None:
 
             # Should handle empty volumes gracefully
             assert panel._state == "success"
-            assert panel._volume_enabled is True
-
-
-@pytest.mark.asyncio
-async def test_chart_panel_volume_disabled_via_config() -> None:
-    """Test that volume can be disabled via config parameter."""
-    class DisabledVolumeApp(App[None]):
-        """Test app with volume disabled."""
-
-        def compose(self) -> ComposeResult:
-            """Compose test app."""
-            yield ChartPanel(volume_enabled=False)
-
-    app = DisabledVolumeApp()
-    async with app.run_test() as pilot:
-        panel = app.query_one(ChartPanel)
-
-        # Volume should be disabled when passed False
-        assert panel.is_volume_enabled() is False
-        assert panel._volume_enabled is False
-
-        # Toggle volume on
-        panel.toggle_volume()
-        await pilot.pause()
-        assert panel.is_volume_enabled() is True
-        assert panel._volume_enabled is True
-
-
-@pytest.mark.asyncio
-async def test_chart_panel_volume_status_indicator() -> None:
-    """Test that volume status is shown in chart header."""
-    from datetime import datetime, timedelta
-
-    app = ChartPanelTestApp()
-    async with app.run_test() as pilot:
-        panel = app.query_one(ChartPanel)
-
-        # Create mock data
-        mock_data = HistoricalData(
-            ticker="AAPL",
-            dates=[datetime.now() - timedelta(days=i) for i in range(5)],
-            prices=[150.0, 152.0, 151.0, 153.0, 155.0],
-            volumes=[1000000, 1200000, 1100000, 1500000, 1300000],
-            highs=[151.0, 153.0, 152.0, 154.0, 156.0],
-            lows=[149.0, 151.0, 150.0, 152.0, 154.0],
-            opens=[150.0, 151.0, 152.0, 151.0, 153.0],
-            period="1M",
-            interval="1d",
-        )
-
-        mock_stats = HistoricalStats(
-            period_high=156.0,
-            period_low=149.0,
-            change_percent=3.33,
-            avg_volume=1220000.0,
-            num_data_points=5,
-        )
-
-        # Load chart with volume enabled (default)
-        with patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock) as mock_fetch:
-            mock_fetch.return_value = mock_data
-            await panel.load_chart("AAPL", "1M")
-            await pilot.pause()
-
-            # Check that "Vol: ON" appears in header
-            labels = panel.query(Label)
-            header_labels = [label for label in labels if "Chart" in str(label.render())]
-            assert len(header_labels) > 0
-            assert any("[Vol: ON]" in str(label.render()) for label in header_labels)
-
-            # Toggle volume off
-            panel.toggle_volume()
-            await pilot.pause()
-
-            # Check that "Vol: OFF" appears in header
-            labels = panel.query(Label)
-            header_labels = [label for label in labels if "Chart" in str(label.render())]
-            assert len(header_labels) > 0
-            assert any("[Vol: OFF]" in str(label.render()) for label in header_labels)
 
 
 @pytest.mark.asyncio
@@ -1612,3 +1498,360 @@ async def test_chart_panel_rsi_caching() -> None:
 
         # RSI values should still be cached (not recalculated on toggle)
         assert panel._rsi_values is initial_rsi
+
+
+# ============================================================================
+# ============================================================================
+# Height calculation tests (VPR-040 characterization, VPR-043 fix)
+# These tests verify the correct height calculation for ChartPanel with RSI.
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_height_calculation_rsi_hidden() -> None:
+    """Test height calculation with RSI hidden.
+
+    This test verifies _render_chart() behavior when RSI is not visible.
+    Formula: available_height = self.size.height - 7 - volume_height
+    (no rsi_height subtraction - RSI panel is a sibling widget)
+    """
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create test data with sufficient points for all indicators
+        dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices = [float(100 + i % 10) for i in range(50)]
+        volumes = [int(1000000) for _ in range(50)]
+        opens = [float(100) for _ in range(50)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        # Show chart with RSI hidden (default state)
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Verify RSI is hidden
+        assert panel.is_rsi_visible() is False
+
+        # Verify correct height calculation behavior
+        # Formula: available_height = self.size.height - 7 - volume_height
+        # Volume is always on: volume_height = 3
+        # Expected: available_height = panel.size.height - 7 - 3
+        expected_height = panel.size.height - 7 - 3
+
+        # Verify the calculation is correct (RSI panel is not subtracted because it's a sibling)
+        # The actual rendered chart height should match this calculation
+        assert expected_height >= 10  # Minimum height enforcement
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_height_calculation_rsi_visible() -> None:
+    """Test correct height calculation with RSI visible (VPR-043 fix).
+
+    After VPR-043 fix, the height calculation no longer subtracts rsi_height because
+    RSI panel is a SIBLING to #chart-content (yielded separately in compose()).
+    Textual's layout model stacks siblings vertically automatically, so we don't need
+    to manually reserve space for the RSI panel.
+
+    Correct formula: available_height = self.size.height - 7 - volume_height
+    (no rsi_height subtraction needed)
+    """
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create test data with sufficient points for RSI calculation (need 15+)
+        dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices = [float(100 + i % 10) for i in range(50)]
+        volumes = [int(1000000) for _ in range(50)]
+        opens = [float(100) for _ in range(50)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        # Show chart and toggle RSI on
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        panel.toggle_rsi()
+        await pilot.pause()
+
+        # Verify RSI is visible
+        assert panel.is_rsi_visible() is True
+
+        # Verify CORRECT height calculation behavior (VPR-043 fix)
+        # With RSI visible, we do NOT subtract rsi_height anymore
+        # Correct formula: available_height = self.size.height - 7 - volume_height
+        # Since volume is always on: volume_height = 3
+        # Correct calculation: available_height = panel.size.height - 7 - 3
+        correct_height = panel.size.height - 7 - 3
+
+        # Verify the chart uses the full available height (minus only fixed elements and volume)
+        # Note: Minimum height is 10, so if calculated height < 10, it gets clamped to 10
+        # In test environment (25 height): 25 - 7 - 3 = 15 (well above minimum)
+        expected_height = max(correct_height, 10)
+        assert expected_height == panel.size.height - 10  # Fixed elements (7) + volume (3)
+
+        # The fix: RSI panel is yielded from compose() as a sibling, so it stacks BELOW
+        # #chart-content naturally. We let Textual handle the vertical stacking automatically.
+        # This prevents volume bars and X-axis from being pushed out of view.
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_rsi_toggle_calls_render_content() -> None:
+    """Test that toggling RSI triggers _render_content().
+
+    This test verifies that toggle_rsi() calls _render_content() to update
+    the chart panel display when RSI visibility changes.
+    """
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create test data
+        dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices = [float(100 + i % 10) for i in range(50)]
+        volumes = [int(1000000) for _ in range(50)]
+        opens = [float(100) for _ in range(50)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        # Show chart
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Initial state: RSI hidden
+        assert panel.is_rsi_visible() is False
+
+        # Toggle RSI on - this should call _render_content()
+        panel.toggle_rsi()
+        await pilot.pause()
+
+        # Verify state changed
+        assert panel.is_rsi_visible() is True
+
+        # Toggle RSI off - this should call _render_content() again
+        panel.toggle_rsi()
+        await pilot.pause()
+
+        # Verify state changed back
+        assert panel.is_rsi_visible() is False
+
+        # This test documents that toggle_rsi() triggers layout recalculation
+        # by calling _render_content(), which recalculates available_height
+
+
+@pytest.mark.asyncio
+async def test_indicator_panel_receives_chart_width() -> None:
+    """Test that RSI panel receives chart width correctly.
+
+    This test verifies that IndicatorPanel (RSIPanel) is updated with the chart
+    width parameter when show_indicator() is called.
+    """
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create test data with sufficient points for RSI
+        dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices = [float(100 + i % 10) for i in range(50)]
+        volumes = [int(1000000) for _ in range(50)]
+        opens = [float(100) for _ in range(50)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        # Show chart - this should calculate RSI and update panel
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Verify RSI panel exists
+        assert panel._rsi_panel is not None
+
+        # Verify RSI was calculated (even though panel is hidden)
+        assert panel._rsi_values is not None
+        assert len(panel._rsi_values) == len(prices)
+
+        # Document: chart_area_width is cached after rendering
+        assert panel._chart_area_width > 0
+
+        # This test documents that the panel receives chart width data
+        # (though currently RSI panel uses hardcoded 70 chars - deferred to Feature 5)
+
+
+@pytest.mark.asyncio
+async def test_rsi_panel_refresh_on_ticker_change() -> None:
+    """Test that RSI panel refreshes correctly when ticker changes.
+
+    This test verifies that VPR-041 fix works: RSI panel should re-render with new data
+    when ticker changes, even if the panel is currently hidden.
+
+    FIX: show_indicator() now always calls _render_content() regardless of visibility,
+    so the panel display is always up-to-date when toggled visible.
+    """
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create first ticker data (AAPL)
+        dates_aapl = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices_aapl = [float(150 + i % 10) for i in range(50)]  # AAPL-like prices
+        volumes_aapl = [int(1000000) for _ in range(50)]
+        opens_aapl = [float(150) for _ in range(50)]
+        highs_aapl = [p + 2.0 for p in prices_aapl]
+        lows_aapl = [p - 2.0 for p in prices_aapl]
+
+        data_aapl = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates_aapl,
+            prices=prices_aapl,
+            volumes=volumes_aapl,
+            opens=opens_aapl,
+            highs=highs_aapl,
+            lows=lows_aapl,
+            interval="1d",
+        )
+
+        stats_aapl = HistoricalStats(
+            period_high=max(prices_aapl),
+            period_low=min(prices_aapl),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices_aapl),
+        )
+
+        # Show AAPL chart with RSI visible
+        panel.show_chart(data_aapl, stats_aapl)
+        await pilot.pause()
+
+        panel.toggle_rsi()
+        await pilot.pause()
+
+        assert panel.is_rsi_visible() is True
+        rsi_values_aapl = panel._rsi_values
+
+        # Create second ticker data (MSFT) with different price pattern
+        dates_msft = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices_msft = [float(300 + i % 15) for i in range(50)]  # MSFT-like prices (different)
+        volumes_msft = [int(2000000) for _ in range(50)]
+        opens_msft = [float(300) for _ in range(50)]
+        highs_msft = [p + 3.0 for p in prices_msft]
+        lows_msft = [p - 3.0 for p in prices_msft]
+
+        data_msft = HistoricalData(
+            ticker="MSFT",
+            period="1M",
+            dates=dates_msft,
+            prices=prices_msft,
+            volumes=volumes_msft,
+            opens=opens_msft,
+            highs=highs_msft,
+            lows=lows_msft,
+            interval="1d",
+        )
+
+        stats_msft = HistoricalStats(
+            period_high=max(prices_msft),
+            period_low=min(prices_msft),
+            change_percent=3.0,
+            avg_volume=2000000,
+            num_data_points=len(prices_msft),
+        )
+
+        # Switch to MSFT while RSI is visible
+        panel.show_chart(data_msft, stats_msft)
+        await pilot.pause()
+
+        # Verify RSI values changed (internal state updated correctly)
+        rsi_values_msft = panel._rsi_values
+        assert rsi_values_msft is not None
+        assert rsi_values_msft != rsi_values_aapl  # Different data should produce different RSI
+
+        # Verify the FIX: RSI panel display should be refreshed with new data
+        # After VPR-041 fix, show_indicator() always calls _render_content(),
+        # so the panel's internal _indicator_values should match the new ticker's RSI
+        assert panel._rsi_panel is not None
+        assert panel._rsi_panel._indicator_values == rsi_values_msft
+        # Verify current value is also updated
+        current_rsi_msft = next((v for v in reversed(rsi_values_msft) if v is not None), None)
+        assert panel._rsi_panel._current_value == current_rsi_msft

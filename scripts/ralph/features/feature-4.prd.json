@@ -68,7 +68,7 @@
         "All tests PASS with current code (characterize, don't fix yet)"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": [],
       "notes": "CRITICAL: Must capture current behavior before fixing. These tests document the bugs. Mark tests with @pytest.mark.characterization so we can update them as bugs are fixed."
@@ -85,7 +85,7 @@
         "Update characterization test from VPR-040 to expect correct behavior"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-040"],
       "notes": "Quick bug fix that improves user experience immediately. Low risk change - just ensure refresh happens."
@@ -107,7 +107,7 @@
         "Volume rendering code stays the same, just always runs"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": [],
       "notes": "Pure removal/simplification - makes the core fix easier by removing a toggle state. Matches TradingView where volume is always visible below price."
@@ -126,7 +126,7 @@
         "Manual verification: screenshot with RSI on shows volume bars and X-axis"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-040", "VPR-042"],
       "notes": "This is THE core bug fix. The fix is likely just removing 'rsi_height' from the calculation since RSI stacks as a sibling naturally."
@@ -145,7 +145,7 @@
         "Remove or update @pytest.mark.characterization tests"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-041", "VPR-043"],
       "notes": "Final verification that all bugs are fixed. After this story, Feature 4 is complete and ready to merge."

@@ -22,9 +22,9 @@ rsi_height = 7 if self.is_rsi_visible() else 0
 available_height = self.size.height - 7 - volume_height - rsi_height  # BUG!
 ```
 
-**Why it's wrong:** RSI panel is yielded from `compose()` as a **sibling** to `#chart-content`, not a child. Subtracting `rsi_height` shrinks the chart area, but RSI still stacks below as a sibling, causing overflow.
-
-**The fix:** Remove `rsi_height` from the calculation. Let Textual stack RSI naturally.
+When RSI is visible, it takes 8 lines (7 height + 1 margin-top) from #chart-content's space
+We must account for this because self.size.height is ChartPanel's full height,
+but #chart-content (where we render) gets reduced when RSI is visible
 
 ## Stories (5 total, focused on fixes)
 

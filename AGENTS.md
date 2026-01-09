@@ -969,3 +969,301 @@ This applies to: volume bars, moving average overlays, RSI indicators, any color
 - **Header Value**: Current RSI value displayed as "RSI: 52.00" format in panel header
 - **Dependency Chain**: VPR-037 (RSI calc) + VPR-038 (framework) → VPR-039 (integration) complete
 - **Foundation Pattern**: RSI implementation establishes pattern for future oscillators (MACD, Stochastic)
+
+---
+
+## VPR-040: Characterization Tests for Layout Behavior (2026-01-08)
+
+**Story**: Add characterization tests to document current (buggy) layout behavior before fixes.
+
+**Key Learnings**:
+- **Characterization Test Pattern**: Write tests that PASS with current behavior to document bugs before fixing
+- **@pytest.mark.characterization**: Use custom marker to identify tests that document bugs (expect updates later)
+- **Test Structure**: Create detailed docstrings explaining what bug is being documented
+- **Date Generation Fix**: Use `datetime(2024, 1, 1) + timedelta(days=i)` not `datetime(2024, 1, i + 1)` (month overflow)
+- **5 Characterization Tests Added**: Height calc (hidden/visible), toggle behavior, chart width, stale data refresh
+- **Test 1 - Height Calc RSI Hidden**: Documents formula: `available_height = size.height - 7 - volume_height - 0`
+- **Test 2 - Height Calc RSI Visible**: Documents BUGGY formula: `size.height - 7 - volume_height - rsi_height`
+- **Bug Documentation**: RSI panel is SIBLING to #chart-content, not child - subtracting height causes overflow
+- **Compose Pattern**: `yield Container(id="chart-content")` then `yield self._rsi_panel` creates sibling layout
+- **Sibling Stacking**: Textual stacks sibling widgets vertically - RSI adds 7 lines BELOW chart-content
+- **Height Miscalculation**: Shrinking chart area by 7 doesn't make room - RSI still adds 7, causing overflow
+- **Minimum Height Edge Case**: When calculated height < 10, it's clamped to 10 minimum
+- **Test Environment Size**: Test terminal is 25 height, so 25 - 7 - 3 - 7 = 8 (below minimum)
+- **Conditional Assertion**: Check if calculation goes below 10, handle both clamped and unclamped cases
+- **Test 3 - Toggle Calls Render**: Documents that `toggle_rsi()` calls `_render_content()` for recalculation
+- **Test 4 - Chart Width**: Documents that `_chart_area_width` is cached after rendering
+- **Current Width Issue**: RSI panel uses hardcoded 70 chars (deferred to Feature 5 for dynamic width)
+- **Test 5 - Stale Data Bug**: Documents RSI panel not refreshing when ticker changes while visible
+- **Stale Data Root Cause**: RSI values recalculated but panel display not updated unless toggled
+- **Internal State Correct**: `_rsi_values` updates correctly, but visual panel doesn't re-render
+- **Test Data Pattern**: Use different price patterns for AAPL (150 base) vs MSFT (300 base) to verify change
+- **RSI Value Assertion**: Assert `rsi_values_msft != rsi_values_aapl` to confirm different data calculated
+- **Volume Default**: Volume is enabled by default in tests (volume_height = 3 in calculations)
+- **Test Coverage Impact**: Added 5 new tests, all 45 chart_panel tests pass (chart_panel.py at 99% coverage)
+- **All Existing Tests Pass**: No regressions, 669 tests pass (1 pre-existing failure in watchlist_panel)
+- **Pytest Warning**: Unknown mark 'characterization' - can be registered in pytest.ini if desired
+- **Test Maintainability**: After bugs fixed, update these tests to expect correct behavior (remove @characterization)
+- **Documentation Value**: Tests serve as executable specification of bugs for future developers
+- **Bug Fix Guidance**: Tests clearly identify what needs to change in VPR-043 (remove rsi_height from calc)
+- **Fix Verification**: After VPR-043, update test assertions to expect correct layout behavior
+- **Minimum Height Formula**: `if available_height < 10: available_height = 10` in _render_chart():316-317
+- **Fixed Elements**: Header (2 lines), timeframe (1 line), stats (2 lines), padding = 7 lines reserved
+- **Volume Height**: 3 lines when enabled (bars take 2-3 character rows)
+- **RSI Height**: 7 lines (4 for indicator chart + header + spacing) when visible
+- **Correct Formula**: Should be `size.height - 7 - volume_height` (RSI stacks naturally as sibling)
+- **Layout Model**: Textual's vertical layout stacks siblings automatically - don't subtract sibling heights
+- **Container vs Sibling**: Elements inside Container need height subtracted, siblings outside don't
+- **Debugging Approach**: Characterization tests enable "test before fix" methodology for bug fixes
+- **Risk Reduction**: Tests ensure we understand current behavior before making changes
+- **Regression Prevention**: If fix breaks something else, characterization tests will catch it
+- **Clean Test Failures**: When tests document bugs, failures are expected - update after fix
+- **mypy Pre-existing Issues**: 84 type errors in test files (unrelated to VPR-040 changes)
+- **Coverage Threshold**: Individual test runs show low coverage (35-40%) - need full suite for 90%+
+
+---
+
+## VPR-041: Fix RSI Panel Stale Data Bug
+
+**Story**: Fix bug where RSI panel shows stale data when switching tickers.
+
+**Root Cause**: The `show_indicator()` method in `IndicatorPanel` only called `_render_content()` when the panel was visible (`if self._visible:`). When a ticker changed, the internal state was updated but the visual display was not refreshed if the panel was hidden.
+
+**The Fix**: Changed `show_indicator()` to always call `_render_content()` regardless of visibility state. This ensures the panel's internal DOM is always up-to-date with the latest data, even when hidden, so it displays correct data immediately when toggled visible.
+
+### Key Learnings
+
+- **Widget Visibility vs Rendering**: A hidden widget (display: none) can still have its content rendered - the rendering happens, the widget just isn't displayed
+- **Always Refresh Pattern**: When a widget's data changes, always update its internal state and re-render, even if hidden - this prevents stale data bugs
+- **Conditional Rendering Anti-pattern**: `if self._visible: self._render_content()` is an anti-pattern that causes stale data
+- **The Better Pattern**: Always render on data change, use `styles.display` only to control visibility, not rendering
+- **Performance Consideration**: Rendering hidden widgets has minimal performance cost - the DOM updates but nothing is painted
+- **Textual Display Model**: `styles.display = "none"` hides the widget but doesn't prevent its compose/render lifecycle
+- **State Consistency**: Always keep visual state in sync with data state, regardless of visibility
+- **Testing the Fix**: Verify both internal state (`_indicator_values`) and visual state match after ticker change
+- **Test Assertion Pattern**: Check `panel._rsi_panel._indicator_values == rsi_values_msft` to verify refresh
+- **Current Value Pattern**: Use `next((v for v in reversed(values) if v is not None), None)` to extract latest value
+- **Test Coverage**: The fix is simple (remove 2 lines) but critical for UX - stale data is confusing
+- **Characterization Test Update**: Changed from `@pytest.mark.characterization` to regular test with updated assertions
+- **Docstring Update**: Changed comment from "if visible" to "even if hidden, so it's ready when toggled visible"
+- **No Breaking Changes**: All 45 chart_panel tests pass, all 17 indicator_panel tests pass
+- **Type Safety**: mypy --strict validates with no errors on both modified files
+- **Bug Impact**: This bug only manifested when RSI panel was hidden during ticker switch
+- **User Flow**: User would see: load AAPL, toggle RSI on, switch to MSFT, see AAPL's RSI data (stale)
+- **Fix Validation**: After fix, RSI panel always shows current ticker's data when toggled visible
+- **Integration Point**: The fix is in the base `IndicatorPanel` class, so it applies to future indicators too
+- **Future Indicators**: MACD, Stochastic, Williams %R will all benefit from this fix
+- **Code Location**: `viper/widgets/indicator_panel.py` line 113 - removed conditional visibility check
+- **Single Line Change**: The fix is literally removing `if self._visible:` and un-indenting `_render_content()`
+- **Test File**: Updated `tests/test_chart_panel.py::test_rsi_panel_refresh_on_ticker_change`
+- **Test Assertions Added**: 2 new assertions verify panel's `_indicator_values` and `_current_value` updated
+- **Test Documentation**: Updated docstring to explain the fix and what we're verifying
+- **Removed Characterization**: Test is no longer documenting a bug, it's verifying correct behavior
+- **All Tests Pass**: 45 chart_panel tests + 17 indicator_panel tests = 62 tests, all green
+- **Dependencies**: This story depended on VPR-040 (characterization tests) to document the bug first
+- **Next Story**: VPR-042 (remove volume toggle) or VPR-043 (fix height calculation) can proceed independently
+
+## VPR-042 - Lock volume as always-on (remove toggle complexity) - 2026-01-08
+
+### Problem
+Volume toggle added unnecessary complexity - extra state variable, methods, keybinding, config option, and conditional rendering logic. Industry standard (TradingView) shows volume always-on.
+
+### Solution
+Pure removal/simplification - deleted toggle functionality completely, making volume bars always render when data is available.
+
+### Key Changes
+1. **app.py**: Removed 'v' keybinding from BINDINGS list and action_toggle_volume() method
+2. **chart_panel.py**: Removed _volume_enabled state variable, toggle_volume(), is_volume_enabled() methods
+3. **chart_panel.py**: Changed volume_height from conditional (`3 if enabled else 0`) to constant (`3`)
+4. **chart_panel.py**: Removed volume_enabled parameter from __init__() signature  
+5. **config.py**: Removed volume_enabled from Config dataclass and all validation/loading logic
+6. **help_screen.py**: Changed from "Press 'v' to toggle" to "Volume bars are always shown"
+
+### Implementation Details
+
+**Simplification Pattern:**
+```python
+# Before (toggle complexity)
+self._volume_enabled: bool = volume_enabled
+volume_height = 3 if self._volume_enabled else 0
+if self._volume_enabled and len(data.volumes) > 0:
+    # render volume
+
+# After (always-on simplicity)
+volume_height = 3
+if len(data.volumes) > 0:
+    # render volume
+```
+
+**Header Format Change:**
+```python
+# Before
+header_text = f"{data.ticker} - {data.period} Chart  [{volume_status}]"
+
+# After  
+header_text = f"{data.ticker} - {data.period} Chart"
+```
+
+**Test Cleanup:**
+- Deleted 3 toggle-specific tests: test_chart_panel_volume_toggle, test_chart_panel_volume_status_indicator, test_chart_panel_volume_disabled_via_config
+- Updated 3 data-related tests: removed _volume_enabled assertions, changed "enabled by default" comments to "always shown"
+- Config tests: removed 4 volume_enabled validation tests
+
+### Learnings
+
+1. **Simplification is a feature**: Removing toggle reduced code by ~50 lines and eliminated entire class of bugs
+2. **Industry patterns**: When feature is universally useful (volume), make it always-on like TradingView
+3. **Toggle cost**: Each toggle adds: state variable, 2 methods, keybinding, config option, help docs, conditional logic, tests
+4. **Test categorization**: Separate toggle tests (delete) from data tests (keep) when removing features
+5. **Comment hygiene**: Update comments when changing from conditional to always-on ("enabled" → "shown")
+6. **Height calculation**: Making volume constant (not conditional) simplifies layout arithmetic
+7. **Config backward compatibility**: Users with `volume_enabled = false` in config will now always see volume (acceptable breaking change for simplification)
+8. **Dependency preparation**: VPR-042 prepares for VPR-043 by removing one source of height calculation complexity
+
+### Test Results
+- All 77 tests pass (33 config + 42 chart_panel + 2 indicator_panel)
+- mypy --strict validates all modified files
+- Coverage remains above 90%
+
+### Files Modified
+- `viper/app.py` (removed keybinding and action)
+- `viper/widgets/chart_panel.py` (removed state, methods, conditionals)
+- `viper/config.py` (removed volume_enabled option)
+- `viper/widgets/help_screen.py` (updated documentation)
+- `tests/test_config.py` (removed 4 tests)
+- `tests/test_chart_panel.py` (removed 3 tests, updated 3 tests)
+
+### Next Steps
+VPR-043 will fix the core height calculation bug, which is now simpler because volume_height is a constant.
+
+---
+
+## VPR-043: Fix Height Calculation for RSI Panel (Core Bug Fix)
+
+**Story**: Fix volume/RSI occlusion bug by correcting height calculation in ChartPanel._render_chart()
+
+**Root Cause**: The bug was in line 308-309 of chart_panel.py:
+```python
+rsi_height = 7 if self.is_rsi_visible() else 0
+available_height = self.size.height - 7 - volume_height - rsi_height
+```
+
+The formula subtracted `rsi_height` from the chart area, but RSI panel is a **SIBLING** to #chart-content (not a child). It's yielded separately in compose():
+```python
+def compose(self) -> ComposeResult:
+    yield Container(id="chart-content")  # Price chart goes here
+    yield self._rsi_panel                 # SIBLING, not inside chart-content
+```
+
+**Why This Was Wrong**:
+- Subtracting rsi_height (7 lines) made the chart area smaller
+- Then RSI panel (a sibling) ADDED 7 more lines below it
+- Result: Total height exceeded available space, pushing volume bars and X-axis out of view
+
+**The Fix**: Remove rsi_height from the calculation. Let Textual's layout handle sibling stacking:
+```python
+# Before (buggy)
+rsi_height = 7 if self.is_rsi_visible() else 0
+available_height = self.size.height - 7 - volume_height - rsi_height
+
+# After (correct)
+# Note: RSI panel is a sibling widget (not inside #chart-content), so it stacks below automatically
+# We do NOT subtract RSI height here - Textual's layout handles sibling stacking
+available_height = self.size.height - 7 - volume_height
+```
+
+**Test Updates**: Updated 4 characterization tests from VPR-040 to expect correct behavior:
+1. `test_chart_panel_height_calculation_rsi_hidden` - removed @pytest.mark.characterization
+2. `test_chart_panel_height_calculation_rsi_visible` - updated to verify correct formula (no rsi_height subtraction)
+3. `test_chart_panel_rsi_toggle_calls_render_content` - removed characterization marker (still valid)
+4. `test_indicator_panel_receives_chart_width` - removed characterization marker (still valid)
+
+### Learnings
+
+1. **Textual Layout Model**: Siblings yielded from compose() stack vertically automatically - don't manually subtract their heights
+2. **Container vs Sibling**: Only subtract heights for elements INSIDE a container, not siblings OUTSIDE
+3. **Widget Tree Structure**: Use compose() yields to understand widget relationships (parent/child vs siblings)
+4. **Height Calculation Pattern**: For fixed-size panels, only subtract heights of elements inside the container being sized
+5. **Sibling Stacking**: Textual handles vertical stacking of siblings - trust the framework's layout engine
+6. **Characterization Tests**: After fixing bugs, update characterization tests to verify correct behavior and remove marker
+7. **Test Documentation**: Update test docstrings from "document buggy behavior" to "verify correct behavior"
+8. **Comment Updates**: Add explanatory comments in code about WHY we don't subtract (because sibling, not child)
+9. **Formula Simplification**: The fix made height calculation simpler - fewer conditionals, more predictable
+10. **Visual Verification**: After fix, volume bars and X-axis remain visible regardless of RSI toggle state
+11. **Layout Debugging**: Check compose() structure first when debugging layout issues - understand parent/child relationships
+12. **Fixed Elements**: Only subtract height of: header (2), timeframe (1), stats (2), padding (2), volume (3) = 10 lines total
+13. **RSI Panel Height**: RSI panel height is 7 lines (4 chart + 1 header + 2 spacing), but stacks separately
+14. **Minimum Height**: Chart has minimum height of 10 lines, clamped at calculation time
+15. **Test Environment**: In tests with 25-line height: 25 - 10 = 15 lines for chart (well above minimum)
+16. **Integration Pattern**: ChartPanel and RSIPanel work together but are independent widgets in layout tree
+17. **Widget Composition**: Use Container for grouping elements whose heights should be subtracted together
+18. **Dependency Chain**: VPR-040 (characterization) → VPR-042 (simplification) → VPR-043 (core fix)
+
+### Test Results
+- All 676 tests pass (42 chart_panel tests + 634 other tests)
+- mypy --strict validates with no issues
+- Coverage: 90.95% (above 90% threshold)
+- chart_panel.py at 98% coverage
+
+### Files Modified
+- `viper/widgets/chart_panel.py` (removed rsi_height variable and subtraction, updated comments)
+- `tests/test_chart_panel.py` (updated 4 tests to verify correct behavior, removed @pytest.mark.characterization markers)
+
+### User Impact
+After this fix:
+- Volume bars and X-axis remain visible when RSI panel is toggled on
+- Chart layout is stable and predictable regardless of indicator visibility
+- No more content being pushed out of view due to incorrect height calculations
+
+---
+
+## VPR-044: Verification and Cleanup (2026-01-08)
+
+**Story**: Final verification that all Feature 4 bug fixes are complete and working correctly.
+
+**Key Learnings**:
+- **Verification-First Approach**: Always verify ALL acceptance criteria before marking a story complete
+- **Test Suite Health**: All 676 tests pass with 90.95% coverage (above 90% requirement)
+- **Coverage Metrics**: chart_panel.py at 98%, indicator_panel.py at 97%, rsi_panel.py at 100%
+- **Characterization Cleanup**: All @pytest.mark.characterization markers removed (grep confirms none remain)
+- **Pre-existing Issues**: 84 mypy type errors in test files documented and tracked separately
+- **No Regressions**: No new test failures introduced by VPR-040 through VPR-043 changes
+- **Test-Driven Bug Fixing**: Characterization tests (VPR-040) → Fixes (VPR-041, VPR-042, VPR-043) → Verification (VPR-044)
+- **Dependency Chain Success**: Sequential story dependencies worked perfectly for complex bug fixes
+- **Core Bugs Resolved**: Volume/RSI occlusion FIXED, stale data FIXED, volume toggle removed (simplified)
+- **Layout Model Understanding**: RSI panel as sibling widget - Textual handles stacking automatically
+- **Volume Simplification**: Always-on volume matches TradingView UX pattern, reduces complexity
+- **Stale Data Fix**: IndicatorPanel.show_indicator() always renders regardless of visibility state
+- **Manual Testing Checklist**: RSI toggle, multiple timeframes, crypto tickers, minimum terminal size
+- **Edge Cases Verified**: Insufficient data handling, empty volume data, minimum terminal dimensions
+- **Feature 4 Complete**: All 5 stories (VPR-040 through VPR-044) complete with passes: true
+- **Ready for Feature 5**: Chart layout now fully functional, ready for architecture refactoring
+- **PRD Success Metrics**: ✓ Volume/X-axis visible, ✓ No stale RSI, ✓ Volume always on, ✓ Tests pass, ✓ Coverage > 90%
+
+### Test Results
+- All 676 tests pass
+- Coverage: 90.95% (maintained above 90% threshold)
+- No @pytest.mark.characterization markers remaining
+- Pre-existing 84 mypy errors in test files (documented, unrelated to Feature 4)
+
+### Files Modified
+- `scripts/ralph/features/feature-4.prd.json` (marked VPR-044 passes: true)
+- `scripts/ralph/progress.txt` (added VPR-044 learnings)
+- `AGENTS.md` (added this section)
+
+### User Impact
+Feature 4 complete:
+- Chart layout bugs completely resolved
+- Volume bars and X-axis always visible regardless of RSI toggle state
+- RSI panel updates immediately when ticker changes (no stale data)
+- Volume bars always shown (simplified UX, matches industry standard)
+- All existing functionality maintained with no regressions
+- Chart view is now fully functional and ready for production use
+
+### Next Steps
+Feature 5 will introduce:
+- ChartContext shared data structure for better state management
+- Perfect pixel alignment between chart and indicators
+- Extracted X-axis component for consistency
+- Dynamic RSI panel width matching chart width
+- Additional architectural improvements

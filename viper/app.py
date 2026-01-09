@@ -147,7 +147,6 @@ class ViperApp(App[None]):
         ("i", "toggle_info", "Toggle Info"),
         ("c", "toggle_chart", "Toggle Chart"),
         ("n", "toggle_news", "Toggle News"),
-        ("v", "toggle_volume", "Toggle Volume"),
         ("m", "cycle_ma", "Cycle MA"),
         ("r", "toggle_rsi", "Toggle RSI"),
         ("1", "timeframe_1", "1W"),
@@ -226,7 +225,7 @@ class ViperApp(App[None]):
                 with Container(id="info-container"):
                     yield InfoPanel()
                 with Container(id="chart-container"):
-                    yield ChartPanel(volume_enabled=self.config.volume_enabled)
+                    yield ChartPanel()
                 with Container(id="news-container"):
                     yield NewsPanel()
         yield TickerInput(history_manager=self.history_manager)
@@ -399,12 +398,6 @@ class ViperApp(App[None]):
         """Change chart timeframe to MAX."""
         self._change_chart_timeframe("7")
 
-    def action_toggle_volume(self) -> None:
-        """Toggle volume bars on the chart panel."""
-        # Only toggle volume when chart panel is visible
-        if self._chart_panel_visible:
-            chart_panel = self.query_one("#chart-container ChartPanel", ChartPanel)
-            chart_panel.toggle_volume()
 
     def action_cycle_ma(self) -> None:
         """Cycle through moving average display modes on the chart panel."""

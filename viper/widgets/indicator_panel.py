@@ -109,9 +109,8 @@ class IndicatorPanel(Widget):
         self._current_value = current_value
         if chart_width is not None:
             self._chart_width = chart_width
-        # Always re-render content when data changes (if visible)
-        if self._visible:
-            self._render_content()
+        # Always re-render content when data changes (even if hidden, so it's ready when toggled visible)
+        self._render_content()
 
     def hide(self) -> None:
         """Hide the indicator panel."""

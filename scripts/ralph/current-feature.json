@@ -1,20 +1,13 @@
 {
-  "currentFeature": "feature-4",
-  "featureName": "Chart Layout Bug Fixes",
-  "prdPath": "features/feature-4.prd.json",
-  "branch": "viper/feature-4-chart-bug-fixes",
+  "currentFeature": "feature-5",
+  "featureName": "Chart Architecture Refactoring",
+  "prdPath": "features/feature-5.prd.json",
+  "branch": "viper/feature-5-chart-architecture",
   "status": "ready-to-start",
   "startedAt": null,
-  "description": "Fix critical chart layout bugs: volume/RSI occlusion, RSI stale data, remove volume toggle. After this feature, chart view is fully functional. Architecture refactoring deferred to Feature 5.",
-  "stories": ["VPR-040", "VPR-041", "VPR-042", "VPR-043", "VPR-044"],
-  "nextFeature": {
-    "feature": "feature-5",
-    "name": "Chart Architecture Refactoring",
-    "prdPath": "features/feature-5.prd.json",
-    "branch": "viper/feature-5-chart-architecture",
-    "stories": ["VPR-050", "VPR-051", "VPR-052", "VPR-053"],
-    "description": "Introduce ChartContext, perfect pixel alignment, extracted X-axis. Builds on Feature 4 bug fixes."
-  },
+  "description": "Introduce ChartContext, perfect pixel alignment, extracted X-axis. Builds on Feature 4 bug fixes.",
+  "stories": ["VPR-050", "VPR-051", "VPR-052", "VPR-053"],
+  "nextFeature": null,
   "completedFeatures": [
     {
       "feature": "feature-1",
@@ -45,6 +38,17 @@
       "completedAt": "2026-01-08",
       "stories": 12,
       "notes": "Fixed news feed with yfinance, unified crypto data source, volume alignment, technical indicators (SMA/EMA/RSI), sub-panel framework, Rich markup migration"
+    },
+    {
+      "feature": "feature-4",
+      "name": "Chart Layout Bug Fixes",
+      "prdPath": "features/feature-4.prd.json",
+      "branch": "viper/feature-4-chart-bug-fixes",
+      "status": "complete",
+      "completedAt": "2026-01-08",
+      "stories": 6,
+      "testsPassing": 676,
+      "notes": "Fixed volume/RSI occlusion (VPR-045), RSI stale data clearing, locked volume as always-on. Chart view now fully functional."
     }
   ],
   "futureEnhancements": [
