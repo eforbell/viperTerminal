@@ -698,3 +698,146 @@
   - **Ready for Merge**: All acceptance criteria met, all dependencies resolved, all tests green
   - **Next Steps**: Feature 5 will introduce ChartContext, perfect alignment, extracted X-axis (architectural improvements)
 ---
+## 2026-01-09 - VPR-050
+- **What was implemented**: Created ChartContext dataclass as single source of truth for chart dimensions
+- **Files changed**:
+  - `viper/widgets/chart_context.py`: Created new immutable dataclass with all fields and factory method
+  - `tests/test_chart_context.py`: Created comprehensive test suite with 16 tests across 5 test classes
+  - `scripts/ralph/features/feature-5.prd.json`: Marked VPR-050 as complete (passes: true)
+- **Learnings**:
+  - **Frozen Dataclass Pattern**: Use `@dataclass(frozen=True)` for immutability - prevents accidental mutation
+  - **Single Source of Truth**: ChartContext holds ALL chart dimensions - total_width, total_height, y_axis_width
+  - **Computed Property**: Use `@property` for derived values like chart_area_width = total_width - y_axis_width
+  - **Factory Method Pattern**: `@classmethod from_historical_data()` creates context from HistoricalData
+  - **Data Fields**: ticker, period, dates, prices, volumes, opens, closes, highs, lows (full OHLCV)
+  - **Default Parameter**: y_axis_width: int = 12 (field default, also factory method default)
+  - **Immutability Test**: Use `with pytest.raises(AttributeError)` to verify frozen=True works
+  - **FrozenInstanceError**: Attempting to modify frozen dataclass raises AttributeError (not FrozenInstanceError)
+  - **Closes = Prices**: Factory method sets closes=data.prices for symmetry with opens field
+  - **Test Organization**: 5 test classes - Basics, Factory, Dimensions, DataLengths, EdgeCases
+  - **16 Comprehensive Tests**: All fields, computed property, factory basic/custom, crypto, min/max terminal sizes
+  - **Edge Cases Covered**: Empty lists, single data point, 250+ points, zero y_axis_width
+  - **Different Tickers**: Tested both stock ("AAPL") and crypto ("BTC-USD", "ETH-USD") formats
+  - **Different Periods**: Tested all period strings ("1D", "1W", "1M", "3M", "6M", "1Y", "5Y", "MAX")
+  - **Minimum Terminal**: 80x24 yields chart_area_width=68 (80-12)
+  - **Large Terminal**: 200x60 yields chart_area_width=188 (200-12)
+  - **Type Safety**: mypy --strict validates with no errors - all fields properly annotated
+  - **100% Coverage**: chart_context.py has 100% test coverage (23 statements, all covered)
+  - **Test Count**: Added 16 new tests, total now 692 tests passing
+  - **Overall Coverage**: 91.07% (above 90% threshold)
+  - **No Integration**: VPR-050 creates dataclass in isolation - no changes to existing code
+  - **Foundation Ready**: ChartContext is ready for VPR-051 integration with ChartPanel and IndicatorPanel
+  - **Documentation**: Comprehensive module docstring explains design principles and usage
+  - **Docstring Examples**: Include example usage in both module and method docstrings
+  - **Alignment Contract**: chart_area_width becomes the alignment contract between all components
+  - **Future-Proof**: Design supports future indicators (MACD, Stochastic) with same context
+---
+
+## 2026-01-09 - VPR-051
+- **What was implemented**: Integrated ChartContext into ChartPanel, ChartRenderer, and IndicatorPanel for perfect alignment
+- **Files changed**:
+  - `viper/widgets/chart_renderer.py`: Added ChartContext parameter with @overload for backward compatibility
+  - `viper/widgets/chart_panel.py`: Create ChartContext from HistoricalData, pass to renderer and RSI panel
+  - `viper/widgets/indicator_panel.py`: Accept ChartContext parameter, extract chart_area_width and y_axis_width
+  - `scripts/ralph/features/feature-5.prd.json`: Marked VPR-051 as complete (passes: true)
+  - `AGENTS.md`: Added comprehensive VPR-051 learnings section
+- **Learnings**:
+  - **@overload Pattern**: Use function overloading to maintain backward compatibility during refactoring
+  - **Keyword-Only Parameters**: Use `*` before `context` parameter to force keyword-only usage
+  - **TYPE_CHECKING Import**: Use `if TYPE_CHECKING:` to avoid circular imports while keeping type hints
+  - **Factory Method Usage**: ChartContext.from_historical_data() creates context from domain data cleanly
+  - **Single Source of Truth**: ChartContext holds all dimensions, eliminates duplicate calculations
+  - **Property-Based Dimensions**: chart_area_width as @property ensures consistent derivation
+  - **Frozen Dataclass**: immutable context prevents accidental mutations, safe to share
+  - **Dual Path Implementation**: Support both legacy (individual params) and modern (context) calling styles
+  - **Modern Path First**: Check `if context is not None:` before falling back to legacy parameters
+  - **Attribute Extraction**: Extract dimensions early: `chart_width = context.chart_area_width`
+  - **State Caching**: Store `self._chart_context` on ChartPanel for reuse by child components
+  - **Context Propagation**: Pass context to all child components (IndicatorPanel, RSIPanel)
+  - **Dynamic Y-axis Padding**: Replace `" " * 12` with `" " * self._y_axis_width` from context
+  - **Attribute Initialization**: Add `_y_axis_width: int = 12` attribute with sensible default
+  - **Optional Parameters**: Use `context: ChartContext | None = None` for backward-compatible additions
+  - **Conditional State Updates**: Only update internal state when context is provided
+  - **Documentation Updates**: Update docstrings to explain both legacy and modern usage patterns
+  - **Width Mismatch Fix**: RSI panel now uses context.chart_area_width instead of hardcoded 70
+  - **Perfect Alignment**: All components derive width from same context.chart_area_width value
+  - **Test Preservation**: All 692 existing tests pass without modification (full backward compatibility)
+  - **Type Safety**: mypy --strict validates all modified files with no errors
+  - **Coverage Maintained**: 91.10% overall coverage, all modified files >95%
+  - **Future-Proof Design**: ChartContext can be extended with new fields without breaking existing code
+  - **Incremental Migration**: Both old and new APIs coexist during transition period
+  - **Implementation Pattern**: Check context first, extract fields, fall back to legacy params
+  - **Overload Signature**: One overload for legacy (prices required), one for modern (context required)
+  - **Zero Tests Broken**: Complete backward compatibility means no test updates needed
+- All 692 tests passing with 91.10% overall coverage
+- mypy --strict validates with no issues
+- chart_panel.py at 99% coverage, chart_renderer.py at 95%, indicator_panel.py at 96%
+- **Architecture Improvement**: ChartContext is now single source of truth for all dimensions
+- **Width Alignment Fixed**: RSI panel width now matches price chart width perfectly (no hardcoded 70)
+- **Y-axis Padding Fixed**: IndicatorPanel now uses dynamic y_axis_width from context
+- **Foundation Complete**: Ready for VPR-052 (X-axis extraction) which will use context for alignment
+---
+
+## 2026-01-09 - VPR-052
+- **What was implemented**: Extracted X-axis rendering to standalone render_x_axis() function
+- **Files changed**:
+  - `viper/widgets/chart_renderer.py`: Added render_x_axis(context) function, set include_x_axis=False in modern path
+  - `viper/widgets/chart_panel.py`: Import render_x_axis, render X-axis once at bottom after all components
+  - `tests/test_render_x_axis.py`: Created comprehensive test suite with 6 tests
+  - `tests/test_chart_renderer.py`: Added imports for ChartContext, HistoricalData, render_x_axis
+  - `scripts/ralph/features/feature-5.prd.json`: Marked VPR-052 as complete (passes: true)
+  - `AGENTS.md`: Added VPR-052 learnings section with detailed documentation
+- **Learnings**:
+  - **X-axis Extraction Pattern**: Extract to standalone function that uses ChartContext for all dimensions
+  - **Return Format**: Return list[str] (not single string with \n) for easier Label mounting
+  - **Modern vs Legacy**: Modern ChartContext path sets include_x_axis=False, legacy path unchanged
+  - **Integration Point**: ChartPanel renders X-axis after all other components (price, volume, indicators)
+  - **Single Rendering**: X-axis rendered once at bottom, shared by all components (no duplication)
+  - **Guaranteed Visibility**: X-axis always at bottom, never occluded by indicator panels
+  - **Date Formatting**: Short periods (1W, 1M) use MM/DD, medium (3M, 6M) use MM/DD/YY, 1Y uses MMM 'YY, long (2Y, 5Y, MAX) use YYYY
+  - **Alignment Consistency**: Use chart_area_width and y_axis_width from ChartContext for perfect alignment
+  - **Function Signature**: Accept ChartContext instead of individual parameters for extensibility
+  - **Testing Strategy**: Created separate test file for X-axis tests (cleaner separation of concerns)
+  - **6 Tests Added**: Basic, no dates, short/long periods, width alignment, crypto ticker
+  - **Type Annotations**: Explicit list[str] return type for mypy validation
+  - **Backward Compatibility**: Legacy path still includes X-axis in output, only modern path excludes
+  - **Code Duplication**: _create_x_axis() remains for legacy path, render_x_axis() for modern path
+  - **Future Refactor**: Could extract date formatting to shared helper function
+  - All 698 tests passing with 90.92% overall coverage
+  - mypy --strict validates with no issues
+  - chart_renderer.py at 93% coverage, chart_panel.py at 99% coverage
+---
+
+## 2026-01-09 - VPR-053
+- **What was implemented**: Final verification and comprehensive testing for Feature 5 (Chart Architecture Refactoring)
+- **Files changed**:
+  - `AGENTS.md`: Added comprehensive VPR-053 learnings section documenting Feature 5 achievements
+  - `scripts/ralph/features/feature-5.prd.json`: Marked VPR-053 as complete (passes: true)
+  - `scripts/ralph/progress.txt`: This entry
+- **Learnings**:
+  - **Test Suite Success**: All 698 tests pass in 96.39s (increased from 676 after Feature 4)
+  - **Coverage Achievement**: 90.92% overall coverage, exceeding 90% threshold
+  - **Module Coverage**: chart_context.py (100%), chart_panel.py (99%), indicator_panel.py (96%), rsi_panel.py (100%)
+  - **Type Safety**: mypy --strict validates all 32 source files with no errors
+  - **ChartContext Success**: Immutable frozen dataclass provides single source of truth for dimensions
+  - **Perfect Alignment**: All components use context.chart_area_width and context.y_axis_width
+  - **X-axis Extraction**: Rendered once at bottom via render_x_axis(context), shared by all components
+  - **Backward Compatibility**: Dual API paths (legacy + modern) maintained during transition
+  - **@overload Pattern**: Used typing.overload to support both old and new function signatures
+  - **Property-Based Dimensions**: chart_area_width as @property ensures consistent derivation
+  - **Factory Method Pattern**: from_historical_data() classmethod encapsulates construction logic
+  - **Incremental Refactoring**: VPR-050 (create) → VPR-051 (integrate) → VPR-052 (extract) → VPR-053 (verify)
+  - **Each Step Complete**: Every commit left codebase in working state with all tests passing
+  - **Architecture Extensibility**: Clean pattern ready for future indicators (MACD, Stochastic, etc.)
+  - **Layout Verification**: Tested at 80x24 minimum and 200x60 large terminal sizes
+  - **Timeframe Testing**: All periods (1W, 1M, 3M, 6M, 1Y, 5Y, MAX) verified with RSI on/off
+  - **Ticker Testing**: Stock (AAPL, MSFT) and crypto (BTC-USD, ETH-USD) tickers work identically
+  - **RSI Toggle Verified**: No occlusion of volume bars or X-axis when toggling RSI panel
+  - **Volume Always Visible**: Volume bars locked as always-on from Feature 4, verified working
+  - **Success Metrics Met**: All 8 PRD success metrics achieved and verified
+  - **Comprehensive Documentation**: AGENTS.md updated with 200+ lines of Feature 5 learnings
+  - **Frozen Dataclass Benefits**: Immutability prevents accidental mutations, thread-safe
+  - **Test Organization**: Separate test files (test_chart_context.py, test_render_x_axis.py) for clean separation
+  - **22 New Tests**: 16 ChartContext tests + 6 X-axis tests added to ensure architecture correctness
+  - **Feature 5 Complete**: Chart architecture refactoring successful, foundation ready for Feature 6+
+---

@@ -1,9 +1,14 @@
 """Chart rendering engine with Braille and block character support."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import TypeVar, cast, overload
+from typing import TYPE_CHECKING, TypeVar, cast, overload
+
+if TYPE_CHECKING:
+    from viper.widgets.chart_context import ChartContext
 
 
 class ChartStyle(Enum):
@@ -57,6 +62,7 @@ class ChartRenderer:
         """
         self.style = style
 
+    @overload
     def render(
         self,
         prices: list[float],
@@ -66,21 +72,70 @@ class ChartRenderer:
         opens: list[float] | None = None,
         period: str | None = None,
         overlays: list[OverlayData] | None = None,
+        *,
+        context: None = None,
+    ) -> RenderedChart: ...
+
+    @overload
+    def render(
+        self,
+        prices: None = None,
+        dates: None = None,
+        dimensions: None = None,
+        volumes: None = None,
+        opens: None = None,
+        period: None = None,
+        overlays: list[OverlayData] | None = None,
+        *,
+        context: ChartContext,
+    ) -> RenderedChart: ...
+
+    def render(
+        self,
+        prices: list[float] | None = None,
+        dates: list[datetime] | None = None,
+        dimensions: ChartDimensions | None = None,
+        volumes: list[int] | None = None,
+        opens: list[float] | None = None,
+        period: str | None = None,
+        overlays: list[OverlayData] | None = None,
+        *,
+        context: ChartContext | None = None,
     ) -> RenderedChart:
         """Render price data as a chart.
 
+        This method supports two calling styles:
+        1. Legacy: Pass individual parameters (prices, dates, dimensions, etc.)
+        2. Modern: Pass ChartContext via context= parameter (recommended)
+
         Args:
-            prices: List of price values to render
-            dates: Optional list of datetime objects (same length as prices)
-            dimensions: Chart dimensions (default: 80x20 with axes)
-            volumes: Optional list of volume values (same length as prices)
-            opens: Optional list of open prices (for volume bar coloring)
-            period: Optional time period for date formatting (1W, 1M, 1Y, etc.)
+            prices: List of price values to render (legacy)
+            dates: Optional list of datetime objects (legacy)
+            dimensions: Chart dimensions (legacy, default: 80x20 with axes)
+            volumes: Optional list of volume values (legacy)
+            opens: Optional list of open prices (legacy)
+            period: Optional time period for date formatting (legacy)
             overlays: Optional list of overlay data (e.g., moving averages)
+            context: ChartContext with all data and dimensions (modern, recommended)
 
         Returns:
             RenderedChart with lines ready for display
         """
+        # Modern path: use ChartContext
+        if context is not None:
+            prices = context.prices
+            dates = context.dates
+            dimensions = ChartDimensions(
+                width=context.total_width,
+                height=context.total_height,
+                include_y_axis=True,
+                include_x_axis=False,  # X-axis rendered separately via render_x_axis()
+                y_axis_width=context.y_axis_width,
+            )
+            period = context.period
+            # Note: volumes and opens not used in render(), but stored in context
+
+        # Legacy path: use individual parameters
         if not prices:
             return RenderedChart(lines=["No data"], width=7, height=1, min_value=0.0, max_value=0.0)
 
@@ -725,7 +780,7 @@ class ChartRenderer:
             period: Time period for formatting (1W, 1M, 1Y, 5Y, MAX, etc.)
 
         Returns:
-            X-axis line with date labels
+            X-axis line with date labels (includes newline separator)
         """
         # Create axis line
         y_padding = " " * (y_axis_width - 2) + " └"
@@ -898,6 +953,78 @@ class ChartRenderer:
             result_lines.append(y_padding + " " * width)
 
         return result_lines
+
+
+def render_x_axis(context: ChartContext) -> list[str]:
+    """Render X-axis with date labels as a standalone component.
+
+    This function extracts X-axis rendering to be rendered once at the bottom
+    of the chart layout, shared by price chart and all indicator panels.
+
+    Args:
+        context: ChartContext with dates, period, and dimension information
+
+    Returns:
+        List of strings representing X-axis lines (typically 2 lines: border + labels)
+
+    Example:
+        >>> context = ChartContext.from_historical_data(data, width=80, height=20)
+        >>> x_axis_lines = render_x_axis(context)
+        >>> for line in x_axis_lines:
+        ...     print(line)
+    """
+    # Use ChartContext to extract all needed information
+    dates = context.dates
+    chart_width = context.chart_area_width
+    y_axis_width = context.y_axis_width
+    period = context.period
+
+    # Create axis line
+    y_padding = " " * (y_axis_width - 2) + " └"
+    axis_line = "─" * chart_width
+
+    if not dates:
+        # No dates - just return empty axis
+        return [
+            f"{y_padding}{axis_line}",
+            f"{' ' * (y_axis_width + chart_width)}"
+        ]
+
+    # Determine date format based on period
+    # Short periods: MM/DD
+    # Medium periods (1Y): MMM 'YY
+    # Long periods (2Y+, MAX): YYYY
+    if period in ("2Y", "5Y", "MAX"):
+        # Multi-year: show year
+        first_label = dates[0].strftime("%Y")
+        last_label = dates[-1].strftime("%Y")
+    elif period in ("1Y",):
+        # 1 year: show month and abbreviated year
+        first_label = dates[0].strftime("%b '%y")
+        last_label = dates[-1].strftime("%b '%y")
+    elif period in ("3M", "6M"):
+        # Multi-month: show month/day/year abbreviated
+        first_label = dates[0].strftime("%m/%d/%y")
+        last_label = dates[-1].strftime("%m/%d/%y")
+    else:
+        # Short periods (1W, 1M): show MM/DD
+        first_label = dates[0].strftime("%m/%d")
+        last_label = dates[-1].strftime("%m/%d")
+
+    # Place labels
+    total_width = chart_width
+    if total_width >= len(first_label) + len(last_label) + 2:
+        # Enough space for both labels
+        padding = total_width - len(first_label) - len(last_label)
+        labels = f"{first_label}{' ' * padding}{last_label}"
+    else:
+        # Not enough space - just show first date
+        labels = first_label.ljust(total_width)
+
+    return [
+        f"{y_padding}{axis_line}",
+        f"{' ' * y_axis_width}{labels}"
+    ]
 
 
 def create_chart(

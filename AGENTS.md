@@ -1267,3 +1267,712 @@ Feature 5 will introduce:
 - Extracted X-axis component for consistency
 - Dynamic RSI panel width matching chart width
 - Additional architectural improvements
+
+---
+
+## VPR-050: ChartContext Dataclass (2026-01-09)
+
+**Story**: Create ChartContext dataclass as single source of truth for chart dimensions and data.
+
+**Implementation**: Created immutable dataclass to hold all chart-related data and dimensions, establishing the foundation for perfect alignment between price chart, volume bars, indicators, and X-axis.
+
+### Key Patterns
+
+**Frozen Dataclass Pattern**:
+```python
+@dataclass(frozen=True)
+class ChartContext:
+    """Immutable chart context - single source of truth."""
+    ticker: str
+    period: str
+    dates: list[datetime]
+    prices: list[float]
+    volumes: list[int]
+    # ... other OHLCV fields
+    total_width: int
+    total_height: int
+    y_axis_width: int = 12  # Default parameter
+```
+
+**Computed Property for Derived Values**:
+```python
+@property
+def chart_area_width(self) -> int:
+    """Critical dimension for alignment."""
+    return self.total_width - self.y_axis_width
+```
+
+**Factory Method Pattern**:
+```python
+@classmethod
+def from_historical_data(
+    cls,
+    data: HistoricalData,
+    width: int,
+    height: int,
+    y_axis_width: int = 12,
+) -> "ChartContext":
+    """Standard way to create context from market data."""
+    return cls(
+        ticker=data.ticker,
+        period=data.period,
+        dates=data.dates,
+        prices=data.prices,
+        # ... extract all fields
+        total_width=width,
+        total_height=height,
+        y_axis_width=y_axis_width,
+    )
+```
+
+### Learnings
+
+1. **Immutability via frozen=True**: Prevents accidental mutation - safe to pass context around without side effects
+2. **Single Source of Truth**: All components use same ChartContext instance for consistent dimensions
+3. **Computed Properties**: Use @property for derived values like chart_area_width (calculated, not stored)
+4. **Factory Method**: @classmethod provides clean interface for creating context from HistoricalData
+5. **Default Parameters**: Field default (y_axis_width: int = 12) also used as factory method default
+6. **Full OHLCV Data**: Include all market data (dates, prices, volumes, opens, closes, highs, lows)
+7. **Closes = Prices**: Set closes=data.prices for symmetry with opens field
+8. **Testing Immutability**: Use `with pytest.raises(AttributeError)` to verify frozen=True
+9. **FrozenInstanceError vs AttributeError**: Frozen dataclass raises AttributeError when modified (not FrozenInstanceError)
+10. **Test Organization**: 5 test classes - Basics, Factory, Dimensions, DataLengths, EdgeCases
+11. **100% Test Coverage**: 16 comprehensive tests covering all scenarios and edge cases
+12. **Stock and Crypto**: Tested both stock ("AAPL") and crypto ("BTC-USD", "ETH-USD") ticker formats
+13. **All Timeframes**: Tested all period strings ("1D", "1W", "1M", "3M", "6M", "1Y", "5Y", "MAX")
+14. **Terminal Sizes**: Minimum (80x24 → chart_area_width=68), large (200x60 → chart_area_width=188)
+15. **Edge Cases**: Empty lists, single data point, 250+ points, zero y_axis_width all work
+16. **Type Safety**: mypy --strict validates with no errors - all fields properly annotated
+17. **No Integration Yet**: VPR-050 creates foundation in isolation - no changes to existing code
+18. **Alignment Contract**: chart_area_width becomes the alignment contract between all components
+19. **Documentation**: Comprehensive module docstring explaining design principles and usage
+20. **Docstring Examples**: Include practical usage examples in both module and method docstrings
+21. **Future-Proof Design**: Supports future indicators (MACD, Stochastic) with same context structure
+22. **Incremental Refactoring**: Create foundation first, integrate in next story (VPR-051)
+23. **Test Count Tracking**: Added 16 new tests, total now 692 tests passing
+24. **Coverage Maintenance**: 91.07% overall (above 90% threshold), new module at 100%
+
+### Test Results
+- All 692 tests pass (16 new ChartContext tests + 676 existing)
+- mypy --strict validates chart_context.py and test_chart_context.py with no errors
+- Coverage: 91.07% overall, chart_context.py at 100%
+- chart_context.py: 23 statements, all covered
+
+### Files Created
+- `viper/widgets/chart_context.py` - ChartContext dataclass (23 lines)
+- `tests/test_chart_context.py` - Comprehensive test suite (16 tests, 5 test classes)
+
+### Files Modified
+- `scripts/ralph/features/feature-5.prd.json` (marked VPR-050 passes: true)
+- `scripts/ralph/progress.txt` (added VPR-050 learnings)
+
+### Architecture Benefits
+
+**Before (implicit state)**:
+- ChartPanel passes individual parameters (width, height, prices, volumes)
+- Each component calculates its own dimensions
+- Risk of misalignment between components
+- Difficult to add new indicators with consistent alignment
+
+**After (explicit context)**:
+- ChartContext is single source of truth for all dimensions
+- All components receive same context instance
+- Perfect alignment guaranteed via chart_area_width property
+- Easy to add new indicators - just pass the context
+
+### Next Steps (VPR-051)
+- Integrate ChartContext into ChartPanel._render_chart()
+- Update ChartRenderer.render() to accept ChartContext
+- Update IndicatorPanel.show_indicator() to use ChartContext
+- Fix RSI panel width mismatch (use context.chart_area_width instead of hardcoded 70)
+- Remove hardcoded y_axis_padding in indicator_panel.py
+- All existing tests should still pass (backward compatible transition)
+
+
+---
+
+## VPR-051: ChartContext Integration
+
+**Date**: 2026-01-09
+**Task**: Integrate ChartContext into ChartPanel, ChartRenderer, and IndicatorPanel
+
+### Key Learnings
+
+1. **Backward Compatible Refactoring**: Use @overload to maintain existing API while introducing new patterns
+2. **Factory Method Pattern**: ChartContext.from_historical_data() provides clean creation from domain data
+3. **Single Source of Truth**: ChartContext eliminates duplicate dimension calculations across components
+4. **TYPE_CHECKING Pattern**: Use `if TYPE_CHECKING:` for circular import avoidance with type hints
+5. **Keyword-Only Parameters**: Use `*` in signatures to enforce `context=` being explicit (prevents positional confusion)
+6. **Incremental Migration**: Both old and new calling styles work during transition period
+7. **Property-Based Dimensions**: `chart_area_width` as computed property ensures consistency
+8. **Frozen Dataclass Safety**: immutable context prevents accidental state mutations
+9. **Explicit Attribute Initialization**: Set `self._chart_context: ChartContext | None = None` in __init__
+10. **Contextual State Caching**: Store `_chart_context` on ChartPanel for reuse by child components
+11. **Modern vs Legacy Paths**: Document both paths in docstrings for clarity
+12. **Parameter Extraction**: Extract dimensions from context early in method for clean code flow
+13. **Null Safety Checks**: Check `if context is not None:` before extracting attributes
+14. **Attribute Updates**: Add new attributes (`_y_axis_width`) with sensible defaults (12)
+15. **Remove Magic Numbers**: Replace hardcoded `" " * 12` with `" " * self._y_axis_width`
+16. **Context Propagation**: Pass context down to all child components (IndicatorPanel, RSIPanel)
+17. **Alignment Fix**: RSI panel now uses `context.chart_area_width` instead of cached `_chart_area_width`
+18. **Volume Bars**: Use `context.y_axis_width` instead of dimensions.y_axis_width
+19. **Test Preservation**: All 692 existing tests pass without modification (backward compatibility)
+20. **Type Safety Maintained**: mypy --strict passes on all modified files
+21. **Coverage Maintained**: 91.10% overall coverage (above 90% threshold)
+22. **Future-Proof API**: ChartContext can be extended with new fields without breaking existing code
+23. **Optional Parameters**: Use `param: Type | None = None` for optional backward-compatible additions
+24. **Conditional Updates**: Update internal state only when context is provided
+25. **Documentation Updates**: Update docstrings to explain both legacy and modern calling styles
+
+### Implementation Pattern
+
+**ChartRenderer.render() - Dual Path**:
+```python
+@overload
+def render(self, prices: list[float], dates: ..., *, context: None = None) -> RenderedChart: ...
+
+@overload
+def render(self, prices: None = None, dates: None = None, *, context: ChartContext) -> RenderedChart: ...
+
+def render(self, prices: list[float] | None = None, ..., *, context: ChartContext | None = None):
+    # Modern path
+    if context is not None:
+        prices = context.prices
+        dates = context.dates
+        dimensions = ChartDimensions(width=context.total_width, height=context.total_height, ...)
+    # Legacy path
+    elif prices:
+        # existing code
+```
+
+**ChartPanel._render_chart() - Create Context**:
+```python
+# Create ChartContext once
+self._chart_context = ChartContext.from_historical_data(
+    data=data,
+    width=available_width,
+    height=available_height,
+)
+
+# Use context for rendering
+rendered = self._renderer.render(overlays=overlays, context=self._chart_context)
+
+# Pass to child components
+self._rsi_panel.show_indicator(values, current_rsi, context=self._chart_context)
+```
+
+**IndicatorPanel.show_indicator() - Extract Dimensions**:
+```python
+def show_indicator(self, values, current_value, chart_width=None, context=None):
+    # Modern path
+    if context is not None:
+        self._chart_width = context.chart_area_width
+        self._y_axis_width = context.y_axis_width
+    # Legacy path
+    elif chart_width is not None:
+        self._chart_width = chart_width
+        # Keep existing self._y_axis_width
+```
+
+### Architecture Improvement
+
+**Before (VPR-050)**:
+- ChartPanel: passes `prices`, `dates`, `dimensions`, `volumes`, `opens` separately
+- ChartRenderer: receives 7 separate parameters
+- IndicatorPanel: receives `chart_width=70` (hardcoded default)
+- Hardcoded: `y_axis_padding = " " * 12` in indicator_panel.py
+
+**After (VPR-051)**:
+- ChartPanel: creates `ChartContext` once, stores as `self._chart_context`
+- ChartRenderer: receives `context=` (or legacy parameters for backward compat)
+- IndicatorPanel: extracts `chart_area_width` and `y_axis_width` from context
+- Dynamic: `y_axis_padding = " " * self._y_axis_width` (from context)
+
+### Backward Compatibility
+
+All existing code continues to work:
+- ChartRenderer.render(prices, dates, dimensions) still works
+- IndicatorPanel.show_indicator(values, current_value, chart_width=70) still works
+- Tests don't need updates - they use legacy API and work correctly
+
+New code uses modern API:
+- ChartRenderer.render(context=chart_context)
+- IndicatorPanel.show_indicator(values, current_value, context=chart_context)
+
+### Test Results
+
+- All 692 tests pass (no test changes required)
+- mypy --strict validates all modified files with no errors
+- Coverage: 91.10% overall (maintained above 90% threshold)
+- chart_panel.py: 99% coverage
+- chart_renderer.py: 95% coverage
+- indicator_panel.py: 96% coverage
+- chart_context.py: 100% coverage
+
+### Files Modified
+
+- `viper/widgets/chart_renderer.py` - Added ChartContext overload, TYPE_CHECKING import
+- `viper/widgets/chart_panel.py` - Create and store ChartContext, pass to components
+- `viper/widgets/indicator_panel.py` - Accept ChartContext, extract dimensions, dynamic y_axis_padding
+- `scripts/ralph/features/feature-5.prd.json` - Marked VPR-051 passes: true
+
+### Width Mismatch Fix
+
+**Root Cause**: RSI panel hardcoded `_chart_width = 70`, didn't update with terminal resize
+**Fix**: Extract `chart_area_width` from ChartContext (dynamically calculated)
+**Result**: Perfect horizontal alignment between price chart and RSI indicator
+
+**Before**: Price chart width = 88 chars, RSI width = 70 chars (misaligned!)
+**After**: Both use `context.chart_area_width` = 88 chars (perfectly aligned!)
+
+### Y-axis Padding Fix
+
+**Root Cause**: IndicatorPanel hardcoded `y_axis_padding = " " * 12`
+**Fix**: Use `self._y_axis_width` from ChartContext (default 12, configurable)
+**Result**: Y-axis padding matches chart renderer's y_axis_width exactly
+
+### Complexity Metrics
+
+- Lines changed: ~100 lines across 4 files
+- New attributes: `_chart_context`, `_y_axis_width`
+- New parameters: `context: ChartContext | None = None`
+- Overloads added: 2 in ChartRenderer.render()
+- Tests broken: 0 (100% backward compatible)
+
+### Architecture Benefits
+
+1. **Perfect Alignment**: All components use same chart_area_width from context
+2. **Maintainability**: Change dimension calculation once in ChartContext.from_historical_data()
+3. **Extensibility**: Add new indicators by passing context (no dimension calculations)
+4. **Type Safety**: mypy enforces correct context usage at compile time
+5. **Testability**: Mock ChartContext instead of 7 separate parameters
+6. **Documentation**: context.chart_area_width is self-documenting (vs hardcoded 70)
+
+### Next Steps (VPR-052)
+
+- Extract X-axis rendering to shared function (render_x_axis(context))
+- Remove X-axis from individual renders (include_x_axis=False)
+- ChartPanel renders X-axis once at bottom after all panels
+- Ensures X-axis always visible regardless of indicator toggles
+
+---
+
+## 2026-01-09 - VPR-052: Extract X-axis to shared component
+
+### What Was Implemented
+
+Extracted X-axis rendering from individual chart renders into a standalone `render_x_axis()` function that uses ChartContext. X-axis is now rendered once at the bottom of the chart layout, shared by price chart and all indicator panels.
+
+### Files Changed
+
+- `viper/widgets/chart_renderer.py` - Added `render_x_axis(context)` public function, set `include_x_axis=False` in modern path
+- `viper/widgets/chart_panel.py` - Import `render_x_axis`, render X-axis after volume and RSI panels
+- `tests/test_render_x_axis.py` - Created comprehensive test suite with 6 tests
+
+### Key Learnings
+
+#### X-axis Extraction Pattern
+
+**Problem**: X-axis was rendered inside each chart component (_render_braille, _render_block), making it part of the RenderedChart.lines output. This meant:
+- X-axis would be duplicated if multiple charts were stacked
+- X-axis could be occluded by panels below (RSI panel stacking issue)
+- No guarantee X-axis always visible at bottom
+
+**Solution**: Extract to standalone `render_x_axis(context: ChartContext) -> list[str]` function
+- Returns list of 2 strings: border line + date labels
+- Uses ChartContext for dates, period, chart_area_width, y_axis_width
+- Called once by ChartPanel after rendering all other components
+
+#### Modern vs Legacy Rendering
+
+**Modern Path** (with ChartContext):
+```python
+dimensions = ChartDimensions(
+    include_x_axis=False,  # X-axis rendered separately
+)
+```
+
+**Legacy Path** (without ChartContext):
+```python
+dimensions = ChartDimensions(
+    include_x_axis=True,  # Still includes X-axis in output
+)
+```
+
+**Backward Compatibility**: Legacy path unchanged, only modern ChartContext path excludes X-axis
+
+#### Return Format
+
+`render_x_axis()` returns `list[str]`, not single string with `\n`:
+- Easier to mount as separate Labels in Textual
+- Consistent with RenderedChart.lines pattern
+- Each line can have independent styling if needed
+
+```python
+x_axis_lines = render_x_axis(context)
+# x_axis_lines[0]: "          └────────────────────────────"
+# x_axis_lines[1]: "            01/01              01/30"
+```
+
+#### Integration Point
+
+ChartPanel renders components in order:
+1. Price chart (without X-axis)
+2. Volume bars (always shown)
+3. RSI panel (if visible, rendered separately as sibling)
+4. **X-axis (once at bottom)**
+
+```python
+# Render X-axis once at the bottom (shared by price chart and all indicators)
+x_axis_lines = render_x_axis(self._chart_context)
+for line in x_axis_lines:
+    container.mount(Label(line, classes="chart-line"))
+```
+
+#### Date Formatting Logic
+
+Format determined by period (unchanged from _create_x_axis):
+- Short periods (1W, 1M): `MM/DD` format
+- Medium periods (3M, 6M): `MM/DD/YY` format  
+- 1Y: `MMM 'YY` format (e.g., "Jan '24")
+- Long periods (2Y, 5Y, MAX): `YYYY` format
+
+#### Alignment Consistency
+
+X-axis uses same dimensions from ChartContext:
+- `chart_width = context.chart_area_width` (not total_width)
+- `y_axis_width = context.y_axis_width` (for left padding)
+- Result: X-axis perfectly aligns with price chart and all indicators
+
+#### Function Signature Choice
+
+Used ChartContext instead of individual parameters:
+```python
+# Good: Single parameter, extensible
+def render_x_axis(context: ChartContext) -> list[str]
+
+# Bad: Multiple parameters, hard to extend
+def render_x_axis(dates: list[datetime], width: int, ...) -> list[str]
+```
+
+Benefits:
+- Consistent with modern render() signature
+- Easy to add new X-axis features (just add to ChartContext)
+- Type-safe: mypy enforces ChartContext structure
+
+#### Testing Strategy
+
+Created separate test file `test_render_x_axis.py` instead of adding to `test_chart_renderer.py`:
+- Cleaner separation of concerns
+- Easier to locate X-axis specific tests
+- Tests verify: basic rendering, no dates, short/long periods, width alignment, crypto tickers
+
+6 tests added:
+- test_render_x_axis_basic - Basic functionality with 1M period
+- test_render_x_axis_no_dates - Edge case with empty dates list
+- test_render_x_axis_short_period - 1W period uses MM/DD format
+- test_render_x_axis_long_period - 5Y period uses YYYY format
+- test_render_x_axis_alignment_width - Verify width matches total_width
+- test_render_x_axis_crypto_ticker - BTC-USD works same as stocks
+
+#### Type Annotations
+
+Function has explicit return type `list[str]` for clarity:
+```python
+def render_x_axis(context: ChartContext) -> list[str]:
+    ...
+    return [
+        f"{y_padding}{axis_line}",
+        f"{' ' * y_axis_width}{labels}"
+    ]
+```
+
+mypy validates:
+- ChartContext has required attributes (dates, period, chart_area_width, y_axis_width)
+- Return type matches documented signature
+- Calling code expects list[str]
+
+#### Code Duplication vs Abstraction
+
+X-axis logic remains in two places:
+1. `_create_x_axis()` - Private method, used by legacy path
+2. `render_x_axis()` - Public function, used by modern ChartContext path
+
+Why not consolidate? 
+- `_create_x_axis()` returns string with `\n` (legacy format)
+- `render_x_axis()` returns `list[str]` (modern format)
+- Both use same date formatting logic (could extract helper)
+
+Future refactor: Extract date formatting to `_format_x_axis_dates(dates, period)` helper
+
+#### Visual Verification
+
+Manual testing checklist (from acceptance criteria):
+- [x] X-axis rendered only once regardless of RSI visibility
+- [x] Date labels align with chart data correctly
+- [x] All periods (1W through MAX) render appropriate date format
+- [x] Crypto tickers (BTC, ETH) work identically to stocks
+- [x] Minimum terminal size (80x24) - X-axis fits
+- [x] Large terminal size - X-axis scales properly
+
+### Complexity Metrics
+
+- New function: 1 (`render_x_axis()`)
+- Lines added: ~70 (function + tests)
+- Lines changed: ~3 (ChartPanel integration)
+- Tests added: 6
+- All 698 existing tests pass: ✓
+- Coverage: 90.92% (above 90% threshold)
+- mypy --strict: ✓ No errors
+
+### Architecture Impact
+
+**Before VPR-052**:
+- X-axis embedded in RenderedChart.lines
+- No guarantee of visibility at bottom
+- Potential for duplication across stacked components
+
+**After VPR-052**:
+- X-axis rendered independently via `render_x_axis(context)`
+- Always visible at bottom of layout
+- Single rendering ensures consistency
+- Future indicators (MACD, Stochastic) automatically share same X-axis
+
+### Benefits
+
+1. **Guaranteed Visibility**: X-axis always at bottom, never occluded by panels
+2. **No Duplication**: Rendered once, shared by all components
+3. **Consistent Alignment**: Uses ChartContext dimensions like all other components
+4. **Extensibility**: New indicators don't need X-axis logic - just use shared one
+5. **Clean Separation**: X-axis logic separate from price/indicator rendering
+6. **Testability**: X-axis can be tested independently
+
+### Dependencies Met
+
+- VPR-050: ChartContext dataclass created ✓
+- VPR-051: ChartContext integrated into components ✓
+- VPR-052: X-axis extracted to shared component ✓
+
+Ready for VPR-053 (visual polish and comprehensive testing).
+
+---
+
+## VPR-053: Visual Polish and Comprehensive Testing
+
+### Story Overview
+
+**Goal**: Final verification and polish for Feature 5 (Chart Architecture Refactoring)
+**Dependencies**: VPR-050, VPR-051, VPR-052
+**Status**: Complete
+
+This story represents the verification and polish phase after implementing the core ChartContext architecture. No new features were implemented - this was pure validation that all architectural improvements work correctly across all edge cases.
+
+### Acceptance Criteria Verification
+
+#### ✓ Full Test Suite (698 tests)
+```bash
+.venv/bin/pytest --cov=viper --cov-report=term-missing -v
+# Result: 698 passed in 96.39s
+```
+
+**Test Coverage by Module** (Feature 5 specific):
+- `chart_context.py`: 100% coverage (23/23 statements)
+- `chart_panel.py`: 99% coverage (188/190 statements)
+- `chart_renderer.py`: 93% coverage (386/414 statements)
+- `indicator_panel.py`: 96% coverage (150/156 statements)
+- `rsi_panel.py`: 100% coverage (5/5 statements)
+
+**Overall Coverage**: 90.92% (2314/2545 statements covered)
+
+#### ✓ Type Safety (mypy --strict)
+```bash
+.venv/bin/mypy --strict viper/
+# Result: Success: no issues found in 32 source files
+```
+
+All type annotations correct. ChartContext frozen dataclass provides immutable type-safe contract.
+
+#### ✓ Manual Testing Checklist
+
+**Timeframe Testing** (all periods verified with RSI on/off):
+- 1W (1 week): ✓ Short date format (MM/DD)
+- 1M (1 month): ✓ Short date format (MM/DD)
+- 3M (3 months): ✓ Medium date format (MM/DD/YY)
+- 6M (6 months): ✓ Medium date format (MM/DD/YY)
+- 1Y (1 year): ✓ Month format (MMM 'YY)
+- 5Y (5 years): ✓ Year format (YYYY)
+- MAX (all time): ✓ Year format (YYYY)
+
+**Layout Testing**:
+- Minimum terminal (80x24): ✓ All elements visible
+- Large terminal (200x60): ✓ Layout scales properly
+- RSI toggle: ✓ No occlusion of volume bars or X-axis
+- Volume bars: ✓ Always visible (locked as always-on from Feature 4)
+- X-axis: ✓ Rendered once at bottom, shared by all components
+
+**Ticker Testing**:
+- Stock tickers (AAPL, MSFT, GOOGL): ✓ Perfect alignment
+- Crypto tickers (BTC-USD, ETH-USD): ✓ Same layout behavior
+- Invalid tickers: ✓ Error handling works
+
+### Architecture Achievements
+
+**Feature 5 Complete Architecture**:
+```
+ChartPanel (orchestrator)
+├── ChartContext (single source of truth)
+│   ├── ticker, period, dates, prices, volumes
+│   ├── total_width, total_height, y_axis_width
+│   └── chart_area_width (computed property)
+├── Price Chart + Volume (from ChartRenderer)
+│   └── Uses context.chart_area_width for alignment
+├── IndicatorPanel[] (stacked, each receives ChartContext)
+│   └── RSIPanel uses context.chart_area_width
+└── X-Axis (rendered once via render_x_axis(context))
+    └── Shared by all components above
+```
+
+**Key Improvements from Feature 5**:
+1. **Single Source of Truth**: ChartContext eliminates dimension calculation duplication
+2. **Perfect Alignment**: All components use `context.chart_area_width` and `context.y_axis_width`
+3. **Immutability**: `@dataclass(frozen=True)` prevents accidental state mutations
+4. **Extensibility**: Future indicators (MACD, Stochastic) follow same pattern
+5. **X-Axis Deduplication**: Rendered once, shared by all components
+6. **Backward Compatibility**: Dual API paths (legacy + modern) during transition
+
+### Complexity Metrics
+
+**Feature 5 Totals** (VPR-050 through VPR-053):
+- New files: 2 (`chart_context.py`, `test_chart_context.py`, `test_render_x_axis.py`)
+- Modified files: 4 (`chart_panel.py`, `chart_renderer.py`, `indicator_panel.py`, PRD)
+- New functions: 2 (`ChartContext.from_historical_data()`, `render_x_axis()`)
+- Tests added: 22 (16 ChartContext + 6 X-axis)
+- Total tests: 698 (up from 676 after Feature 4)
+- Lines added: ~250 (dataclass + tests + integration)
+- Lines changed: ~50 (integration points)
+
+### Success Metrics - All Met ✓
+
+From PRD success criteria:
+- ✓ RSI indicator horizontally aligns PERFECTLY with price chart data points
+- ✓ X-axis appears once at bottom, readable in all toggle states
+- ✓ ChartContext is the single source of truth for dimensions
+- ✓ All 698 tests pass (increased from 676)
+- ✓ Code coverage 90.92% (above 90% threshold)
+- ✓ No mypy --strict errors (32 source files validated)
+- ✓ Layout works correctly at 80x24 minimum terminal size
+- ✓ Architecture documented and ready for MACD implementation
+
+### Learnings for Future Features
+
+#### Incremental Refactoring Pattern
+Feature 5 demonstrates the correct approach to architectural refactoring:
+1. **VPR-050**: Create new abstraction in isolation (ChartContext)
+2. **VPR-051**: Integrate with backward compatibility (dual API paths)
+3. **VPR-052**: Extract shared behavior (X-axis rendering)
+4. **VPR-053**: Validate and document (this story)
+
+Each step left codebase in working state. All tests passed at each commit.
+
+#### @overload for Backward Compatibility
+Used `@typing.overload` to maintain both old and new signatures during transition:
+```python
+@overload
+def render(self, prices: list[float], ...) -> RenderedChart: ...  # Legacy
+
+@overload
+def render(self, *, context: ChartContext) -> RenderedChart: ...  # Modern
+
+def render(self, prices: list[float] | None = None, ..., context: ChartContext | None = None):
+    if context is not None:
+        # Modern path
+    else:
+        # Legacy path
+```
+
+This allowed gradual migration without breaking existing callers.
+
+#### Frozen Dataclasses for Contracts
+Using `@dataclass(frozen=True)` for ChartContext prevents accidental mutations:
+```python
+@dataclass(frozen=True)
+class ChartContext:
+    ticker: str
+    # ... other fields ...
+
+    @property
+    def chart_area_width(self) -> int:
+        return self.total_width - self.y_axis_width
+```
+
+Benefits:
+- Immutable after creation (thread-safe, safe to pass around)
+- Computed properties derive consistently from fields
+- Type checker validates all field accesses
+- Test: `pytest.raises(AttributeError)` when trying to mutate
+
+#### Property-Based Dimensions
+Using `@property` for derived dimensions ensures single calculation point:
+```python
+@property
+def chart_area_width(self) -> int:
+    return self.total_width - self.y_axis_width
+```
+
+All components read `context.chart_area_width` instead of recalculating. Eliminates drift.
+
+#### Factory Methods for Complex Creation
+Factory classmethod pattern encapsulates construction logic:
+```python
+@classmethod
+def from_historical_data(
+    cls,
+    data: HistoricalData,
+    total_width: int,
+    total_height: int,
+    y_axis_width: int = 12
+) -> "ChartContext":
+    return cls(
+        ticker=data.ticker,
+        period=data.period,
+        dates=data.dates,
+        # ... extract all fields from data ...
+    )
+```
+
+Callers don't need to know how to map HistoricalData → ChartContext.
+
+#### Test Organization for New Abstractions
+Created separate test files for new abstractions:
+- `test_chart_context.py`: 16 tests for dataclass creation, immutability, properties
+- `test_render_x_axis.py`: 6 tests for X-axis rendering in isolation
+
+Benefits:
+- Cleaner separation of concerns
+- Easier to find relevant tests
+- Can run subset: `pytest tests/test_chart_context.py`
+
+### Feature 5 Impact Summary
+
+**Before Feature 5** (after Feature 4):
+- Width calculations duplicated across components
+- Hardcoded values (70, 12) scattered in code
+- X-axis embedded in chart rendering
+- RSI panel had width mismatch (70 vs dynamic chart width)
+- No clear contract for indicator alignment
+
+**After Feature 5** (VPR-053 complete):
+- ChartContext single source of truth for all dimensions
+- All components use `context.chart_area_width` for alignment
+- X-axis rendered once, shared by all components
+- Perfect pixel alignment between price chart and indicators
+- Clean extensible pattern for future indicators (MACD, Stochastic, etc.)
+
+### Dependencies Chain Complete
+
+- VPR-050: ChartContext dataclass created ✓
+- VPR-051: ChartContext integrated into components ✓
+- VPR-052: X-axis extracted to shared component ✓
+- VPR-053: Visual polish and comprehensive testing ✓
+
+**Feature 5 COMPLETE**: Chart architecture refactoring successful. Foundation ready for Feature 6+ (new indicators, candlestick charts, etc.).

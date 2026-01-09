@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from viper.services.history_data import HistoricalData
+from viper.widgets.chart_context import ChartContext
 from viper.widgets.chart_renderer import (
     ChartDimensions,
     ChartRenderer,
@@ -11,6 +13,7 @@ from viper.widgets.chart_renderer import (
     OverlayData,
     RenderedChart,
     create_chart,
+    render_x_axis,
 )
 
 
