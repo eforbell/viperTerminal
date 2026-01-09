@@ -14,7 +14,7 @@
       "completedAt": "2026-01-10",
       "description": "Fetch and display news article content directly in terminal. Reader mode strips ads/navigation and renders clean text. Enter opens reader, 'o' opens browser.",
       "stories": 5
-    }
+    },
     {
       "feature": "feature-5",
       "name": "Chart Architecture Refactoring",
