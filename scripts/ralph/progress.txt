@@ -698,3 +698,37 @@
   - **Ready for Merge**: All acceptance criteria met, all dependencies resolved, all tests green
   - **Next Steps**: Feature 5 will introduce ChartContext, perfect alignment, extracted X-axis (architectural improvements)
 ---
+## 2026-01-09 - VPR-050
+- **What was implemented**: Created ChartContext dataclass as single source of truth for chart dimensions
+- **Files changed**:
+  - `viper/widgets/chart_context.py`: Created new immutable dataclass with all fields and factory method
+  - `tests/test_chart_context.py`: Created comprehensive test suite with 16 tests across 5 test classes
+  - `scripts/ralph/features/feature-5.prd.json`: Marked VPR-050 as complete (passes: true)
+- **Learnings**:
+  - **Frozen Dataclass Pattern**: Use `@dataclass(frozen=True)` for immutability - prevents accidental mutation
+  - **Single Source of Truth**: ChartContext holds ALL chart dimensions - total_width, total_height, y_axis_width
+  - **Computed Property**: Use `@property` for derived values like chart_area_width = total_width - y_axis_width
+  - **Factory Method Pattern**: `@classmethod from_historical_data()` creates context from HistoricalData
+  - **Data Fields**: ticker, period, dates, prices, volumes, opens, closes, highs, lows (full OHLCV)
+  - **Default Parameter**: y_axis_width: int = 12 (field default, also factory method default)
+  - **Immutability Test**: Use `with pytest.raises(AttributeError)` to verify frozen=True works
+  - **FrozenInstanceError**: Attempting to modify frozen dataclass raises AttributeError (not FrozenInstanceError)
+  - **Closes = Prices**: Factory method sets closes=data.prices for symmetry with opens field
+  - **Test Organization**: 5 test classes - Basics, Factory, Dimensions, DataLengths, EdgeCases
+  - **16 Comprehensive Tests**: All fields, computed property, factory basic/custom, crypto, min/max terminal sizes
+  - **Edge Cases Covered**: Empty lists, single data point, 250+ points, zero y_axis_width
+  - **Different Tickers**: Tested both stock ("AAPL") and crypto ("BTC-USD", "ETH-USD") formats
+  - **Different Periods**: Tested all period strings ("1D", "1W", "1M", "3M", "6M", "1Y", "5Y", "MAX")
+  - **Minimum Terminal**: 80x24 yields chart_area_width=68 (80-12)
+  - **Large Terminal**: 200x60 yields chart_area_width=188 (200-12)
+  - **Type Safety**: mypy --strict validates with no errors - all fields properly annotated
+  - **100% Coverage**: chart_context.py has 100% test coverage (23 statements, all covered)
+  - **Test Count**: Added 16 new tests, total now 692 tests passing
+  - **Overall Coverage**: 91.07% (above 90% threshold)
+  - **No Integration**: VPR-050 creates dataclass in isolation - no changes to existing code
+  - **Foundation Ready**: ChartContext is ready for VPR-051 integration with ChartPanel and IndicatorPanel
+  - **Documentation**: Comprehensive module docstring explains design principles and usage
+  - **Docstring Examples**: Include example usage in both module and method docstrings
+  - **Alignment Contract**: chart_area_width becomes the alignment contract between all components
+  - **Future-Proof**: Design supports future indicators (MACD, Stochastic) with same context
+---
