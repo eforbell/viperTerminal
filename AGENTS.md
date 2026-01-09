@@ -1062,3 +1062,76 @@ This applies to: volume bars, moving average overlays, RSI indicators, any color
 - **All Tests Pass**: 45 chart_panel tests + 17 indicator_panel tests = 62 tests, all green
 - **Dependencies**: This story depended on VPR-040 (characterization tests) to document the bug first
 - **Next Story**: VPR-042 (remove volume toggle) or VPR-043 (fix height calculation) can proceed independently
+
+## VPR-042 - Lock volume as always-on (remove toggle complexity) - 2026-01-08
+
+### Problem
+Volume toggle added unnecessary complexity - extra state variable, methods, keybinding, config option, and conditional rendering logic. Industry standard (TradingView) shows volume always-on.
+
+### Solution
+Pure removal/simplification - deleted toggle functionality completely, making volume bars always render when data is available.
+
+### Key Changes
+1. **app.py**: Removed 'v' keybinding from BINDINGS list and action_toggle_volume() method
+2. **chart_panel.py**: Removed _volume_enabled state variable, toggle_volume(), is_volume_enabled() methods
+3. **chart_panel.py**: Changed volume_height from conditional (`3 if enabled else 0`) to constant (`3`)
+4. **chart_panel.py**: Removed volume_enabled parameter from __init__() signature  
+5. **config.py**: Removed volume_enabled from Config dataclass and all validation/loading logic
+6. **help_screen.py**: Changed from "Press 'v' to toggle" to "Volume bars are always shown"
+
+### Implementation Details
+
+**Simplification Pattern:**
+```python
+# Before (toggle complexity)
+self._volume_enabled: bool = volume_enabled
+volume_height = 3 if self._volume_enabled else 0
+if self._volume_enabled and len(data.volumes) > 0:
+    # render volume
+
+# After (always-on simplicity)
+volume_height = 3
+if len(data.volumes) > 0:
+    # render volume
+```
+
+**Header Format Change:**
+```python
+# Before
+header_text = f"{data.ticker} - {data.period} Chart  [{volume_status}]"
+
+# After  
+header_text = f"{data.ticker} - {data.period} Chart"
+```
+
+**Test Cleanup:**
+- Deleted 3 toggle-specific tests: test_chart_panel_volume_toggle, test_chart_panel_volume_status_indicator, test_chart_panel_volume_disabled_via_config
+- Updated 3 data-related tests: removed _volume_enabled assertions, changed "enabled by default" comments to "always shown"
+- Config tests: removed 4 volume_enabled validation tests
+
+### Learnings
+
+1. **Simplification is a feature**: Removing toggle reduced code by ~50 lines and eliminated entire class of bugs
+2. **Industry patterns**: When feature is universally useful (volume), make it always-on like TradingView
+3. **Toggle cost**: Each toggle adds: state variable, 2 methods, keybinding, config option, help docs, conditional logic, tests
+4. **Test categorization**: Separate toggle tests (delete) from data tests (keep) when removing features
+5. **Comment hygiene**: Update comments when changing from conditional to always-on ("enabled" → "shown")
+6. **Height calculation**: Making volume constant (not conditional) simplifies layout arithmetic
+7. **Config backward compatibility**: Users with `volume_enabled = false` in config will now always see volume (acceptable breaking change for simplification)
+8. **Dependency preparation**: VPR-042 prepares for VPR-043 by removing one source of height calculation complexity
+
+### Test Results
+- All 77 tests pass (33 config + 42 chart_panel + 2 indicator_panel)
+- mypy --strict validates all modified files
+- Coverage remains above 90%
+
+### Files Modified
+- `viper/app.py` (removed keybinding and action)
+- `viper/widgets/chart_panel.py` (removed state, methods, conditionals)
+- `viper/config.py` (removed volume_enabled option)
+- `viper/widgets/help_screen.py` (updated documentation)
+- `tests/test_config.py` (removed 4 tests)
+- `tests/test_chart_panel.py` (removed 3 tests, updated 3 tests)
+
+### Next Steps
+VPR-043 will fix the core height calculation bug, which is now simpler because volume_height is a constant.
