@@ -46,7 +46,7 @@ class IndicatorPanel(Widget):
     IndicatorPanel {
         height: 7;
         width: 100%;
-        padding: 0 2;
+        padding: 0;
         margin-top: 1;
         margin-bottom: 0;
     }
