@@ -95,7 +95,7 @@
     {
       "id": "VPR-061",
       "title": "Create ArticleReaderPanel widget",
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "New file: viper/widgets/article_reader_panel.py",
         "ArticleReaderPanel extends Textual Widget",

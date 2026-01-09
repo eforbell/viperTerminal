@@ -891,3 +891,41 @@
   - **Dependency Addition**: Added trafilatura and its transitive deps (courlan, htmldate, justext, lxml, etc.)
   - **Foundation Ready**: Service layer complete for VPR-061 (ArticleReaderPanel widget integration)
 ---
+
+## 2026-01-09 - VPR-061
+- **What was implemented**: ArticleReaderPanel widget for displaying extracted article content in terminal
+- **Files changed**:
+  - `viper/widgets/article_reader_panel.py`: Created new full-screen reader widget (120 lines, 98% coverage)
+  - `viper/widgets/__init__.py`: Added ArticleReaderPanel export
+  - `tests/test_article_reader_panel.py`: Created comprehensive test suite with 21 tests
+  - `AGENTS.md`: Added VPR-061 learnings section with dynamic mounting patterns
+  - `scripts/ralph/features/feature-6.prd.json`: Marked VPR-061 as complete (passes: true)
+- **Learnings**:
+  - **Dynamic Widget Mounting Pattern (CRITICAL)**: Must mount container to DOM first, THEN mount children
+  - **Wrong**: `header.mount(Label); container.mount(header)` → MountError
+  - **Correct**: `container.mount(header); header.mount(Label)` → Works
+  - **Context Manager vs Dynamic**: `with Container():` only works in `compose()`, not in dynamic rendering
+  - **Duplicate ID Avoidance**: Use classes not IDs for dynamically created containers to avoid DuplicateIds error on retry
+  - **IDs for Static**: Only use IDs for containers created once in `compose()`
+  - **Classes for Dynamic**: Use classes for containers that get recreated (loading, content, error states)
+  - **VerticalScroll for Scrolling**: Use `VerticalScroll` container for long content with built-in scroll methods
+  - **Scroll Container Reference**: Store `self._scroll_container` reference for action handler delegation
+  - **Scroll Methods**: `scroll_relative(y=±1)`, `scroll_page_up/down()`, `scroll_home/end()`
+  - **Three Rendering States**: Loading (spinner), Content (scrollable), Error (hints) - all use dynamic mounting
+  - **Loading State Pattern**: Show LoadingIndicator + Label immediately before async fetch
+  - **Error State with Hints**: Provide multiple recovery options (retry, browser, escape)
+  - **Rich Markup in Labels**: MUST set `markup=True` when Label contains Rich markup (colors, bold)
+  - **Keybinding Priority**: Use `priority=True` on widget-level bindings to prevent app-level interception
+  - **Reading Time Calculation**: `max(1, word_count // 200)` prevents "0 min read" for short articles
+  - **Testing Dynamic Rendering**: Test all three states (loading, content, error) separately with mocked fetch
+  - **Testing Message Posting**: Use `patch.object(panel, "post_message")` to verify action handlers
+  - **No Pause After Patch**: Don't use `await pilot.pause()` after patching `post_message` (causes timeout)
+  - **Widget Visibility Check**: Always check `if self._scroll_container:` before using (may not exist yet)
+  - **Remove Children Method**: `container.remove_children()` clears content but doesn't remove from ID registry
+  - **State Management**: Store `_url`, `_article_result`, `_article_error` for retry and browser fallback
+  - **Comprehensive Testing**: 21 tests covering initialization, loading, content display, error handling, actions, scrolling, edge cases
+  - All 743 tests passing with 91.10% overall coverage
+  - article_reader_panel.py at 98% coverage
+  - mypy --strict validates with no issues
+  - Test duration: ~3.4 seconds for ArticleReaderPanel suite
+---
