@@ -2290,6 +2290,184 @@ assert news_container.styles.display == "block"
 assert app._news_panel_visible
 ```
 
+---
+
+## VPR-063: Error Handling and Fallback Behavior
+
+### Overview
+Enhanced article reader error handling with intelligent paywall detection, cache bypass on retry, and comprehensive error testing.
+
+### Paywall Detection Strategy
+Detect paywalls using BOTH content length AND keyword matching:
+```python
+# Check for suspiciously short content or paywall keywords
+paywall_keywords = [
+    "subscribe",
+    "subscription",
+    "sign up to read",
+    "premium content",
+    "members only",
+    "login to continue",
+    "register to read",
+    "paywall",
+    "become a member",
+]
+
+content_lower = content.lower()
+has_paywall_keyword = any(keyword in content_lower for keyword in paywall_keywords)
+
+# If short AND has paywall keywords, likely a paywall
+if len(content) < 200 and has_paywall_keyword:
+    return None  # Will trigger extraction error
+```
+
+**Why BOTH conditions?**
+- Short content alone: Could be legitimate brief news (market updates, alerts)
+- Keywords alone: Long articles often have newsletter CTAs with "subscribe"
+- Both together: High confidence of paywall blocking access
+
+### Retry Bypasses Cache Pattern
+Allow users to retry with fresh fetch:
+```python
+# Panel method accepts use_cache parameter
+async def show_article(self, url: str, use_cache: bool = True) -> None:
+    """Fetch and display article from URL.
+
+    Args:
+        url: The article URL to fetch and display
+        use_cache: Whether to use cached article (default True)
+    """
+    # Fetch article (retry bypasses cache)
+    result = await fetch_article(url, use_cache=use_cache)
+
+# Retry action bypasses cache
+async def action_retry_fetch(self) -> None:
+    """Retry fetching the article (for transient errors).
+
+    Bypasses cache to force a fresh fetch.
+    """
+    if self._url:
+        await self.show_article(self._url, use_cache=False)
+```
+
+**Why bypass cache on retry?**
+- User explicitly requests retry → expect fresh attempt
+- Transient errors (network, timeout) may be resolved
+- Cached error would prevent retry from succeeding
+
+### Cache Expiration Testing
+Test cache TTL behavior by manipulating timestamps:
+```python
+from datetime import datetime, timedelta
+from viper.services.article_reader import _article_cache, _CACHE_TTL_SECONDS
+
+# Fetch and cache
+result1 = await fetch_article(url)
+
+# Manually expire the cache by modifying timestamp
+if url in _article_cache:
+    expired_time = datetime.now() - timedelta(seconds=_CACHE_TTL_SECONDS + 1)
+    _article_cache[url] = (expired_time, _article_cache[url][1])
+
+# Second fetch - should re-fetch due to expiration
+result2 = await fetch_article(url)
+assert result2 is not result1  # Different object (re-fetched)
+```
+
+**Pattern**: Direct cache manipulation in tests to verify expiration logic without waiting 30 minutes.
+
+### Mock Call Tracking Pattern
+Track function calls with parameters using list:
+```python
+# Mock fetch_article to track calls
+fetch_calls = []
+
+async def mock_fetch(url: str, timeout: int = 10, use_cache: bool = True) -> ArticleResult:
+    fetch_calls.append({"url": url, "use_cache": use_cache})
+    return ArticleResult(...)
+
+with patch("module.fetch_article", side_effect=mock_fetch):
+    await panel.show_article("https://example.com/article")
+
+    # Verify initial fetch used cache
+    assert fetch_calls[0]["use_cache"] is True
+
+    await panel.action_retry_fetch()
+
+    # Verify retry bypassed cache
+    assert fetch_calls[1]["use_cache"] is False
+```
+
+**Pattern**: `side_effect` with async function allows tracking calls while still returning values.
+
+### Paywall Test Cases
+Test both false positives and true positives:
+
+**True Positive (Detected):**
+```python
+paywall_html = """
+<article>
+<h1>Premium Article</h1>
+<p>Subscribe to read this premium content.</p>
+</article>
+"""
+# Short (< 200 chars) + "subscribe" keyword = paywall
+result = await fetch_article(url)
+assert isinstance(result, ArticleError)
+```
+
+**False Positive Avoided (Allowed):**
+```python
+# Case 1: Short but no keywords
+short_html = """
+<article>
+<h1>Brief Update</h1>
+<p>Market closes up 2% today on strong earnings.</p>
+</article>
+"""
+result = await fetch_article(url)
+assert isinstance(result, ArticleResult)  # Allowed
+
+# Case 2: Long with keywords (newsletter CTA)
+long_html = """
+<article>
+<h1>Market Analysis</h1>
+<p>""" + " ".join(["Detailed analysis."] * 50) + """</p>
+<p>Subscribe to our newsletter for more insights.</p>
+</article>
+"""
+result = await fetch_article(url)
+assert isinstance(result, ArticleResult)  # Allowed
+```
+
+### Error Handling Already Comprehensive
+VPR-060 already implemented:
+- ✅ Timeout errors with `should_retry=True`
+- ✅ Network errors with `should_retry=True`
+- ✅ HTTP errors (404, 403, 500+) with smart retry logic
+- ✅ Extraction failures with `should_retry=False`
+- ✅ Browser fallback via 'o' key (VPR-061)
+- ✅ Retry hints in error panel (VPR-061)
+
+VPR-063 added:
+- ✅ Paywall detection with keyword checking
+- ✅ Retry bypasses cache for fresh fetch
+- ✅ Cache expiration testing
+- ✅ Call tracking tests
+
+### Acceptance Criteria Verification
+- ✅ Error messages clear and actionable
+- ✅ Error panel offers browser fallback ('o' key)
+- ✅ Specific errors: timeout, network, paywall, extraction
+- ✅ Paywall detection: short content + keywords
+- ✅ Retry logic: 'r' key bypasses cache
+- ✅ Session caching: 30-min TTL with lazy eviction
+- ✅ Cache expiration: tested with timestamp manipulation
+- ✅ All error scenarios tested
+- ✅ Cache hit/miss behavior tested
+- ✅ 753 tests pass, 91.34% coverage
+- ✅ mypy --strict validates source files
+
 ### Test Data Type Matching
 ArticleResult requires specific types:
 - `date` must be `str` not `datetime` (e.g., "2024-01-09")

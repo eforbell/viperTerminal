@@ -410,3 +410,148 @@ class TestEdgeCases:
         result = await fetch_article(url)
 
         assert isinstance(result, ArticleResult)
+
+
+class TestPaywallDetection:
+    """Test paywall detection functionality."""
+
+    @pytest.mark.asyncio
+    async def test_paywall_detection_with_subscribe_keyword(self, respx_mock: respx.MockRouter) -> None:
+        """Test that short content with 'subscribe' keyword is detected as paywall."""
+        url = "https://example.com/paywall"
+        paywall_html = """
+        <html><body><article>
+        <h1>Premium Article</h1>
+        <p>Subscribe to read this premium content.</p>
+        </article></body></html>
+        """
+        respx_mock.get(url).mock(return_value=Response(200, text=paywall_html))
+
+        result = await fetch_article(url)
+
+        # Should fail extraction due to paywall detection
+        assert isinstance(result, ArticleError)
+        assert result.error_type == "extraction"
+
+    @pytest.mark.asyncio
+    async def test_paywall_detection_with_subscription_keyword(self, respx_mock: respx.MockRouter) -> None:
+        """Test that short content with 'subscription' keyword is detected as paywall."""
+        url = "https://example.com/paywall"
+        paywall_html = """
+        <html><body><article>
+        <h1>Members Only</h1>
+        <p>This requires a subscription to view.</p>
+        </article></body></html>
+        """
+        respx_mock.get(url).mock(return_value=Response(200, text=paywall_html))
+
+        result = await fetch_article(url)
+
+        assert isinstance(result, ArticleError)
+        assert result.error_type == "extraction"
+
+    @pytest.mark.asyncio
+    async def test_paywall_detection_with_members_only(self, respx_mock: respx.MockRouter) -> None:
+        """Test that short content with 'members only' keyword is detected as paywall."""
+        url = "https://example.com/paywall"
+        paywall_html = """
+        <html><body><article>
+        <h1>Exclusive Content</h1>
+        <p>This is for members only. Sign up to continue reading.</p>
+        </article></body></html>
+        """
+        respx_mock.get(url).mock(return_value=Response(200, text=paywall_html))
+
+        result = await fetch_article(url)
+
+        assert isinstance(result, ArticleError)
+        assert result.error_type == "extraction"
+
+    @pytest.mark.asyncio
+    async def test_short_article_without_paywall_keywords_succeeds(
+        self, respx_mock: respx.MockRouter
+    ) -> None:
+        """Test that short content WITHOUT paywall keywords is allowed."""
+        url = "https://example.com/short"
+        # Short but legitimate content (no paywall keywords)
+        short_html = """
+        <html><body><article>
+        <h1>Brief Update</h1>
+        <p>Market closes up 2% today on strong earnings reports from tech sector.</p>
+        </article></body></html>
+        """
+        respx_mock.get(url).mock(return_value=Response(200, text=short_html))
+
+        result = await fetch_article(url)
+
+        # Should succeed - short but no paywall keywords
+        assert isinstance(result, ArticleResult)
+        assert result.word_count < 200  # Verify it's actually short
+        assert result.word_count > 0
+
+    @pytest.mark.asyncio
+    async def test_long_article_with_subscribe_keyword_succeeds(
+        self, respx_mock: respx.MockRouter
+    ) -> None:
+        """Test that LONG content with 'subscribe' keyword is allowed (e.g., newsletter signup at end)."""
+        url = "https://example.com/article"
+        # Long legitimate article that mentions subscribe at the bottom
+        long_html = """
+        <html><body><article>
+        <h1>Market Analysis</h1>
+        <p>""" + " ".join(["This is a detailed analysis of market trends."] * 50) + """</p>
+        <p>Subscribe to our newsletter for more insights.</p>
+        </article></body></html>
+        """
+        respx_mock.get(url).mock(return_value=Response(200, text=long_html))
+
+        result = await fetch_article(url)
+
+        # Should succeed - long content with subscribe is OK (newsletter CTA)
+        assert isinstance(result, ArticleResult)
+        assert result.word_count > 200  # Verify it's actually long
+
+
+class TestCacheExpiration:
+    """Test cache expiration behavior."""
+
+    @pytest.mark.asyncio
+    async def test_cache_expiration(self, respx_mock: respx.MockRouter) -> None:
+        """Test that cache expires after TTL."""
+        import time
+        from datetime import timedelta
+        from viper.services.article_reader import _article_cache, _CACHE_TTL_SECONDS
+
+        url = "https://example.com/article"
+        respx_mock.get(url).mock(return_value=Response(200, text=SAMPLE_HTML))
+
+        # First fetch - should cache
+        result1 = await fetch_article(url)
+        assert isinstance(result1, ArticleResult)
+
+        # Manually expire the cache by modifying timestamp
+        from datetime import datetime
+        if url in _article_cache:
+            # Set timestamp to past (beyond TTL)
+            expired_time = datetime.now() - timedelta(seconds=_CACHE_TTL_SECONDS + 1)
+            _article_cache[url] = (expired_time, _article_cache[url][1])
+
+        # Second fetch - should re-fetch due to expiration
+        result2 = await fetch_article(url)
+        assert isinstance(result2, ArticleResult)
+        assert result2 is not result1  # Different object (re-fetched)
+
+    @pytest.mark.asyncio
+    async def test_cache_hit_within_ttl(self, respx_mock: respx.MockRouter) -> None:
+        """Test that cache returns same object within TTL."""
+        url = "https://example.com/article"
+        respx_mock.get(url).mock(return_value=Response(200, text=SAMPLE_HTML))
+
+        # First fetch
+        result1 = await fetch_article(url)
+        assert isinstance(result1, ArticleResult)
+
+        # Second fetch immediately (within TTL)
+        result2 = await fetch_article(url)
+        assert isinstance(result2, ArticleResult)
+        assert result2 is result1  # Same object from cache

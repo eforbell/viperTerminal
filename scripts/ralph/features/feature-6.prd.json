@@ -118,7 +118,7 @@
     {
       "id": "VPR-062",
       "title": "Integrate ArticleReaderPanel with NewsPanel",
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Modify NewsPanel: Enter key now calls open_in_reader() instead of browser",
         "Add new keybinding 'o' to NewsPanel for 'open in browser' (old behavior)",
@@ -146,7 +146,7 @@
     {
       "id": "VPR-063",
       "title": "Error handling and fallback behavior",
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "If article extraction fails, show error in reader with clear message",
         "Error panel offers 'press o to try opening in browser'",

@@ -166,11 +166,12 @@ class ArticleReaderPanel(Widget):
             # Will be populated dynamically based on state
             yield Container()
 
-    async def show_article(self, url: str) -> None:
+    async def show_article(self, url: str, use_cache: bool = True) -> None:
         """Fetch and display article from URL.
 
         Args:
             url: The article URL to fetch and display
+            use_cache: Whether to use cached article (default True)
         """
         self._url = url
         self._article_result = None
@@ -179,8 +180,8 @@ class ArticleReaderPanel(Widget):
         # Show loading state
         self._render_loading_state()
 
-        # Fetch article
-        result = await fetch_article(url)
+        # Fetch article (retry bypasses cache)
+        result = await fetch_article(url, use_cache=use_cache)
 
         if isinstance(result, ArticleResult):
             self._article_result = result
@@ -340,6 +341,9 @@ class ArticleReaderPanel(Widget):
             self.post_message(self.BrowserOpening(self._url))
 
     async def action_retry_fetch(self) -> None:
-        """Retry fetching the article (for transient errors)."""
+        """Retry fetching the article (for transient errors).
+
+        Bypasses cache to force a fresh fetch.
+        """
         if self._url:
-            await self.show_article(self._url)
+            await self.show_article(self._url, use_cache=False)

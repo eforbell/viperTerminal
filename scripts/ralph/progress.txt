@@ -929,3 +929,74 @@
   - mypy --strict validates with no issues
   - Test duration: ~3.4 seconds for ArticleReaderPanel suite
 ---
+## 2026-01-09 - VPR-062
+- **What was implemented**: Integrated ArticleReaderPanel with NewsPanel for in-terminal article reading
+- **Files changed**:
+  - `viper/widgets/news_panel.py`: Added ArticleOpenRequested message, changed Enter to open_in_reader(), added 'o' for browser
+  - `viper/app.py`: Added article reader container, handlers for ArticleOpenRequested and CloseRequested messages
+  - `viper/widgets/help_screen.py`: Updated keybindings section, added ARTICLE READER section, updated FEATURES
+  - `tests/test_app.py`: Added 2 integration tests for news→reader→news flow and browser fallback
+  - `scripts/ralph/features/feature-6.prd.json`: Marked VPR-062 as complete (passes: true)
+  - `AGENTS.md`: Added VPR-062 learnings section with integration patterns
+- **Learnings**:
+  - **Message-Based Panel Switching**: App coordinates panel visibility through message handlers, not direct widget calls
+  - **Custom Message Pattern**: NewsPanel posts ArticleOpenRequested with NewsItem, app handles transition
+  - **Two-Way Navigation**: ArticleReader posts CloseRequested to return, app reverses visibility changes
+  - **Multiple Message Types**: Same widget can emit different messages (ArticleOpenRequested, BrowserOpening)
+  - **Keybinding UX Change**: Enter now means "read", 'o' means "browser" - matches vim-style muscle memory
+  - **State Tracking**: Added _article_reader_visible alongside existing panel visibility flags
+  - **CSS Pattern**: New container follows same pattern as other panels - width 70%, hidden by default
+  - **Help Screen Organization**: Added dedicated ARTICLE READER section with all reader keybindings
+  - **Integration Test Pattern**: Set state directly (app._current_ticker, container.display) for reliable tests
+  - **ArticleResult Type Matching**: date must be str not datetime, avoid MagicMock to prevent Textual errors
+  - **Action Methods**: NewsPanel actions are synchronous, use pilot.pause() after calling them
+  - **Container Display**: Use container.display = False (preferred) or styles.display = "none" (also works)
+  - **Message Handler Naming**: on_widget_name_message_name pattern (snake_case class names)
+  - **Browser Fallback**: 'o' key still opens browser for articles that fail extraction
+  - **Test Mocking**: Use real ArticleResult instances, mock quote/info to set app ticker state
+  - All 745 tests passing with 91.26% coverage
+  - mypy --strict validates (1 pre-existing config.py error unrelated to this work)
+  - **User Experience**: Seamless news→reader→news flow, Escape returns to news list
+  - **Future Ready**: Pattern established for other panel integrations (e.g., watchlist→quote→info)
+---
+
+## 2026-01-09 - VPR-063
+- **What was implemented**: Enhanced error handling and fallback behavior for article reader with paywall detection
+- **Files changed**:
+  - `viper/services/article_reader.py`: Added paywall detection with keyword checking (subscribe, subscription, members only, etc.)
+  - `viper/widgets/article_reader_panel.py`: Added use_cache parameter to show_article(), retry bypasses cache
+  - `tests/test_article_reader.py`: Added 7 comprehensive tests for paywall detection and cache expiration
+  - `tests/test_article_reader_panel.py`: Added test for retry bypassing cache behavior
+  - `scripts/ralph/features/feature-6.prd.json`: Marked VPR-063 as complete (passes: true)
+- **Learnings**:
+  - **Paywall Detection Strategy**: Check for BOTH short content (< 200 chars) AND paywall keywords to avoid false positives
+  - **Paywall Keywords List**: subscribe, subscription, sign up to read, premium content, members only, login to continue, register to read, paywall, become a member
+  - **Case-Insensitive Matching**: Use `content.lower()` and `any(keyword in content_lower for keyword in paywall_keywords)`
+  - **Return None Pattern**: When paywall detected, `_extract_article_sync()` returns None, triggering extraction error
+  - **Short Content Without Keywords**: Allow short articles if no paywall keywords (e.g., brief market updates)
+  - **Long Content With Keywords**: Allow long articles with subscribe keywords (e.g., newsletter CTAs at bottom)
+  - **Retry Bypass Cache**: Added `use_cache: bool = True` parameter to `show_article()` method
+  - **Action Handler Pattern**: `action_retry_fetch()` calls `show_article(url, use_cache=False)` to force fresh fetch
+  - **Cache Parameter Propagation**: Panel passes `use_cache` to service layer `fetch_article(url, use_cache=use_cache)`
+  - **Test Pattern - Paywall Detection**: Test subscribe, subscription, members only keywords separately for comprehensive coverage
+  - **Test Pattern - Legitimate Short**: Verify short content WITHOUT paywall keywords succeeds (avoid false positives)
+  - **Test Pattern - Newsletter CTA**: Verify long articles with subscribe keyword succeed (newsletter signup at end is OK)
+  - **Cache Expiration Testing**: Manually modify cache timestamp with `datetime.now() - timedelta(seconds=TTL+1)` to simulate expiration
+  - **Cache Hit Testing**: Verify `result2 is result1` (same object reference) when using cache
+  - **Cache Miss Testing**: Verify `result2 is not result1` (different objects) when bypassing cache or expired
+  - **Mock Tracking Pattern**: Use list to track function calls with parameters: `fetch_calls.append({"url": url, "use_cache": use_cache})`
+  - **Async Mock Side Effect**: Use `async def mock_fetch(...)` with `side_effect=mock_fetch` to track async calls
+  - **7 New Paywall Tests**: Subscribe, subscription, members only, short without keywords, long with keywords, cache expiration, cache hit
+  - **1 New Panel Test**: Retry bypasses cache verification with call tracking
+  - **Error Already Comprehensive**: VPR-060 implemented timeout, network, HTTP error, extraction failures - all covered
+  - **Browser Fallback Existing**: 'o' key opens browser from error state - already implemented in VPR-061
+  - **Retry Hint Existing**: Error panel shows "Press r to retry" when should_retry=True - already implemented
+  - **Cache Already Implemented**: Session-level dict with 30-min TTL, lazy eviction - done in VPR-060
+  - **Errors Not Cached**: Only successful ArticleResult cached, errors always re-fetched - correct pattern
+  - All 753 tests passing (745 + 8 new) with 91.34% overall coverage
+  - article_reader.py at 91% coverage (some error branches unreachable in normal flow)
+  - article_reader_panel.py at 98% coverage
+  - mypy --strict validates source files with no issues (1 pre-existing test file error unrelated)
+  - **Test Duration**: 101.96s for full suite (acceptable)
+  - **Acceptance Criteria Met**: ✓ Error messages, ✓ Browser fallback, ✓ Specific errors, ✓ Paywall detection, ✓ Retry logic, ✓ Caching, ✓ Cache expiration, ✓ All tests pass
+---

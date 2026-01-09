@@ -239,11 +239,25 @@ def _extract_article_sync(html: str, url: str) -> ArticleResult | None:
     if not content or len(content.strip()) == 0:
         return None
 
-    # Check for suspiciously short content (possible paywall)
-    if len(content) < 200:
-        # Could be paywall, but also could be a very short article
-        # Don't error, but note this in logs if needed
-        pass
+    # Check for suspiciously short content or paywall keywords
+    paywall_keywords = [
+        "subscribe",
+        "subscription",
+        "sign up to read",
+        "premium content",
+        "members only",
+        "login to continue",
+        "register to read",
+        "paywall",
+        "become a member",
+    ]
+
+    content_lower = content.lower()
+    has_paywall_keyword = any(keyword in content_lower for keyword in paywall_keywords)
+
+    # If short AND has paywall keywords, likely a paywall
+    if len(content) < 200 and has_paywall_keyword:
+        return None  # Will trigger extraction error
 
     # Extract metadata fields
     title = ""

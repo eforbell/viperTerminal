@@ -714,3 +714,51 @@ class TestArticleReaderPanelEdgeCases:
                 label for label in labels if "1 min read" in str(label.render())
             ]
             assert len(reading_time_labels) > 0
+
+
+class TestRetryBehavior:
+    """Test retry functionality and cache bypassing."""
+
+    @pytest.mark.asyncio
+    async def test_retry_bypasses_cache(self) -> None:
+        """Test that retry action bypasses cache to force fresh fetch."""
+        from textual.app import App
+
+        class TestApp(App[None]):
+            def compose(self):  # type: ignore[no-untyped-def]
+                yield ArticleReaderPanel()
+
+        app = TestApp()
+        async with app.run_test() as pilot:
+            panel = app.query_one(ArticleReaderPanel)
+
+            # Mock fetch_article to track calls
+            fetch_calls = []
+
+            async def mock_fetch(url: str, timeout: int = 10, use_cache: bool = True) -> ArticleResult:
+                fetch_calls.append({"url": url, "use_cache": use_cache})
+                return ArticleResult(
+                    title="Test",
+                    content="Content",
+                    author="Author",
+                    date="2024-01-01",
+                    source_url=url,
+                    word_count=10,
+                )
+
+            with patch("viper.widgets.article_reader_panel.fetch_article", side_effect=mock_fetch):
+                # Initial fetch - should use cache
+                await panel.show_article("https://example.com/article")
+                await pilot.pause()
+
+                # Verify initial fetch used cache
+                assert len(fetch_calls) == 1
+                assert fetch_calls[0]["use_cache"] is True
+
+                # Trigger retry - should bypass cache
+                await panel.action_retry_fetch()
+                await pilot.pause()
+
+                # Verify retry bypassed cache
+                assert len(fetch_calls) == 2
+                assert fetch_calls[1]["use_cache"] is False
