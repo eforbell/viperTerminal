@@ -106,6 +106,11 @@ class ChartPanel(Widget):
         color: $accent;
         text-style: bold;
     }
+
+    ChartPanel #x-axis-container {
+        height: auto;
+        width: 100%;
+    }
     """
 
     def __init__(self, style: ChartStyle = ChartStyle.BRAILLE) -> None:
@@ -149,6 +154,8 @@ class ChartPanel(Widget):
         self._rsi_panel = RSIPanel()
         self._rsi_panel.hide()
         yield self._rsi_panel
+        # X-axis container - rendered AFTER all indicator panels (at very bottom)
+        yield Container(id="x-axis-container")
 
     def show_loading(self, ticker: str, period: str) -> None:
         """Display loading state with spinner.
@@ -207,6 +214,7 @@ class ChartPanel(Widget):
 
         if self._state == "empty":
             container.mount(Label("No ticker selected", classes="empty-state"))
+            self._clear_x_axis()
         elif self._state == "loading":
             # Create loading container with widgets to mount
             loading_indicator = LoadingIndicator()
@@ -216,10 +224,12 @@ class ChartPanel(Widget):
                 loading_indicator, loading_label, classes="loading-container"
             )
             container.mount(loading_container)
+            self._clear_x_axis()
         elif self._state == "error" and isinstance(self._data, HistoricalDataError):
             container.mount(
                 Label(f"Error: {self._data.error_message}", classes="error-state")
             )
+            self._clear_x_axis()
         elif self._state == "success" and isinstance(self._data, HistoricalData):
             self._render_chart(container, self._data, self._stats)
 
@@ -382,10 +392,27 @@ class ChartPanel(Widget):
                 self._rsi_values, current_rsi, context=self._chart_context
             )
 
-        # Render X-axis once at the bottom (shared by price chart and all indicators)
-        x_axis_lines = render_x_axis(self._chart_context)
-        for line in x_axis_lines:
-            container.mount(Label(line, classes="chart-line"))
+        # Render X-axis in dedicated container at very bottom (after all indicator panels)
+        self._update_x_axis()
+
+    def _update_x_axis(self) -> None:
+        """Update the X-axis container with date labels.
+
+        This renders the X-axis in a dedicated container at the very bottom,
+        after all indicator panels (RSI, future MACD, etc.).
+        """
+        x_axis_container = self.query_one("#x-axis-container", Container)
+        x_axis_container.remove_children()
+
+        if self._chart_context:
+            x_axis_lines = render_x_axis(self._chart_context)
+            for line in x_axis_lines:
+                x_axis_container.mount(Label(line, classes="chart-line"))
+
+    def _clear_x_axis(self) -> None:
+        """Clear the X-axis container when chart is not displayed."""
+        x_axis_container = self.query_one("#x-axis-container", Container)
+        x_axis_container.remove_children()
 
     def _format_number(self, value: float, decimals: int) -> str:
         """Format a number with commas and specified decimal places.
