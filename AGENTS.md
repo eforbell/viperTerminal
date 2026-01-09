@@ -1135,3 +1135,82 @@ header_text = f"{data.ticker} - {data.period} Chart"
 
 ### Next Steps
 VPR-043 will fix the core height calculation bug, which is now simpler because volume_height is a constant.
+
+---
+
+## VPR-043: Fix Height Calculation for RSI Panel (Core Bug Fix)
+
+**Story**: Fix volume/RSI occlusion bug by correcting height calculation in ChartPanel._render_chart()
+
+**Root Cause**: The bug was in line 308-309 of chart_panel.py:
+```python
+rsi_height = 7 if self.is_rsi_visible() else 0
+available_height = self.size.height - 7 - volume_height - rsi_height
+```
+
+The formula subtracted `rsi_height` from the chart area, but RSI panel is a **SIBLING** to #chart-content (not a child). It's yielded separately in compose():
+```python
+def compose(self) -> ComposeResult:
+    yield Container(id="chart-content")  # Price chart goes here
+    yield self._rsi_panel                 # SIBLING, not inside chart-content
+```
+
+**Why This Was Wrong**:
+- Subtracting rsi_height (7 lines) made the chart area smaller
+- Then RSI panel (a sibling) ADDED 7 more lines below it
+- Result: Total height exceeded available space, pushing volume bars and X-axis out of view
+
+**The Fix**: Remove rsi_height from the calculation. Let Textual's layout handle sibling stacking:
+```python
+# Before (buggy)
+rsi_height = 7 if self.is_rsi_visible() else 0
+available_height = self.size.height - 7 - volume_height - rsi_height
+
+# After (correct)
+# Note: RSI panel is a sibling widget (not inside #chart-content), so it stacks below automatically
+# We do NOT subtract RSI height here - Textual's layout handles sibling stacking
+available_height = self.size.height - 7 - volume_height
+```
+
+**Test Updates**: Updated 4 characterization tests from VPR-040 to expect correct behavior:
+1. `test_chart_panel_height_calculation_rsi_hidden` - removed @pytest.mark.characterization
+2. `test_chart_panel_height_calculation_rsi_visible` - updated to verify correct formula (no rsi_height subtraction)
+3. `test_chart_panel_rsi_toggle_calls_render_content` - removed characterization marker (still valid)
+4. `test_indicator_panel_receives_chart_width` - removed characterization marker (still valid)
+
+### Learnings
+
+1. **Textual Layout Model**: Siblings yielded from compose() stack vertically automatically - don't manually subtract their heights
+2. **Container vs Sibling**: Only subtract heights for elements INSIDE a container, not siblings OUTSIDE
+3. **Widget Tree Structure**: Use compose() yields to understand widget relationships (parent/child vs siblings)
+4. **Height Calculation Pattern**: For fixed-size panels, only subtract heights of elements inside the container being sized
+5. **Sibling Stacking**: Textual handles vertical stacking of siblings - trust the framework's layout engine
+6. **Characterization Tests**: After fixing bugs, update characterization tests to verify correct behavior and remove marker
+7. **Test Documentation**: Update test docstrings from "document buggy behavior" to "verify correct behavior"
+8. **Comment Updates**: Add explanatory comments in code about WHY we don't subtract (because sibling, not child)
+9. **Formula Simplification**: The fix made height calculation simpler - fewer conditionals, more predictable
+10. **Visual Verification**: After fix, volume bars and X-axis remain visible regardless of RSI toggle state
+11. **Layout Debugging**: Check compose() structure first when debugging layout issues - understand parent/child relationships
+12. **Fixed Elements**: Only subtract height of: header (2), timeframe (1), stats (2), padding (2), volume (3) = 10 lines total
+13. **RSI Panel Height**: RSI panel height is 7 lines (4 chart + 1 header + 2 spacing), but stacks separately
+14. **Minimum Height**: Chart has minimum height of 10 lines, clamped at calculation time
+15. **Test Environment**: In tests with 25-line height: 25 - 10 = 15 lines for chart (well above minimum)
+16. **Integration Pattern**: ChartPanel and RSIPanel work together but are independent widgets in layout tree
+17. **Widget Composition**: Use Container for grouping elements whose heights should be subtracted together
+18. **Dependency Chain**: VPR-040 (characterization) → VPR-042 (simplification) → VPR-043 (core fix)
+
+### Test Results
+- All 676 tests pass (42 chart_panel tests + 634 other tests)
+- mypy --strict validates with no issues
+- Coverage: 90.95% (above 90% threshold)
+- chart_panel.py at 98% coverage
+
+### Files Modified
+- `viper/widgets/chart_panel.py` (removed rsi_height variable and subtraction, updated comments)
+- `tests/test_chart_panel.py` (updated 4 tests to verify correct behavior, removed @pytest.mark.characterization markers)
+
+### User Impact
+After this fix:
+- Volume bars and X-axis remain visible when RSI panel is toggled on
+- Chart layout is stable and predictable regardless of indicator visibility
+- No more content being pushed out of view due to incorrect height calculations

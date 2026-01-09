@@ -303,10 +303,10 @@ class ChartPanel(Widget):
         # Calculate available dimensions for chart
         # Reserve space for header (2 lines), timeframe bar (1 line), stats (2 lines), padding (2 lines)
         # Reserve 3 lines for volume bars (always shown)
-        # If RSI is visible, reserve additional 7 lines for RSI panel
+        # Note: RSI panel is a sibling widget (not inside #chart-content), so it stacks below automatically
+        # We do NOT subtract RSI height here - Textual's layout handles sibling stacking
         volume_height = 3
-        rsi_height = 7 if self.is_rsi_visible() else 0
-        available_height = self.size.height - 7 - volume_height - rsi_height
+        available_height = self.size.height - 7 - volume_height
         available_width = self.size.width - 4  # Account for padding
 
         # Ensure minimum dimensions

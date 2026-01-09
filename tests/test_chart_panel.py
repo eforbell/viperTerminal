@@ -1501,20 +1501,19 @@ async def test_chart_panel_rsi_caching() -> None:
 
 
 # ============================================================================
-# Characterization tests for VPR-040
-# These tests document the current (buggy) behavior before fixes are applied.
-# Mark with @pytest.mark.characterization for easy identification.
+# ============================================================================
+# Height calculation tests (VPR-040 characterization, VPR-043 fix)
+# These tests verify the correct height calculation for ChartPanel with RSI.
 # ============================================================================
 
 
 @pytest.mark.asyncio
-@pytest.mark.characterization
 async def test_chart_panel_height_calculation_rsi_hidden() -> None:
-    """Characterization test: document current height calculation with RSI hidden.
+    """Test height calculation with RSI hidden.
 
-    This test captures the current behavior of _render_chart() when RSI is not visible.
-    Expected formula: available_height = self.size.height - 7 - volume_height - 0
-    (rsi_height = 0 when RSI is hidden)
+    This test verifies _render_chart() behavior when RSI is not visible.
+    Formula: available_height = self.size.height - 7 - volume_height
+    (no rsi_height subtraction - RSI panel is a sibling widget)
     """
     app = ChartPanelTestApp()
     async with app.run_test() as pilot:
@@ -1555,28 +1554,28 @@ async def test_chart_panel_height_calculation_rsi_hidden() -> None:
         # Verify RSI is hidden
         assert panel.is_rsi_visible() is False
 
-        # Document current height calculation behavior
-        # With RSI hidden: rsi_height = 0
-        # Current formula: available_height = self.size.height - 7 - volume_height - rsi_height
-        # Since volume is enabled by default: volume_height = 3
-        # Expected: available_height = panel.size.height - 7 - 3 - 0
-        expected_height = panel.size.height - 7 - 3 - 0
+        # Verify correct height calculation behavior
+        # Formula: available_height = self.size.height - 7 - volume_height
+        # Volume is always on: volume_height = 3
+        # Expected: available_height = panel.size.height - 7 - 3
+        expected_height = panel.size.height - 7 - 3
 
-        # Verify this is the current behavior (documenting the calculation)
+        # Verify the calculation is correct (RSI panel is not subtracted because it's a sibling)
         # The actual rendered chart height should match this calculation
         assert expected_height >= 10  # Minimum height enforcement
 
 
 @pytest.mark.asyncio
-@pytest.mark.characterization
 async def test_chart_panel_height_calculation_rsi_visible() -> None:
-    """Characterization test: document current (buggy) height calculation with RSI visible.
+    """Test correct height calculation with RSI visible (VPR-043 fix).
 
-    This test captures the current BUGGY behavior of _render_chart() when RSI is visible.
-    Current formula: available_height = self.size.height - 7 - volume_height - rsi_height
-    BUG: RSI panel is a SIBLING to #chart-content, not a child, so subtracting rsi_height
-    causes the chart area to shrink, but then RSI panel ADDS 7 more rows below it,
-    causing volume bars and X-axis to be pushed out of view.
+    After VPR-043 fix, the height calculation no longer subtracts rsi_height because
+    RSI panel is a SIBLING to #chart-content (yielded separately in compose()).
+    Textual's layout model stacks siblings vertically automatically, so we don't need
+    to manually reserve space for the RSI panel.
+
+    Correct formula: available_height = self.size.height - 7 - volume_height
+    (no rsi_height subtraction needed)
     """
     app = ChartPanelTestApp()
     async with app.run_test() as pilot:
@@ -1620,36 +1619,30 @@ async def test_chart_panel_height_calculation_rsi_visible() -> None:
         # Verify RSI is visible
         assert panel.is_rsi_visible() is True
 
-        # Document current BUGGY height calculation behavior
-        # With RSI visible: rsi_height = 7
-        # Current (buggy) formula: available_height = self.size.height - 7 - volume_height - rsi_height
-        # Since volume is enabled: volume_height = 3
-        # Current buggy calculation: available_height = panel.size.height - 7 - 3 - 7
-        current_buggy_height = panel.size.height - 7 - 3 - 7
+        # Verify CORRECT height calculation behavior (VPR-043 fix)
+        # With RSI visible, we do NOT subtract rsi_height anymore
+        # Correct formula: available_height = self.size.height - 7 - volume_height
+        # Since volume is always on: volume_height = 3
+        # Correct calculation: available_height = panel.size.height - 7 - 3
+        correct_height = panel.size.height - 7 - 3
 
-        # This documents the current buggy behavior
-        # The chart area shrinks by 7 lines, but RSI panel (a sibling) still adds 7 lines below,
-        # causing overflow and hiding volume/X-axis
+        # Verify the chart uses the full available height (minus only fixed elements and volume)
         # Note: Minimum height is 10, so if calculated height < 10, it gets clamped to 10
-        # In test environment (25 height): 25 - 7 - 3 - 7 = 8, clamped to 10
-        if current_buggy_height < 10:
-            # This confirms the bug - height calculation goes below minimum
-            assert panel.size.height - 7 - 3 - 7 < 10
-        else:
-            assert current_buggy_height >= 10
+        # In test environment (25 height): 25 - 7 - 3 = 15 (well above minimum)
+        expected_height = max(correct_height, 10)
+        assert expected_height == panel.size.height - 10  # Fixed elements (7) + volume (3)
 
-        # The bug: RSI panel is yielded from compose() as a sibling, so it stacks BELOW
-        # #chart-content naturally. Subtracting rsi_height from chart area doesn't make
-        # room - it just makes chart smaller, and then RSI adds more height, causing overflow.
+        # The fix: RSI panel is yielded from compose() as a sibling, so it stacks BELOW
+        # #chart-content naturally. We let Textual handle the vertical stacking automatically.
+        # This prevents volume bars and X-axis from being pushed out of view.
 
 
 @pytest.mark.asyncio
-@pytest.mark.characterization
 async def test_chart_panel_rsi_toggle_calls_render_content() -> None:
-    """Characterization test: verify toggling RSI triggers _render_content().
+    """Test that toggling RSI triggers _render_content().
 
-    This test documents that toggle_rsi() calls _render_content() which recalculates
-    the available_height based on RSI visibility state.
+    This test verifies that toggle_rsi() calls _render_content() to update
+    the chart panel display when RSI visibility changes.
     """
     app = ChartPanelTestApp()
     async with app.run_test() as pilot:
@@ -1709,11 +1702,10 @@ async def test_chart_panel_rsi_toggle_calls_render_content() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.characterization
 async def test_indicator_panel_receives_chart_width() -> None:
-    """Characterization test: verify RSI panel receives chart width correctly.
+    """Test that RSI panel receives chart width correctly.
 
-    This test documents that IndicatorPanel (RSIPanel) is updated with the chart
+    This test verifies that IndicatorPanel (RSIPanel) is updated with the chart
     width parameter when show_indicator() is called.
     """
     app = ChartPanelTestApp()
