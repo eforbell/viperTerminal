@@ -1881,16 +1881,14 @@ async def test_indicator_panel_receives_chart_width() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.characterization
 async def test_rsi_panel_refresh_on_ticker_change() -> None:
-    """Characterization test: document CURRENT BUG - RSI shows stale data on ticker switch.
+    """Test that RSI panel refreshes correctly when ticker changes.
 
-    This test documents the current buggy behavior where RSI panel is not properly
-    refreshed when switching tickers, showing stale data from the previous ticker.
+    This test verifies that VPR-041 fix works: RSI panel should re-render with new data
+    when ticker changes, even if the panel is currently hidden.
 
-    BUG: When ticker changes, RSI values are recalculated but the RSI panel display
-    is not refreshed if the panel is hidden. When user toggles RSI visible, it shows
-    the NEW data, but if RSI was visible during the ticker switch, it may show stale data.
+    FIX: show_indicator() now always calls _render_content() regardless of visibility,
+    so the panel display is always up-to-date when toggled visible.
     """
     app = ChartPanelTestApp()
     async with app.run_test() as pilot:
@@ -1971,7 +1969,11 @@ async def test_rsi_panel_refresh_on_ticker_change() -> None:
         assert rsi_values_msft is not None
         assert rsi_values_msft != rsi_values_aapl  # Different data should produce different RSI
 
-        # Document the bug: RSI panel display may not refresh immediately
-        # The RSI values are recalculated (internal state is correct),
-        # but the visual panel may show stale data if it doesn't re-render.
-        # This is the bug that VPR-041 will fix.
+        # Verify the FIX: RSI panel display should be refreshed with new data
+        # After VPR-041 fix, show_indicator() always calls _render_content(),
+        # so the panel's internal _indicator_values should match the new ticker's RSI
+        assert panel._rsi_panel is not None
+        assert panel._rsi_panel._indicator_values == rsi_values_msft
+        # Verify current value is also updated
+        current_rsi_msft = next((v for v in reversed(rsi_values_msft) if v is not None), None)
+        assert panel._rsi_panel._current_value == current_rsi_msft

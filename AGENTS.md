@@ -1020,3 +1020,45 @@ This applies to: volume bars, moving average overlays, RSI indicators, any color
 - **Clean Test Failures**: When tests document bugs, failures are expected - update after fix
 - **mypy Pre-existing Issues**: 84 type errors in test files (unrelated to VPR-040 changes)
 - **Coverage Threshold**: Individual test runs show low coverage (35-40%) - need full suite for 90%+
+
+---
+
+## VPR-041: Fix RSI Panel Stale Data Bug
+
+**Story**: Fix bug where RSI panel shows stale data when switching tickers.
+
+**Root Cause**: The `show_indicator()` method in `IndicatorPanel` only called `_render_content()` when the panel was visible (`if self._visible:`). When a ticker changed, the internal state was updated but the visual display was not refreshed if the panel was hidden.
+
+**The Fix**: Changed `show_indicator()` to always call `_render_content()` regardless of visibility state. This ensures the panel's internal DOM is always up-to-date with the latest data, even when hidden, so it displays correct data immediately when toggled visible.
+
+### Key Learnings
+
+- **Widget Visibility vs Rendering**: A hidden widget (display: none) can still have its content rendered - the rendering happens, the widget just isn't displayed
+- **Always Refresh Pattern**: When a widget's data changes, always update its internal state and re-render, even if hidden - this prevents stale data bugs
+- **Conditional Rendering Anti-pattern**: `if self._visible: self._render_content()` is an anti-pattern that causes stale data
+- **The Better Pattern**: Always render on data change, use `styles.display` only to control visibility, not rendering
+- **Performance Consideration**: Rendering hidden widgets has minimal performance cost - the DOM updates but nothing is painted
+- **Textual Display Model**: `styles.display = "none"` hides the widget but doesn't prevent its compose/render lifecycle
+- **State Consistency**: Always keep visual state in sync with data state, regardless of visibility
+- **Testing the Fix**: Verify both internal state (`_indicator_values`) and visual state match after ticker change
+- **Test Assertion Pattern**: Check `panel._rsi_panel._indicator_values == rsi_values_msft` to verify refresh
+- **Current Value Pattern**: Use `next((v for v in reversed(values) if v is not None), None)` to extract latest value
+- **Test Coverage**: The fix is simple (remove 2 lines) but critical for UX - stale data is confusing
+- **Characterization Test Update**: Changed from `@pytest.mark.characterization` to regular test with updated assertions
+- **Docstring Update**: Changed comment from "if visible" to "even if hidden, so it's ready when toggled visible"
+- **No Breaking Changes**: All 45 chart_panel tests pass, all 17 indicator_panel tests pass
+- **Type Safety**: mypy --strict validates with no errors on both modified files
+- **Bug Impact**: This bug only manifested when RSI panel was hidden during ticker switch
+- **User Flow**: User would see: load AAPL, toggle RSI on, switch to MSFT, see AAPL's RSI data (stale)
+- **Fix Validation**: After fix, RSI panel always shows current ticker's data when toggled visible
+- **Integration Point**: The fix is in the base `IndicatorPanel` class, so it applies to future indicators too
+- **Future Indicators**: MACD, Stochastic, Williams %R will all benefit from this fix
+- **Code Location**: `viper/widgets/indicator_panel.py` line 113 - removed conditional visibility check
+- **Single Line Change**: The fix is literally removing `if self._visible:` and un-indenting `_render_content()`
+- **Test File**: Updated `tests/test_chart_panel.py::test_rsi_panel_refresh_on_ticker_change`
+- **Test Assertions Added**: 2 new assertions verify panel's `_indicator_values` and `_current_value` updated
+- **Test Documentation**: Updated docstring to explain the fix and what we're verifying
+- **Removed Characterization**: Test is no longer documenting a bug, it's verifying correct behavior
+- **All Tests Pass**: 45 chart_panel tests + 17 indicator_panel tests = 62 tests, all green
+- **Dependencies**: This story depended on VPR-040 (characterization tests) to document the bug first
+- **Next Story**: VPR-042 (remove volume toggle) or VPR-043 (fix height calculation) can proceed independently
