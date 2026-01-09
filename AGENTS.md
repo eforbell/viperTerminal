@@ -1214,3 +1214,56 @@ After this fix:
 - Volume bars and X-axis remain visible when RSI panel is toggled on
 - Chart layout is stable and predictable regardless of indicator visibility
 - No more content being pushed out of view due to incorrect height calculations
+
+---
+
+## VPR-044: Verification and Cleanup (2026-01-08)
+
+**Story**: Final verification that all Feature 4 bug fixes are complete and working correctly.
+
+**Key Learnings**:
+- **Verification-First Approach**: Always verify ALL acceptance criteria before marking a story complete
+- **Test Suite Health**: All 676 tests pass with 90.95% coverage (above 90% requirement)
+- **Coverage Metrics**: chart_panel.py at 98%, indicator_panel.py at 97%, rsi_panel.py at 100%
+- **Characterization Cleanup**: All @pytest.mark.characterization markers removed (grep confirms none remain)
+- **Pre-existing Issues**: 84 mypy type errors in test files documented and tracked separately
+- **No Regressions**: No new test failures introduced by VPR-040 through VPR-043 changes
+- **Test-Driven Bug Fixing**: Characterization tests (VPR-040) → Fixes (VPR-041, VPR-042, VPR-043) → Verification (VPR-044)
+- **Dependency Chain Success**: Sequential story dependencies worked perfectly for complex bug fixes
+- **Core Bugs Resolved**: Volume/RSI occlusion FIXED, stale data FIXED, volume toggle removed (simplified)
+- **Layout Model Understanding**: RSI panel as sibling widget - Textual handles stacking automatically
+- **Volume Simplification**: Always-on volume matches TradingView UX pattern, reduces complexity
+- **Stale Data Fix**: IndicatorPanel.show_indicator() always renders regardless of visibility state
+- **Manual Testing Checklist**: RSI toggle, multiple timeframes, crypto tickers, minimum terminal size
+- **Edge Cases Verified**: Insufficient data handling, empty volume data, minimum terminal dimensions
+- **Feature 4 Complete**: All 5 stories (VPR-040 through VPR-044) complete with passes: true
+- **Ready for Feature 5**: Chart layout now fully functional, ready for architecture refactoring
+- **PRD Success Metrics**: ✓ Volume/X-axis visible, ✓ No stale RSI, ✓ Volume always on, ✓ Tests pass, ✓ Coverage > 90%
+
+### Test Results
+- All 676 tests pass
+- Coverage: 90.95% (maintained above 90% threshold)
+- No @pytest.mark.characterization markers remaining
+- Pre-existing 84 mypy errors in test files (documented, unrelated to Feature 4)
+
+### Files Modified
+- `scripts/ralph/features/feature-4.prd.json` (marked VPR-044 passes: true)
+- `scripts/ralph/progress.txt` (added VPR-044 learnings)
+- `AGENTS.md` (added this section)
+
+### User Impact
+Feature 4 complete:
+- Chart layout bugs completely resolved
+- Volume bars and X-axis always visible regardless of RSI toggle state
+- RSI panel updates immediately when ticker changes (no stale data)
+- Volume bars always shown (simplified UX, matches industry standard)
+- All existing functionality maintained with no regressions
+- Chart view is now fully functional and ready for production use
+
+### Next Steps
+Feature 5 will introduce:
+- ChartContext shared data structure for better state management
+- Perfect pixel alignment between chart and indicators
+- Extracted X-axis component for consistency
+- Dynamic RSI panel width matching chart width
+- Additional architectural improvements
