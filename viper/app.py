@@ -459,6 +459,9 @@ class ViperApp(App[None]):
         reader_panel = self.query_one(ArticleReaderPanel)
         await reader_panel.show_article(event.news_item.url)
 
+        # Focus the article reader panel so keybindings work (j/k scroll, Escape to close)
+        reader_panel.focus()
+
         # Update status
         status_bar = self.query_one(StatusBar)
         status_bar.set_message(f"Loading article: {event.news_item.title[:50]}...")
@@ -481,6 +484,10 @@ class ViperApp(App[None]):
 
         news_container.display = True
         self._news_panel_visible = True
+
+        # Restore focus to news panel so j/k navigation works
+        news_panel = self.query_one(NewsPanel)
+        news_panel.focus()
 
         # Update status
         status_bar = self.query_one(StatusBar)
