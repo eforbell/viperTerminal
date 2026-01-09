@@ -129,7 +129,7 @@ class ChartRenderer:
                 width=context.total_width,
                 height=context.total_height,
                 include_y_axis=True,
-                include_x_axis=True,
+                include_x_axis=False,  # X-axis rendered separately via render_x_axis()
                 y_axis_width=context.y_axis_width,
             )
             period = context.period
@@ -775,7 +775,7 @@ class ChartRenderer:
             period: Time period for formatting (1W, 1M, 1Y, 5Y, MAX, etc.)
 
         Returns:
-            X-axis line with date labels
+            X-axis line with date labels (includes newline separator)
         """
         # Create axis line
         y_padding = " " * (y_axis_width - 2) + " └"
@@ -948,6 +948,78 @@ class ChartRenderer:
             result_lines.append(y_padding + " " * width)
 
         return result_lines
+
+
+def render_x_axis(context: ChartContext) -> list[str]:
+    """Render X-axis with date labels as a standalone component.
+
+    This function extracts X-axis rendering to be rendered once at the bottom
+    of the chart layout, shared by price chart and all indicator panels.
+
+    Args:
+        context: ChartContext with dates, period, and dimension information
+
+    Returns:
+        List of strings representing X-axis lines (typically 2 lines: border + labels)
+
+    Example:
+        >>> context = ChartContext.from_historical_data(data, width=80, height=20)
+        >>> x_axis_lines = render_x_axis(context)
+        >>> for line in x_axis_lines:
+        ...     print(line)
+    """
+    # Use ChartContext to extract all needed information
+    dates = context.dates
+    chart_width = context.chart_area_width
+    y_axis_width = context.y_axis_width
+    period = context.period
+
+    # Create axis line
+    y_padding = " " * (y_axis_width - 2) + " └"
+    axis_line = "─" * chart_width
+
+    if not dates:
+        # No dates - just return empty axis
+        return [
+            f"{y_padding}{axis_line}",
+            f"{' ' * (y_axis_width + chart_width)}"
+        ]
+
+    # Determine date format based on period
+    # Short periods: MM/DD
+    # Medium periods (1Y): MMM 'YY
+    # Long periods (2Y+, MAX): YYYY
+    if period in ("2Y", "5Y", "MAX"):
+        # Multi-year: show year
+        first_label = dates[0].strftime("%Y")
+        last_label = dates[-1].strftime("%Y")
+    elif period in ("1Y",):
+        # 1 year: show month and abbreviated year
+        first_label = dates[0].strftime("%b '%y")
+        last_label = dates[-1].strftime("%b '%y")
+    elif period in ("3M", "6M"):
+        # Multi-month: show month/day/year abbreviated
+        first_label = dates[0].strftime("%m/%d/%y")
+        last_label = dates[-1].strftime("%m/%d/%y")
+    else:
+        # Short periods (1W, 1M): show MM/DD
+        first_label = dates[0].strftime("%m/%d")
+        last_label = dates[-1].strftime("%m/%d")
+
+    # Place labels
+    total_width = chart_width
+    if total_width >= len(first_label) + len(last_label) + 2:
+        # Enough space for both labels
+        padding = total_width - len(first_label) - len(last_label)
+        labels = f"{first_label}{' ' * padding}{last_label}"
+    else:
+        # Not enough space - just show first date
+        labels = first_label.ljust(total_width)
+
+    return [
+        f"{y_padding}{axis_line}",
+        f"{' ' * y_axis_width}{labels}"
+    ]
 
 
 def create_chart(

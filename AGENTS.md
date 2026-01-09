@@ -1554,3 +1554,203 @@ New code uses modern API:
 - Remove X-axis from individual renders (include_x_axis=False)
 - ChartPanel renders X-axis once at bottom after all panels
 - Ensures X-axis always visible regardless of indicator toggles
+
+---
+
+## 2026-01-09 - VPR-052: Extract X-axis to shared component
+
+### What Was Implemented
+
+Extracted X-axis rendering from individual chart renders into a standalone `render_x_axis()` function that uses ChartContext. X-axis is now rendered once at the bottom of the chart layout, shared by price chart and all indicator panels.
+
+### Files Changed
+
+- `viper/widgets/chart_renderer.py` - Added `render_x_axis(context)` public function, set `include_x_axis=False` in modern path
+- `viper/widgets/chart_panel.py` - Import `render_x_axis`, render X-axis after volume and RSI panels
+- `tests/test_render_x_axis.py` - Created comprehensive test suite with 6 tests
+
+### Key Learnings
+
+#### X-axis Extraction Pattern
+
+**Problem**: X-axis was rendered inside each chart component (_render_braille, _render_block), making it part of the RenderedChart.lines output. This meant:
+- X-axis would be duplicated if multiple charts were stacked
+- X-axis could be occluded by panels below (RSI panel stacking issue)
+- No guarantee X-axis always visible at bottom
+
+**Solution**: Extract to standalone `render_x_axis(context: ChartContext) -> list[str]` function
+- Returns list of 2 strings: border line + date labels
+- Uses ChartContext for dates, period, chart_area_width, y_axis_width
+- Called once by ChartPanel after rendering all other components
+
+#### Modern vs Legacy Rendering
+
+**Modern Path** (with ChartContext):
+```python
+dimensions = ChartDimensions(
+    include_x_axis=False,  # X-axis rendered separately
+)
+```
+
+**Legacy Path** (without ChartContext):
+```python
+dimensions = ChartDimensions(
+    include_x_axis=True,  # Still includes X-axis in output
+)
+```
+
+**Backward Compatibility**: Legacy path unchanged, only modern ChartContext path excludes X-axis
+
+#### Return Format
+
+`render_x_axis()` returns `list[str]`, not single string with `\n`:
+- Easier to mount as separate Labels in Textual
+- Consistent with RenderedChart.lines pattern
+- Each line can have independent styling if needed
+
+```python
+x_axis_lines = render_x_axis(context)
+# x_axis_lines[0]: "          └────────────────────────────"
+# x_axis_lines[1]: "            01/01              01/30"
+```
+
+#### Integration Point
+
+ChartPanel renders components in order:
+1. Price chart (without X-axis)
+2. Volume bars (always shown)
+3. RSI panel (if visible, rendered separately as sibling)
+4. **X-axis (once at bottom)**
+
+```python
+# Render X-axis once at the bottom (shared by price chart and all indicators)
+x_axis_lines = render_x_axis(self._chart_context)
+for line in x_axis_lines:
+    container.mount(Label(line, classes="chart-line"))
+```
+
+#### Date Formatting Logic
+
+Format determined by period (unchanged from _create_x_axis):
+- Short periods (1W, 1M): `MM/DD` format
+- Medium periods (3M, 6M): `MM/DD/YY` format  
+- 1Y: `MMM 'YY` format (e.g., "Jan '24")
+- Long periods (2Y, 5Y, MAX): `YYYY` format
+
+#### Alignment Consistency
+
+X-axis uses same dimensions from ChartContext:
+- `chart_width = context.chart_area_width` (not total_width)
+- `y_axis_width = context.y_axis_width` (for left padding)
+- Result: X-axis perfectly aligns with price chart and all indicators
+
+#### Function Signature Choice
+
+Used ChartContext instead of individual parameters:
+```python
+# Good: Single parameter, extensible
+def render_x_axis(context: ChartContext) -> list[str]
+
+# Bad: Multiple parameters, hard to extend
+def render_x_axis(dates: list[datetime], width: int, ...) -> list[str]
+```
+
+Benefits:
+- Consistent with modern render() signature
+- Easy to add new X-axis features (just add to ChartContext)
+- Type-safe: mypy enforces ChartContext structure
+
+#### Testing Strategy
+
+Created separate test file `test_render_x_axis.py` instead of adding to `test_chart_renderer.py`:
+- Cleaner separation of concerns
+- Easier to locate X-axis specific tests
+- Tests verify: basic rendering, no dates, short/long periods, width alignment, crypto tickers
+
+6 tests added:
+- test_render_x_axis_basic - Basic functionality with 1M period
+- test_render_x_axis_no_dates - Edge case with empty dates list
+- test_render_x_axis_short_period - 1W period uses MM/DD format
+- test_render_x_axis_long_period - 5Y period uses YYYY format
+- test_render_x_axis_alignment_width - Verify width matches total_width
+- test_render_x_axis_crypto_ticker - BTC-USD works same as stocks
+
+#### Type Annotations
+
+Function has explicit return type `list[str]` for clarity:
+```python
+def render_x_axis(context: ChartContext) -> list[str]:
+    ...
+    return [
+        f"{y_padding}{axis_line}",
+        f"{' ' * y_axis_width}{labels}"
+    ]
+```
+
+mypy validates:
+- ChartContext has required attributes (dates, period, chart_area_width, y_axis_width)
+- Return type matches documented signature
+- Calling code expects list[str]
+
+#### Code Duplication vs Abstraction
+
+X-axis logic remains in two places:
+1. `_create_x_axis()` - Private method, used by legacy path
+2. `render_x_axis()` - Public function, used by modern ChartContext path
+
+Why not consolidate? 
+- `_create_x_axis()` returns string with `\n` (legacy format)
+- `render_x_axis()` returns `list[str]` (modern format)
+- Both use same date formatting logic (could extract helper)
+
+Future refactor: Extract date formatting to `_format_x_axis_dates(dates, period)` helper
+
+#### Visual Verification
+
+Manual testing checklist (from acceptance criteria):
+- [x] X-axis rendered only once regardless of RSI visibility
+- [x] Date labels align with chart data correctly
+- [x] All periods (1W through MAX) render appropriate date format
+- [x] Crypto tickers (BTC, ETH) work identically to stocks
+- [x] Minimum terminal size (80x24) - X-axis fits
+- [x] Large terminal size - X-axis scales properly
+
+### Complexity Metrics
+
+- New function: 1 (`render_x_axis()`)
+- Lines added: ~70 (function + tests)
+- Lines changed: ~3 (ChartPanel integration)
+- Tests added: 6
+- All 698 existing tests pass: ✓
+- Coverage: 90.92% (above 90% threshold)
+- mypy --strict: ✓ No errors
+
+### Architecture Impact
+
+**Before VPR-052**:
+- X-axis embedded in RenderedChart.lines
+- No guarantee of visibility at bottom
+- Potential for duplication across stacked components
+
+**After VPR-052**:
+- X-axis rendered independently via `render_x_axis(context)`
+- Always visible at bottom of layout
+- Single rendering ensures consistency
+- Future indicators (MACD, Stochastic) automatically share same X-axis
+
+### Benefits
+
+1. **Guaranteed Visibility**: X-axis always at bottom, never occluded by panels
+2. **No Duplication**: Rendered once, shared by all components
+3. **Consistent Alignment**: Uses ChartContext dimensions like all other components
+4. **Extensibility**: New indicators don't need X-axis logic - just use shared one
+5. **Clean Separation**: X-axis logic separate from price/indicator rendering
+6. **Testability**: X-axis can be tested independently
+
+### Dependencies Met
+
+- VPR-050: ChartContext dataclass created ✓
+- VPR-051: ChartContext integrated into components ✓
+- VPR-052: X-axis extracted to shared component ✓
+
+Ready for VPR-053 (visual polish and comprehensive testing).

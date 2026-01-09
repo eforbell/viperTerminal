@@ -21,6 +21,7 @@ from viper.widgets.chart_renderer import (
     ChartRenderer,
     ChartStyle,
     OverlayData,
+    render_x_axis,
 )
 from viper.widgets.rsi_panel import RSIPanel
 
@@ -380,6 +381,11 @@ class ChartPanel(Widget):
             self._rsi_panel.show_indicator(
                 self._rsi_values, current_rsi, context=self._chart_context
             )
+
+        # Render X-axis once at the bottom (shared by price chart and all indicators)
+        x_axis_lines = render_x_axis(self._chart_context)
+        for line in x_axis_lines:
+            container.mount(Label(line, classes="chart-line"))
 
     def _format_number(self, value: float, decimals: int) -> str:
         """Format a number with commas and specified decimal places.
