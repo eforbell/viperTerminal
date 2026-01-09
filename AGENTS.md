@@ -1976,3 +1976,215 @@ Benefits:
 - VPR-053: Visual polish and comprehensive testing ✓
 
 **Feature 5 COMPLETE**: Chart architecture refactoring successful. Foundation ready for Feature 6+ (new indicators, candlestick charts, etc.).
+
+---
+
+## Feature 6: In-App Article Reader Mode
+
+### VPR-061: ArticleReaderPanel Widget (2026-01-09)
+
+**Story**: Create ArticleReaderPanel widget for displaying extracted article content in terminal.
+
+**Files Changed**:
+- `viper/widgets/article_reader_panel.py`: Created new full-screen reader widget
+- `viper/widgets/__init__.py`: Added ArticleReaderPanel export
+- `tests/test_article_reader_panel.py`: Created comprehensive test suite with 21 tests
+
+**Key Learnings**:
+
+#### Dynamic Widget Mounting Pattern (CRITICAL)
+In Textual, you CANNOT mount children to a container BEFORE the container is mounted to the DOM:
+
+**WRONG ❌:**
+```python
+header = Container(classes="article-header")
+header.mount(Label("Title"))  # MountError: Can't mount before container is mounted
+container.mount(header)
+```
+
+**CORRECT ✅:**
+```python
+header = Container(classes="article-header")
+container.mount(header)  # Mount container first
+header.mount(Label("Title"))  # Now can mount children
+```
+
+This is the OPPOSITE of the `with` context manager pattern used in `compose()`:
+```python
+def compose(self) -> ComposeResult:
+    with Container(classes="header"):  # Context manager OK during compose
+        yield Label("Title")  # Works in compose
+```
+
+The `with` pattern ONLY works in `compose()`. For dynamic rendering after mount, use the two-step pattern.
+
+#### Avoiding Duplicate ID Errors on Re-render
+When re-rendering widgets (like retry functionality), using IDs on dynamically created containers causes errors:
+```
+DuplicateIds: Tried to insert a widget with ID 'article-header', but a widget already exists with that ID
+```
+
+**Solution**: Use **classes** instead of IDs for dynamically created containers:
+```python
+# Old (causes errors on retry):
+header = Container(id="article-header")  # ❌ Duplicate on second render
+
+# New (works on retry):
+header = Container(classes="article-header")  # ✅ No ID conflicts
+```
+
+Only use IDs for containers created once in `compose()`. Use classes for dynamic content.
+
+#### VerticalScroll for Scrollable Content
+Use `VerticalScroll` container for long article content with scroll keybindings:
+```python
+scroll = VerticalScroll(classes="article-content-scroll")
+container.mount(scroll)
+
+for paragraph in paragraphs:
+    scroll.mount(Static(paragraph, classes="article-content", markup=True))
+
+# Action handlers delegate to scroll container
+def action_scroll_down(self) -> None:
+    if self._scroll_container:
+        self._scroll_container.scroll_relative(y=1)
+```
+
+Built-in methods: `scroll_relative()`, `scroll_page_up()`, `scroll_page_down()`, `scroll_home()`, `scroll_end()`.
+
+#### Loading State Pattern
+Show loading indicator while fetching async data:
+```python
+async def show_article(self, url: str) -> None:
+    self._render_loading_state()  # Show spinner immediately
+    result = await fetch_article(url)  # Async fetch
+    if isinstance(result, ArticleResult):
+        self._render_article_content()  # Show content
+    else:
+        self._render_error_state()  # Show error
+```
+
+Use `LoadingIndicator()` widget + descriptive Label for user feedback.
+
+#### Error State with Actionable Hints
+Error states should guide users to recovery:
+```python
+if error.should_retry:
+    hints.append("Press [green]r[/green] to retry")
+hints.append("Press [green]o[/green] to open in browser")
+hints.append("Press [green]Esc[/green] to go back")
+```
+
+Use Rich markup (`[green]key[/green]`) with `markup=True` on Labels. Provide multiple escape hatches.
+
+#### Keybinding Best Practices
+Use `priority=True` on widget-level bindings to ensure they work when focused:
+```python
+BINDINGS = [
+    Binding("escape", "close", "Close", show=False, priority=True),
+    Binding("j", "scroll_down", "Scroll Down", show=False, priority=True),
+    # ...
+]
+```
+
+Without `priority=True`, app-level bindings might intercept keys.
+
+#### Testing Dynamic Rendering
+Test all rendering states (loading, content, error) separately:
+```python
+# Test loading state (with delayed mock)
+async def delayed_fetch(url, **kwargs):
+    await asyncio.sleep(0.1)
+    return article
+
+with patch("module.fetch_article", side_effect=delayed_fetch):
+    fetch_task = panel.show_article(url)
+    await pilot.pause(0.05)  # Check loading state mid-fetch
+    await fetch_task  # Wait for completion
+
+# Test content state
+with patch("module.fetch_article", return_value=article):
+    await panel.show_article(url)
+    await pilot.pause()
+    # Assert content displayed
+
+# Test error state
+with patch("module.fetch_article", return_value=error):
+    await panel.show_article(url)
+    await pilot.pause()
+    # Assert error message displayed
+```
+
+#### Testing Message Posting
+Use `patch.object()` to verify action handlers post messages:
+```python
+with patch.object(panel, "post_message") as mock_post:
+    panel.action_close()
+    assert mock_post.call_count == 1
+    message = mock_post.call_args[0][0]
+    assert isinstance(message, ArticleReaderPanel.CloseRequested)
+```
+
+Don't use `await pilot.pause()` after patching post_message (causes timeout).
+
+#### Reading Time Calculation
+Calculate reading time estimate with minimum of 1 minute:
+```python
+reading_time = max(1, article.word_count // 200)  # 200 words per minute
+meta_parts.append(f"~{reading_time} min read")
+```
+
+Prevents "0 min read" for very short articles.
+
+#### Widget Visibility Management
+Store scroll container reference for action handlers:
+```python
+def __init__(self):
+    self._scroll_container: Optional[VerticalScroll] = None
+
+def _render_article_content(self):
+    scroll = VerticalScroll(classes="article-content-scroll")
+    self._scroll_container = scroll  # Store reference
+    container.mount(scroll)
+
+def action_scroll_down(self):
+    if self._scroll_container:  # Check exists before using
+        self._scroll_container.scroll_relative(y=1)
+```
+
+Action handlers can be called before content is rendered - always check.
+
+#### Rich Markup in Labels
+When displaying content with Rich markup (colors, bold, etc.), MUST set `markup=True`:
+```python
+Label(article.title, classes="article-title", markup=True)  # ✅
+Label(f"[green]hint[/green]", classes="hint", markup=True)  # ✅
+```
+
+Without `markup=True`, tags display as literal text: `[green]hint[/green]`.
+
+### Test Results
+- 21 comprehensive tests created, all passing
+- Test coverage: article_reader_panel.py at 98%
+- Overall coverage: 91.10% (743 total tests passing)
+- mypy --strict: No type errors
+- Test duration: ~3.4 seconds for ArticleReaderPanel tests
+
+### Widget Architecture
+ArticleReaderPanel provides three states:
+1. **Loading**: Spinner + "Fetching article..." message
+2. **Content**: Header (title, metadata) + scrollable body + footer (hints)
+3. **Error**: Error message + recovery hints (retry, browser fallback)
+
+All states use dynamic mounting (not `compose()`), enabling seamless transitions.
+
+### Keybindings Implemented
+- `Escape/q`: Close reader, return to news list
+- `j/k`: Scroll line up/down (vim-style)
+- `PageUp/PageDown`: Scroll page up/down
+- `Home/End`: Jump to top/bottom
+- `o`: Open article in browser (fallback)
+- `r`: Retry fetch (for transient errors)
+
+All bindings set `priority=True` for reliable widget-level handling.
+

@@ -841,3 +841,53 @@
   - **22 New Tests**: 16 ChartContext tests + 6 X-axis tests added to ensure architecture correctness
   - **Feature 5 Complete**: Chart architecture refactoring successful, foundation ready for Feature 6+
 ---
+
+## 2026-01-09 - VPR-060
+- **What was implemented**: ArticleReader service for content extraction from news URLs
+- **Files changed**:
+  - `pyproject.toml`: Added trafilatura>=1.6.0 dependency for article extraction
+  - `viper/services/article_reader.py`: Created new service with ArticleResult/ArticleError dataclasses, async fetch_article() function
+  - `tests/test_article_reader.py`: Created comprehensive test suite with 24 tests across 7 test classes
+  - `scripts/ralph/features/feature-6.prd.json`: Marked VPR-060 as complete (passes: true)
+- **Learnings**:
+  - **Trafilatura Library**: Best-in-class article extraction, strips ads/nav/boilerplate automatically
+  - **Dual Dataclass Pattern**: ArticleResult for success, ArticleError for failures - type-safe union return
+  - **ArticleResult Fields**: title, content, author, date, source_url, word_count (immutable frozen dataclass)
+  - **ArticleError Fields**: error_type, error_message, source_url, should_retry (guides user on retry vs fallback)
+  - **Error Types**: timeout, network, http_error, extraction - each with appropriate should_retry flag
+  - **Async HTTP with httpx**: Use AsyncClient with timeout, follow_redirects=True, realistic User-Agent
+  - **User-Agent Pattern**: Set Mozilla/Chrome User-Agent to avoid bot blocking by news sites
+  - **Timeout Handling**: httpx.TimeoutException caught and returned as ArticleError with should_retry=True
+  - **HTTP Status Codes**: 404/403 → should_retry=False, 500+ → should_retry=True (transient server errors)
+  - **Extraction in Thread**: trafilatura is synchronous, use `await asyncio.to_thread()` to avoid blocking UI
+  - **Metadata Extraction**: trafilatura.extract_metadata() returns title, author, date (all optional)
+  - **Content Extraction**: trafilatura.extract() with include_comments=False, include_tables=True, no_fallback=False
+  - **Title Fallback Chain**: metadata.title → extract with xml format → first line of content (defensive)
+  - **Empty Content Handling**: Return ArticleError when extracted content is None or empty string
+  - **Session-Level Caching**: Module-level dict {url: (timestamp, ArticleResult)} with 30-min TTL
+  - **Cache Key**: Use URL as key (handles query params and fragments correctly)
+  - **Cache Expiration**: Check timestamp on access, delete expired entries (lazy eviction)
+  - **clear_article_cache()**: Manual cache clearing function for testing and reset scenarios
+  - **Cache Bypass**: use_cache=False parameter to force re-fetch (useful for retry)
+  - **Errors Not Cached**: Only cache successful ArticleResult, always re-fetch errors (could be transient)
+  - **Word Count**: Simple `len(content.split())` for reading time estimates
+  - **Test Organization**: 7 test classes - Dataclasses, SyncExtraction, FetchArticle, Caching, UserAgent, EdgeCases
+  - **respx Mocking**: Use respx.MockRouter to mock httpx requests in async tests
+  - **Mock Pattern**: `respx_mock.get(url).mock(return_value=Response(200, text=html))`
+  - **Timeout Mock**: `side_effect=TimeoutException("Timeout")` to simulate timeout
+  - **HTTP Error Mock**: `return_value=Response(404, text="Not Found")` for status code testing
+  - **Redirect Testing**: Mock 301 response with Location header, verify follow_redirects works
+  - **User-Agent Verification**: Capture request via `route.calls.last.request.headers` to verify headers sent
+  - **Empty HTML Test**: Truly empty `<html><body></body></html>` returns None from trafilatura
+  - **Minimal HTML Test**: Navigation/footer only may extract nav text or None - both acceptable
+  - **Paywall Detection**: Short content (< 200 chars) could indicate paywall, but still return result
+  - **Frozen Dataclass Testing**: Use `pytest.raises(AttributeError)` to verify frozen=True immutability
+  - **Cache Object Identity**: Use `result2 is result1` to verify same object returned from cache
+  - **24 Comprehensive Tests**: All edge cases covered - success, errors, caching, redirects, user-agent
+  - **88% Module Coverage**: article_reader.py at 88%, uncovered lines are defensive branches and fallbacks
+  - **722 Total Tests Pass**: 698 existing + 24 new, all green with 90.77% overall coverage
+  - **mypy --strict Clean**: Fixed trafilatura.extract() return type (can be None) with explicit handling
+  - **Type Safety Pattern**: `extracted_title = trafilatura.extract(...); title = extracted_title or ""`
+  - **Dependency Addition**: Added trafilatura and its transitive deps (courlan, htmldate, justext, lxml, etc.)
+  - **Foundation Ready**: Service layer complete for VPR-061 (ArticleReaderPanel widget integration)
+---
