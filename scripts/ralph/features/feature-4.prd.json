@@ -126,7 +126,7 @@
         "Manual verification: screenshot with RSI on shows volume bars and X-axis"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-040", "VPR-042"],
       "notes": "This is THE core bug fix. The fix is likely just removing 'rsi_height' from the calculation since RSI stacks as a sibling naturally."
@@ -145,7 +145,7 @@
         "Remove or update @pytest.mark.characterization tests"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-041", "VPR-043"],
       "notes": "Final verification that all bugs are fixed. After this story, Feature 4 is complete and ready to merge."

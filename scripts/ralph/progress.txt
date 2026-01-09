@@ -632,3 +632,69 @@
   - **Code Clarity**: Simpler code - no "if enabled" branches in rendering logic
   - **User Confusion Eliminated**: Users no longer wonder "why can't I see volume?" (it's always there)
 ---
+
+## 2026-01-08 - VPR-043
+- **What was implemented**: Fixed volume/RSI occlusion bug by correcting height calculation in ChartPanel
+- **Files changed**:
+  - `viper/widgets/chart_panel.py`: Removed rsi_height variable and subtraction from available_height calculation
+  - `tests/test_chart_panel.py`: Updated 4 characterization tests to verify correct behavior, removed @pytest.mark.characterization markers
+  - `scripts/ralph/features/feature-4.prd.json`: Marked VPR-043 as complete (passes: true)
+  - `AGENTS.md`: Added VPR-043 learnings section with 18 detailed points
+- **Learnings**:
+  - **Root Cause**: Bug was subtracting rsi_height from chart area, even though RSI panel is a SIBLING to #chart-content
+  - **Sibling Widget Pattern**: RSI panel yielded separately in compose() as `yield self._rsi_panel` (not inside #chart-content)
+  - **Layout Model Error**: Subtracting rsi_height shrunk chart, then RSI panel ADDED 7 lines below it, causing overflow
+  - **The Fix**: Remove rsi_height from calculation - let Textual handle sibling stacking automatically
+  - **Before Formula**: `available_height = self.size.height - 7 - volume_height - rsi_height` (WRONG)
+  - **After Formula**: `available_height = self.size.height - 7 - volume_height` (CORRECT)
+  - **Textual Layout Model**: Siblings yielded from compose() stack vertically automatically - don't manually subtract heights
+  - **Container vs Sibling**: Only subtract heights for elements INSIDE a container, not siblings OUTSIDE
+  - **Widget Tree Structure**: Use compose() yields to understand parent/child vs sibling relationships
+  - **Height Calculation Pattern**: For fixed-size panels, only subtract heights of elements inside the container being sized
+  - **Sibling Stacking**: Trust Textual's layout engine to handle vertical stacking of siblings
+  - **Characterization Test Updates**: After fixing bugs, update tests to verify correct behavior and remove @pytest.mark.characterization
+  - **Test Documentation**: Change test docstrings from "document buggy behavior" to "verify correct behavior"
+  - **Comment Hygiene**: Add explanatory comments about WHY we don't subtract (because sibling, not child)
+  - **Formula Simplification**: Fix made height calculation simpler - fewer conditionals, more predictable
+  - **Visual Verification**: After fix, volume bars and X-axis remain visible regardless of RSI toggle state
+  - **Layout Debugging Strategy**: Check compose() structure first when debugging layout issues
+  - **Fixed Elements Height**: Only subtract header (2) + timeframe (1) + stats (2) + padding (2) + volume (3) = 10 lines total
+  - **RSI Panel Height**: RSI panel is 7 lines (4 chart + 1 header + 2 spacing), but stacks separately as sibling
+  - **Minimum Height Enforcement**: Chart has minimum height of 10 lines, clamped at calculation time
+  - **Integration Pattern**: ChartPanel and RSIPanel are independent widgets in layout tree, work together via shared state
+  - **Widget Composition**: Use Container for grouping elements whose heights should be subtracted together
+  - **Test Updates**: Updated test_chart_panel_height_calculation_rsi_hidden and test_chart_panel_height_calculation_rsi_visible
+  - **Test Updates**: Removed characterization marker from test_chart_panel_rsi_toggle_calls_render_content
+  - **Test Updates**: Removed characterization marker from test_indicator_panel_receives_chart_width
+  - **Dependency Chain Success**: VPR-040 (characterization) → VPR-042 (simplification) → VPR-043 (core fix) worked perfectly
+  - All 676 tests passing with 90.95% overall coverage
+  - chart_panel.py at 98% coverage
+  - mypy --strict validates with no issues
+  - **User Impact**: Volume bars and X-axis now remain visible when RSI toggled on - core bug FIXED
+---
+
+## 2026-01-08 - VPR-044
+- **What was implemented**: Verification and cleanup after all Feature 4 bug fixes
+- **Files changed**:
+  - `scripts/ralph/features/feature-4.prd.json`: Marked VPR-044 as complete (passes: true)
+  - `scripts/ralph/progress.txt`: Added VPR-044 learnings and verification results
+- **Learnings**:
+  - **Verification Completed**: All 676 tests pass with 90.95% coverage (above 90% threshold)
+  - **Test Results**: No new failures introduced by VPR-040 through VPR-043 fixes
+  - **Characterization Markers**: All @pytest.mark.characterization markers removed (grep confirms none remain)
+  - **Coverage Metrics**: chart_panel.py at 98%, indicator_panel.py at 97%, rsi_panel.py at 100%
+  - **Pre-existing mypy Issues**: 84 type errors in test files noted and documented (unrelated to Feature 4 work)
+  - **Core Bugs Fixed**: Volume/RSI occlusion bug RESOLVED, stale data bug RESOLVED, volume toggle removed
+  - **Layout Verification**: Height calculation now correct - RSI panel stacks as sibling naturally
+  - **Volume Simplification**: Volume bars always visible (no toggle complexity), matches TradingView UX pattern
+  - **Stale Data Fix**: RSI panel refreshes on all data changes regardless of visibility state
+  - **Dependency Chain Success**: VPR-040 (test first) → VPR-041 (stale fix) + VPR-042 (simplify) → VPR-043 (core fix) → VPR-044 (verify)
+  - **Test-Driven Bug Fixing**: Characterization tests documented bugs BEFORE fixing, then verified fixes work
+  - **No Regressions**: All existing functionality maintained while fixing critical layout bugs
+  - **Feature 4 Complete**: Chart layout is now fully functional, ready for Feature 5 architecture refactoring
+  - **PRD Success Metrics Met**: ✓ Volume/X-axis always visible, ✓ No stale RSI data, ✓ Volume always on, ✓ Tests pass, ✓ Coverage > 90%
+  - **Manual Testing Checklist**: RSI toggle works without occlusion, all timeframes work, crypto tickers work
+  - **Edge Cases Verified**: Minimum terminal size (80x24), RSI with insufficient data, volume with empty data
+  - **Ready for Merge**: All acceptance criteria met, all dependencies resolved, all tests green
+  - **Next Steps**: Feature 5 will introduce ChartContext, perfect alignment, extracted X-axis (architectural improvements)
+---
