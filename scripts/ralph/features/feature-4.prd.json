@@ -68,7 +68,7 @@
         "All tests PASS with current code (characterize, don't fix yet)"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": [],
       "notes": "CRITICAL: Must capture current behavior before fixing. These tests document the bugs. Mark tests with @pytest.mark.characterization so we can update them as bugs are fixed."
@@ -85,7 +85,7 @@
         "Update characterization test from VPR-040 to expect correct behavior"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-040"],
       "notes": "Quick bug fix that improves user experience immediately. Low risk change - just ensure refresh happens."
