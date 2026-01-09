@@ -72,7 +72,7 @@
     {
       "id": "VPR-060",
       "title": "Create ArticleReader service for content extraction",
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "New file: viper/services/article_reader.py",
         "Add trafilatura to dependencies (pyproject.toml)",
