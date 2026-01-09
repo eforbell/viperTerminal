@@ -762,32 +762,8 @@ async def test_chart_panel_all_timeframes() -> None:
 
 
 @pytest.mark.asyncio
-async def test_chart_panel_volume_toggle() -> None:
-    """Test that volume can be toggled on and off."""
-    app = ChartPanelTestApp()
-    async with app.run_test() as pilot:
-        panel = app.query_one(ChartPanel)
-
-        # Volume should be enabled by default
-        assert panel.is_volume_enabled() is True
-        assert panel._volume_enabled is True
-
-        # Toggle volume off
-        panel.toggle_volume()
-        await pilot.pause()
-        assert panel.is_volume_enabled() is False
-        assert panel._volume_enabled is False
-
-        # Toggle volume on
-        panel.toggle_volume()
-        await pilot.pause()
-        assert panel.is_volume_enabled() is True
-        assert panel._volume_enabled is True
-
-
-@pytest.mark.asyncio
 async def test_chart_panel_volume_bars_displayed() -> None:
-    """Test that volume bars are displayed when volume is enabled."""
+    """Test that volume bars are displayed with chart data."""
     app = ChartPanelTestApp()
     async with app.run_test() as pilot:
         panel = app.query_one(ChartPanel)
@@ -813,28 +789,19 @@ async def test_chart_panel_volume_bars_displayed() -> None:
             num_data_points=10,
         )
 
-        # Load chart with volume (enabled by default)
+        # Load chart with volume (always shown)
         with patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = mock_data
             await panel.load_chart("AAPL", "1M")
             await pilot.pause()
 
-            # Verify chart is shown
+            # Verify chart is shown with volume data
             assert panel._state == "success"
-            assert panel._volume_enabled is True
-
-            # Toggle volume off
-            panel.toggle_volume()
-            await pilot.pause()
-
-            # Verify volume is disabled and display is updated
-            assert panel._volume_enabled is False
-            # Volume bars should not be rendered when disabled
 
 
 @pytest.mark.asyncio
 async def test_chart_panel_volume_stats_displayed() -> None:
-    """Test that volume statistics are displayed when volume is enabled."""
+    """Test that volume statistics are displayed with chart data."""
     app = ChartPanelTestApp()
     async with app.run_test() as pilot:
         panel = app.query_one(ChartPanel)
@@ -860,21 +827,19 @@ async def test_chart_panel_volume_stats_displayed() -> None:
             num_data_points=5,
         )
 
-        # Volume is already enabled by default, just load chart
+        # Load chart with volume (always shown)
         with patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = mock_data
             await panel.load_chart("AAPL", "1W")
             await pilot.pause()
 
             # Verify volume stats are included in display
-            # The _render_chart method should include volume stats in the stats line
-            assert panel._volume_enabled is True
             assert len(panel._data.volumes) > 0  # type: ignore[union-attr]
 
 
 @pytest.mark.asyncio
 async def test_chart_panel_volume_empty_data() -> None:
-    """Test volume toggle with empty volume data."""
+    """Test volume rendering with empty volume data."""
     app = ChartPanelTestApp()
     async with app.run_test() as pilot:
         panel = app.query_one(ChartPanel)
@@ -892,7 +857,7 @@ async def test_chart_panel_volume_empty_data() -> None:
             interval="1d",
         )
 
-        # Volume is already enabled by default, just load chart
+        # Load chart (volume rendering will be skipped for empty volumes)
         with patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = mock_data
             await panel.load_chart("NEWIPO", "1W")
@@ -900,85 +865,6 @@ async def test_chart_panel_volume_empty_data() -> None:
 
             # Should handle empty volumes gracefully
             assert panel._state == "success"
-            assert panel._volume_enabled is True
-
-
-@pytest.mark.asyncio
-async def test_chart_panel_volume_disabled_via_config() -> None:
-    """Test that volume can be disabled via config parameter."""
-    class DisabledVolumeApp(App[None]):
-        """Test app with volume disabled."""
-
-        def compose(self) -> ComposeResult:
-            """Compose test app."""
-            yield ChartPanel(volume_enabled=False)
-
-    app = DisabledVolumeApp()
-    async with app.run_test() as pilot:
-        panel = app.query_one(ChartPanel)
-
-        # Volume should be disabled when passed False
-        assert panel.is_volume_enabled() is False
-        assert panel._volume_enabled is False
-
-        # Toggle volume on
-        panel.toggle_volume()
-        await pilot.pause()
-        assert panel.is_volume_enabled() is True
-        assert panel._volume_enabled is True
-
-
-@pytest.mark.asyncio
-async def test_chart_panel_volume_status_indicator() -> None:
-    """Test that volume status is shown in chart header."""
-    from datetime import datetime, timedelta
-
-    app = ChartPanelTestApp()
-    async with app.run_test() as pilot:
-        panel = app.query_one(ChartPanel)
-
-        # Create mock data
-        mock_data = HistoricalData(
-            ticker="AAPL",
-            dates=[datetime.now() - timedelta(days=i) for i in range(5)],
-            prices=[150.0, 152.0, 151.0, 153.0, 155.0],
-            volumes=[1000000, 1200000, 1100000, 1500000, 1300000],
-            highs=[151.0, 153.0, 152.0, 154.0, 156.0],
-            lows=[149.0, 151.0, 150.0, 152.0, 154.0],
-            opens=[150.0, 151.0, 152.0, 151.0, 153.0],
-            period="1M",
-            interval="1d",
-        )
-
-        mock_stats = HistoricalStats(
-            period_high=156.0,
-            period_low=149.0,
-            change_percent=3.33,
-            avg_volume=1220000.0,
-            num_data_points=5,
-        )
-
-        # Load chart with volume enabled (default)
-        with patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock) as mock_fetch:
-            mock_fetch.return_value = mock_data
-            await panel.load_chart("AAPL", "1M")
-            await pilot.pause()
-
-            # Check that "Vol: ON" appears in header
-            labels = panel.query(Label)
-            header_labels = [label for label in labels if "Chart" in str(label.render())]
-            assert len(header_labels) > 0
-            assert any("[Vol: ON]" in str(label.render()) for label in header_labels)
-
-            # Toggle volume off
-            panel.toggle_volume()
-            await pilot.pause()
-
-            # Check that "Vol: OFF" appears in header
-            labels = panel.query(Label)
-            header_labels = [label for label in labels if "Chart" in str(label.render())]
-            assert len(header_labels) > 0
-            assert any("[Vol: OFF]" in str(label.render()) for label in header_labels)
 
 
 @pytest.mark.asyncio

@@ -34,7 +34,6 @@ class Config:
     # Chart settings
     default_chart_timeframe: str = "1M"  # Default timeframe for charts
     chart_style: str = "braille"  # 'braille' or 'block'
-    volume_enabled: bool = True  # Whether volume bars are shown by default
 
     # News settings
     news_enabled: bool = True  # Whether news panel is available
@@ -80,13 +79,6 @@ class Config:
                 f"Invalid default_chart_timeframe '{self.default_chart_timeframe}', using default '1M'"
             )
             self.default_chart_timeframe = "1M"
-
-        # Validate volume_enabled is bool
-        if not isinstance(self.volume_enabled, bool):
-            logger.warning(
-                f"Invalid volume_enabled type {type(self.volume_enabled)}, using default True"
-            )
-            self.volume_enabled = True
 
         # Validate news_enabled is bool
         if not isinstance(self.news_enabled, bool):
@@ -144,9 +136,6 @@ def load_config() -> Config:
 
         if "chart_style" in data:
             config_dict["chart_style"] = data["chart_style"]
-
-        if "volume_enabled" in data:
-            config_dict["volume_enabled"] = data["volume_enabled"]
 
         # News settings
         if "news_enabled" in data:

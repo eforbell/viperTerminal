@@ -107,7 +107,7 @@
         "Volume rendering code stays the same, just always runs"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": [],
       "notes": "Pure removal/simplification - makes the core fix easier by removing a toggle state. Matches TradingView where volume is always visible below price."

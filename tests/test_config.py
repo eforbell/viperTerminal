@@ -275,33 +275,12 @@ class TestConfigChartOptions:
         config = Config(chart_style="invalid")
         assert config.chart_style == "braille"
 
-    def test_default_volume_enabled(self) -> None:
-        """Test default volume_enabled value."""
-        config = Config()
-        assert config.volume_enabled is True
-
-    def test_volume_enabled_true(self) -> None:
-        """Test setting volume_enabled to True."""
-        config = Config(volume_enabled=True)
-        assert config.volume_enabled is True
-
-    def test_volume_enabled_false(self) -> None:
-        """Test setting volume_enabled to False."""
-        config = Config(volume_enabled=False)
-        assert config.volume_enabled is False
-
-    def test_invalid_volume_enabled_corrected(self) -> None:
-        """Test that invalid volume_enabled is corrected."""
-        config = Config(volume_enabled="not a bool")  # type: ignore[arg-type]
-        assert config.volume_enabled is True
-
     def test_load_chart_options_from_file(self, tmp_path: Path) -> None:
         """Test loading chart options from config file."""
         config_file = tmp_path / "config.toml"
         config_file.write_text("""
 default_chart_timeframe = "6M"
 chart_style = "block"
-volume_enabled = true
 """)
 
         with patch("viper.config.get_config_path", return_value=config_file):
@@ -309,7 +288,6 @@ volume_enabled = true
 
         assert config.default_chart_timeframe == "6M"
         assert config.chart_style == "block"
-        assert config.volume_enabled is True
 
 
 class TestConfigNewsOptions:
@@ -377,7 +355,6 @@ refresh_interval = 120
 default_watchlist = ["AAPL", "MSFT"]
 default_chart_timeframe = "1Y"
 chart_style = "block"
-volume_enabled = true
 news_enabled = true
 news_max_items = 5
 
@@ -396,6 +373,5 @@ background = "#111111"
         assert config.theme_colors["positive"] == "#00aa00"
         assert config.default_chart_timeframe == "1Y"
         assert config.chart_style == "block"
-        assert config.volume_enabled is True
         assert config.news_enabled is True
         assert config.news_max_items == 5
