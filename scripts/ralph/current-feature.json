@@ -1,14 +1,26 @@
 {
-  "currentFeature": "feature-5",
-  "featureName": "Chart Architecture Refactoring",
-  "prdPath": "features/feature-5.prd.json",
-  "branch": "viper/feature-5-chart-architecture",
-  "status": "ready-to-start",
+  "currentFeature": "feature-6",
+  "featureName": "In-App Article Reader Mode",
+  "prdPath": "features/feature-6.prd.json",
+  "branch": "viper/feature-6-article-reader",
+  "status": "planning",
   "startedAt": null,
-  "description": "Introduce ChartContext, perfect pixel alignment, extracted X-axis. Builds on Feature 4 bug fixes.",
-  "stories": ["VPR-050", "VPR-051", "VPR-052", "VPR-053"],
+  "description": "Fetch and display news article content directly in terminal. Reader mode strips ads/navigation and renders clean text. Enter opens reader, 'o' opens browser.",
+  "stories": ["VPR-060", "VPR-061", "VPR-062", "VPR-063", "VPR-064"],
   "nextFeature": null,
   "completedFeatures": [
+    {
+      "feature": "feature-5",
+      "name": "Chart Architecture Refactoring",
+      "prdPath": "features/feature-5.prd.json",
+      "branch": "viper/feature-5-chart-architecture",
+      "status": "complete",
+      "completedAt": "2026-01-09",
+      "stories": 4,
+      "testsPassing": 698,
+      "coverage": "90.92%",
+      "notes": "Introduced ChartContext dataclass, perfect indicator alignment, extracted X-axis rendering. Foundation for future indicators."
+    },
     {
       "feature": "feature-1",
       "name": "MVP Terminal",
@@ -154,14 +166,17 @@
       "relatedFeature": "feature-2",
       "effort": "Medium",
       "notes": "Essential for headless/server environments without display. Avoids eye strain from bright browser. Libraries: newspaper3k, readability-lxml, or trafilatura for article extraction. Render with Rich/Textual markdown support.",
+      "status": "IN_PROGRESS_FEATURE_6",
+      "assignedStories": ["VPR-060", "VPR-061", "VPR-062", "VPR-063", "VPR-064"],
       "implementation": {
-        "libraries": ["newspaper3k", "readability-lxml", "trafilatura"],
+        "libraries": ["trafilatura (primary)", "newspaper3k (fallback)"],
         "features": [
           "Fetch article HTML from URL",
           "Extract main content (strip ads, nav, sidebars)",
           "Convert to markdown/plain text",
           "Display in scrollable panel with word wrap",
-          "Keybinding: Enter on news item opens reader instead of browser"
+          "Keybinding: Enter on news item opens reader instead of browser",
+          "Keybinding: 'o' opens in browser (fallback)"
         ]
       }
     }

@@ -1,0 +1,260 @@
+{
+  "branchName": "viper/feature-6-article-reader",
+  "projectName": "Viper Terminal - Feature 6",
+  "description": "In-App Article Reader Mode: Fetch and display news article content directly in terminal instead of opening browser. Reader mode strips ads/navigation and renders clean, readable text. Essential for headless/server environments and reduces eye strain from bright browser windows.",
+  "principles": [
+    "Rock-solid quality over speed - every feature must be bulletproof before moving on",
+    "Comprehensive test coverage - unit tests, integration tests, edge cases",
+    "All tests must pass before a story is marked complete",
+    "No story is done until it's documented and tested",
+    "Graceful degradation - if article extraction fails, fall back to browser",
+    "Respect user's time - show loading state, handle timeouts gracefully",
+    "Apply learnings from AGENTS.md - Rich markup for colors, explicit widget heights"
+  ],
+  "CRITICAL_RENDERING_NOTES": {
+    "warning": "READ THIS BEFORE ANY WIDGET/RENDERING WORK",
+    "textual_colors": "Textual uses Rich markup, NOT ANSI escape codes!",
+    "correct_syntax": "[green]text[/green], [cyan]char[/cyan], [bold]heading[/bold]",
+    "wrong_syntax": "\\033[32m (ANSI codes will BREAK rendering in Textual widgets)",
+    "label_markup": "When Label contains Rich markup, you MUST set markup=True",
+    "markdown_rendering": "Use Rich's Markdown class or Textual's Markdown widget for article content"
+  },
+  "techStack": {
+    "language": "Python 3.10+",
+    "tui": "Textual (built on Rich)",
+    "articleExtraction": "trafilatura (primary) - best accuracy, actively maintained",
+    "fallbackExtraction": "newspaper3k (fallback) - widely used, good compatibility",
+    "httpClient": "httpx (async) or aiohttp for non-blocking fetches",
+    "testing": "pytest + pytest-asyncio + pytest-cov",
+    "mocking": "pytest-mock + responses/respx for HTTP mocking",
+    "typecheck": "mypy --strict",
+    "linting": "ruff"
+  },
+  "background": {
+    "motivation": [
+      "Headless/server environments have no display for browser",
+      "Bright browser windows cause eye strain in dark terminal workflow",
+      "Context switching to browser breaks focus",
+      "Many news sites have heavy ads/popups that degrade experience",
+      "Terminal-native reading keeps user in their workflow"
+    ],
+    "currentBehavior": {
+      "newsPanel": "NewsPanel displays headlines, source, relative time, optional summary",
+      "enterKey": "Pressing Enter on selected article calls webbrowser.open(url)",
+      "browserEvent": "Posts NewsPanel.BrowserOpening message, app shows status",
+      "dataAvailable": "NewsItem has: title, source, url, published_at, summary"
+    },
+    "targetBehavior": {
+      "enterKey": "Pressing Enter opens article in ArticleReaderPanel (in-app)",
+      "fallbackKey": "Pressing 'o' (open) launches browser as fallback",
+      "readerPanel": "Full-screen scrollable panel with extracted article text",
+      "escapeKey": "Pressing Escape returns to news list"
+    },
+    "libraryEvaluation": {
+      "trafilatura": {
+        "pros": ["Best extraction accuracy", "Actively maintained (2024+)", "Handles paywalls gracefully", "Built-in fallbacks", "Async-friendly"],
+        "cons": ["Larger dependency footprint"],
+        "recommendation": "PRIMARY choice"
+      },
+      "newspaper3k": {
+        "pros": ["Widely used", "Good documentation", "NLP features"],
+        "cons": ["Less actively maintained", "Some sites fail extraction"],
+        "recommendation": "FALLBACK option"
+      },
+      "readability-lxml": {
+        "pros": ["Lightweight", "Fast"],
+        "cons": ["Basic extraction", "Less accurate on complex layouts"],
+        "recommendation": "Not recommended"
+      }
+    }
+  },
+  "userStories": [
+    {
+      "id": "VPR-060",
+      "title": "Create ArticleReader service for content extraction",
+      "passes": false,
+      "acceptanceCriteria": [
+        "New file: viper/services/article_reader.py",
+        "Add trafilatura to dependencies (pyproject.toml)",
+        "ArticleResult dataclass: title, content, author, date, source_url, word_count",
+        "ArticleError dataclass for error handling",
+        "async fetch_article(url: str) -> ArticleResult | ArticleError",
+        "Use httpx or aiohttp for async HTTP fetching",
+        "Use trafilatura.extract() for content extraction",
+        "Handle common errors: timeout, 404, paywall, extraction failure",
+        "Configurable timeout (default 10 seconds)",
+        "Unit tests with mocked HTTP responses",
+        "Test various article formats (news sites, blogs, paywalls)",
+        "100% test coverage on new module"
+      ],
+      "priority": 1,
+      "estimatedEffort": "Medium",
+      "dependencies": [],
+      "notes": "Service layer only - no UI. Focus on reliable extraction with good error messages. Test with real URLs during development but mock in tests."
+    },
+    {
+      "id": "VPR-061",
+      "title": "Create ArticleReaderPanel widget",
+      "passes": false,
+      "acceptanceCriteria": [
+        "New file: viper/widgets/article_reader_panel.py",
+        "ArticleReaderPanel extends Textual Widget",
+        "Displays: title (bold), author/source, date, word count, reading time estimate",
+        "Main content area: scrollable, word-wrapped article text",
+        "Uses Rich Markdown rendering for formatted content",
+        "Loading state with spinner while fetching",
+        "Error state with descriptive message and 'press o to open in browser' hint",
+        "Keybindings: Escape/q (close), j/k (line scroll), PageUp/PageDown (page scroll), Home/End (top/bottom), o (open in browser), r (retry)",
+        "Green-on-black theme consistent with app",
+        "CSS styling in viper.tcss for article-reader-panel",
+        "Unit tests for widget states (loading, content, error)",
+        "Test scroll behavior and keybindings"
+      ],
+      "priority": 2,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-060"],
+      "notes": "Panel should feel like a focused reading mode. Minimal chrome, maximum content. Consider showing progress indicator (e.g., '3 min read')."
+    },
+    {
+      "id": "VPR-062",
+      "title": "Integrate ArticleReaderPanel with NewsPanel",
+      "passes": false,
+      "acceptanceCriteria": [
+        "Modify NewsPanel: Enter key now calls open_in_reader() instead of browser",
+        "Add new keybinding 'o' to NewsPanel for 'open in browser' (old behavior)",
+        "NewsPanel posts ArticleOpenRequested message with selected NewsItem",
+        "App.py handles ArticleOpenRequested: shows ArticleReaderPanel",
+        "ArticleReaderPanel added to app layout (initially hidden)",
+        "When reader opens: hide news panel, show reader panel, fetch article",
+        "When reader closes (Escape): hide reader, show news panel, restore selection",
+        "Update help_screen.py with new keybindings:",
+        "  - KEYBINDINGS section: Change Enter description to 'Read article / Select item'",
+        "  - KEYBINDINGS section: Add 'o' = 'Open in browser (news panel)'",
+        "  - NEWS section: Update 'Enter to open in browser' -> 'Enter to read in terminal'",
+        "  - NEWS section: Add 'Press o to open article in browser instead'",
+        "  - Add new ARTICLE READER section after NEWS with all reader keybindings",
+        "  - ARTICLE READER: Esc/q=close, j/k=scroll line, PageUp/Down=scroll page, Home/End=top/bottom, o=browser, r=retry",
+        "  - FEATURES section: Add bullet for 'In-app article reader for distraction-free reading'",
+        "Integration tests: news -> reader -> back to news flow",
+        "Test that 'o' still opens browser correctly"
+      ],
+      "priority": 3,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-061"],
+      "notes": "Key UX change - Enter now means 'read' not 'open browser'. Users who want browser use 'o'. This matches vim-style muscle memory."
+    },
+    {
+      "id": "VPR-063",
+      "title": "Error handling and fallback behavior",
+      "passes": false,
+      "acceptanceCriteria": [
+        "If article extraction fails, show error in reader with clear message",
+        "Error panel offers 'press o to try opening in browser'",
+        "Handle specific errors: timeout, paywall detected, empty content, network error",
+        "Paywall detection: if content suspiciously short or contains paywall keywords",
+        "Add retry logic: user can press 'r' to retry fetch",
+        "Cache extracted articles for session (avoid re-fetching on back/forward)",
+        "Cache uses URL as key, expires after 30 minutes",
+        "Test all error scenarios with mocked responses",
+        "Test cache hit/miss behavior"
+      ],
+      "priority": 4,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-062"],
+      "notes": "Graceful degradation is key. Never leave user stuck - always offer browser fallback."
+    },
+    {
+      "id": "VPR-064",
+      "title": "Polish, documentation, and comprehensive testing",
+      "passes": false,
+      "acceptanceCriteria": [
+        "Manual testing with real news articles (5+ different sources)",
+        "Test sites: Reuters, CNBC, Bloomberg, Yahoo Finance, TechCrunch",
+        "Verify formatting looks good for each source",
+        "Test at minimum terminal size (80x24) - content readable",
+        "Test at large terminal size - layout scales properly",
+        "Test rapid navigation: quick Enter/Escape cycles",
+        "Update AGENTS.md with article reader architecture notes",
+        "All 700+ existing tests pass",
+        "New tests bring coverage to maintain 90%+",
+        "No mypy --strict errors",
+        "Update README if needed for new feature documentation"
+      ],
+      "priority": 5,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-063"],
+      "notes": "Final polish pass. Focus on real-world usability with actual news content."
+    }
+  ],
+  "technicalNotes": {
+    "articleExtractionStrategy": {
+      "primary": "trafilatura.extract(html, include_comments=False, include_tables=True)",
+      "contentFormat": "Returns plain text or markdown depending on output_format param",
+      "metadataExtraction": "trafilatura.bare_extraction() returns dict with title, author, date",
+      "fallbackStrategy": "If trafilatura returns empty, try newspaper3k as backup"
+    },
+    "asyncHttpPattern": {
+      "library": "httpx with async client",
+      "timeout": "10 second default, configurable",
+      "userAgent": "Set realistic user-agent to avoid bot blocking",
+      "redirects": "Follow redirects (some news sites redirect)"
+    },
+    "widgetArchitecture": {
+      "ArticleReaderPanel": "Full container with header + scrollable content area",
+      "headerSection": "Title, meta (author/source/date), word count, reading time",
+      "contentSection": "ScrollableContainer with Static or Markdown widget for body",
+      "footerSection": "Keybinding hints: [Esc] Close  [j/k] Scroll  [o] Browser"
+    },
+    "cacheStrategy": {
+      "storage": "Module-level dict: {url: (timestamp, ArticleResult)}",
+      "ttl": "30 minutes (1800 seconds)",
+      "eviction": "On access, check timestamp and evict if expired",
+      "clear": "clear_article_cache() function for manual clearing"
+    },
+    "filesToCreate": [
+      "viper/services/article_reader.py - extraction service",
+      "viper/widgets/article_reader_panel.py - reader widget",
+      "tests/test_article_reader.py - service tests",
+      "tests/test_article_reader_panel.py - widget tests"
+    ],
+    "filesToModify": [
+      "viper/widgets/news_panel.py - change Enter behavior, add 'o' binding",
+      "viper/app.py - handle ArticleOpenRequested, manage reader panel",
+      "viper/viper.tcss - styles for article-reader-panel",
+      "viper/widgets/help_screen.py - document new keybindings",
+      "pyproject.toml - add trafilatura, httpx dependencies"
+    ],
+    "testingStrategy": [
+      "Unit tests for article extraction with mocked HTML",
+      "Unit tests for ArticleReaderPanel states",
+      "Integration tests for news -> reader -> news flow",
+      "Mock HTTP responses using respx or responses library",
+      "Test timeout handling, error states, cache behavior"
+    ]
+  },
+  "outOfScope": [
+    "Offline article saving/bookmarking - future enhancement",
+    "Article search within reader - future enhancement",
+    "Text-to-speech for articles - future enhancement",
+    "Custom fonts or font sizing - terminal limitation",
+    "Image display in articles - terminal limitation (could show alt text)",
+    "Video/multimedia content - terminal limitation",
+    "Login/authentication for paywalled sites - complex, privacy concerns"
+  ],
+  "successMetrics": [
+    "Enter on news item opens readable article content in terminal",
+    "Article text is clean - no ads, navigation, or boilerplate",
+    "Loading state shows within 100ms of pressing Enter",
+    "Article content displays within 5 seconds for most sites",
+    "Extraction succeeds for 80%+ of major news sources",
+    "Graceful fallback to browser when extraction fails",
+    "All 700+ existing tests pass",
+    "New feature has 90%+ test coverage",
+    "No mypy --strict errors",
+    "Works correctly at 80x24 minimum terminal size"
+  ],
+  "storyDependencyGraph": {
+    "description": "Linear dependency for this feature",
+    "flow": "VPR-060 (service) -> VPR-061 (widget) -> VPR-062 (integration) -> VPR-063 (error handling) -> VPR-064 (polish)"
+  }
+}
