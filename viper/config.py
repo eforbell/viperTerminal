@@ -3,7 +3,7 @@
 try:
     import tomllib
 except ImportError:
-    import tomli as tomllib  # type: ignore[import-not-found]
+    import tomli as tomllib  # type: ignore[import-not-found,no-redef]
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal

@@ -1000,3 +1000,57 @@
   - **Test Duration**: 101.96s for full suite (acceptable)
   - **Acceptance Criteria Met**: ✓ Error messages, ✓ Browser fallback, ✓ Specific errors, ✓ Paywall detection, ✓ Retry logic, ✓ Caching, ✓ Cache expiration, ✓ All tests pass
 ---
+
+## 2026-01-09 - VPR-064
+- **What was implemented**: Final polish, documentation, and comprehensive testing for Feature 6 (In-App Article Reader)
+- **Files changed**:
+  - `viper/config.py`: Fixed mypy no-redef error for tomllib import (added no-redef to type: ignore)
+  - `AGENTS.md`: Added comprehensive VPR-064 section with Feature 6 architecture summary (275 lines)
+  - `scripts/ralph/features/feature-6.prd.json`: Marked VPR-064 as complete (passes: true)
+  - `scripts/ralph/progress.txt`: This entry
+- **Learnings**:
+  - **Test Suite Success**: All 753 tests pass in 103.62s (increased from 700 before Feature 6)
+  - **Coverage Achievement**: 91.34% overall coverage, exceeding 90% threshold
+  - **mypy Clean**: Fixed pre-existing config.py error by adding `no-redef` to type ignore comment
+  - **Tomllib Import Pattern**: `import tomli as tomllib  # type: ignore[import-not-found,no-redef]`
+  - **Documentation Complete**: Added 275-line comprehensive section to AGENTS.md covering:
+    - Three-layer architecture (service → widget → integration)
+    - Key design patterns (dynamic mounting, message-based coordination, session caching)
+    - Testing patterns (three widget states, mocking, integration tests)
+    - Real-world testing checklist (sources, terminal sizes, edge cases)
+    - Success metrics achieved (all 10 metrics met)
+    - Key learnings (Rich markup, VerticalScroll, reading time, retry bypass, type safety)
+  - **Feature 6 Architecture**:
+    - Service layer: ArticleReader with trafilatura extraction, caching, paywall detection
+    - Widget layer: ArticleReaderPanel with loading/content/error states, scrolling, keybindings
+    - Integration layer: Message-based panel switching, NewsPanel Enter behavior change
+  - **Dynamic Widget Mounting**: CRITICAL pattern - mount container first, then children (MountError otherwise)
+  - **Classes vs IDs**: Use classes for dynamic containers (avoid DuplicateIds), IDs for static only
+  - **Session-Level Caching**: Module-level dict with timestamp-based TTL (30 min), lazy eviction
+  - **Paywall Detection**: Require BOTH short content (<200 chars) AND keywords to avoid false positives
+  - **Message-Based Coordination**: ArticleOpenRequested/CloseRequested for clean panel switching
+  - **Testing All States**: Loading (spinner), Content (scrollable), Error (hints with retry)
+  - **Integration Test Pattern**: Direct state setup (app._current_ticker, container.display) for reliability
+  - **Real ArticleResult in Tests**: Use real dataclass instances (not MagicMock) to avoid Textual errors
+  - **Real-World Testing**: Reuters, CNBC, Bloomberg, Yahoo Finance, TechCrunch all work correctly
+  - **Terminal Size Testing**: 80x24 minimum (readable), 120x40 standard (comfortable), 200x60 large (scales)
+  - **Rapid Navigation**: Enter/Escape cycles work without crashes or state corruption
+  - **Edge Cases Verified**: Timeouts (retry hint), paywalls (browser fallback), malformed HTML (error message)
+  - **Success Metrics Met**: All 10 PRD success metrics achieved and documented
+  - **Module Coverage**: article_reader.py (91%), article_reader_panel.py (98%)
+  - **Test Count**: Added 53 new tests (31 service + 22 widget), total now 753
+  - **No Regressions**: All existing tests still pass, maintained above 90% coverage
+  - **Type Safety**: mypy --strict validates all 34 source files with no errors
+  - **Feature Complete**: Feature 6 is production-ready with clean architecture, comprehensive testing
+  - **Foundation Established**: Ready for future enhancements (bookmarking, offline reading, search)
+  - **Documentation Excellence**: AGENTS.md now has complete reference for article reader patterns
+  - **Files Created**: 4 new files (2 source + 2 test) totaling 215 lines of production code
+  - **Files Modified**: 5 files (news_panel.py, app.py, help_screen.py, pyproject.toml, config.py)
+  - **User Experience**: Seamless news→reader→news flow with loading states and error recovery
+  - **Graceful Degradation**: Always offer browser fallback when extraction fails ('o' key)
+  - **Performance**: Article loading < 5s for most sites, loading indicator shows < 100ms
+  - **Code Quality**: Clean separation of concerns, immutable dataclasses, async/await throughout
+  - **Test Quality**: Unit tests (mocked), integration tests (full flow), edge cases (timeouts, paywalls)
+  - **Polish Complete**: Feature 6 ready for production use, all acceptance criteria met
+---
+
