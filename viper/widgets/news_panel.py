@@ -26,6 +26,15 @@ class NewsPanel(Widget):
             self.url = url
             super().__init__()
 
+    # Custom event for article reader open request
+    class ArticleOpenRequested(Message):
+        """Event emitted when user wants to read article in-app."""
+
+        def __init__(self, news_item: NewsItem) -> None:
+            """Initialize with NewsItem to read."""
+            self.news_item = news_item
+            super().__init__()
+
     # Make the panel focusable
     can_focus = True
 
@@ -33,7 +42,8 @@ class NewsPanel(Widget):
     BINDINGS = [
         Binding("j", "navigate_down", "Next", show=False, priority=True),
         Binding("k", "navigate_up", "Previous", show=False, priority=True),
-        Binding("enter", "open_in_browser", "Open", show=False, priority=True),
+        Binding("enter", "open_in_reader", "Read", show=False, priority=True),
+        Binding("o", "open_in_browser", "Browser", show=False, priority=True),
         Binding("e", "toggle_expand", "Expand", show=False, priority=True),
         Binding("escape", "collapse", "Collapse", show=False, priority=True),
     ]
@@ -230,7 +240,7 @@ class NewsPanel(Widget):
                     children.append(Label(item.summary, classes="news-summary"))
                 else:
                     children.append(
-                        Label("[No summary available - press Enter to open in browser]",
+                        Label("[No summary available - press Enter to read full article]",
                               classes="news-summary")
                     )
             else:
@@ -320,8 +330,15 @@ class NewsPanel(Widget):
             return None
         return self._news_items[self._selected_index]
 
+    def action_open_in_reader(self) -> None:
+        """Open the selected news item in the article reader panel (Enter key)."""
+        item = self.get_selected_item()
+        if item and item.url:
+            # Post ArticleOpenRequested event to app
+            self.post_message(self.ArticleOpenRequested(item))
+
     def action_open_in_browser(self) -> None:
-        """Open the selected news item in the default browser (Enter key)."""
+        """Open the selected news item in the default browser (o key)."""
         item = self.get_selected_item()
         if item and item.url:
             # Post notification event before opening

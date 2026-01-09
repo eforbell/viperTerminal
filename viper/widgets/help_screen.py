@@ -110,7 +110,8 @@ class HelpScreen(ModalScreen[None]):
                 yield Static("Esc                  Clear input / Close overlays", classes="help-item")
                 yield Static("Tab                  Cycle between panels", classes="help-item")
                 yield Static("j / k                Navigate list items", classes="help-item")
-                yield Static("Enter                View selected item / Open in browser", classes="help-item")
+                yield Static("Enter                Read article / Select item", classes="help-item")
+                yield Static("o                    Open in browser (news panel)", classes="help-item")
                 yield Static("i                    Toggle info panel", classes="help-item")
                 yield Static("c                    Toggle chart panel", classes="help-item")
                 yield Static("n                    Toggle news panel", classes="help-item")
@@ -159,7 +160,11 @@ class HelpScreen(ModalScreen[None]):
                     classes="help-item",
                 )
                 yield Static(
-                    "Use j/k to navigate news headlines, Enter to open in browser.",
+                    "Use j/k to navigate news headlines, Enter to read in terminal.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Press 'o' to open article in browser instead.",
                     classes="help-item",
                 )
                 yield Static(
@@ -168,6 +173,45 @@ class HelpScreen(ModalScreen[None]):
                 )
                 yield Static(
                     "News powered by yfinance - displays recent headlines and summaries.",
+                    classes="help-item",
+                )
+
+                # Article Reader Section
+                yield Static("\n\nARTICLE READER", classes="help-section-title")
+                yield Static(
+                    "Press Enter on a news item to read the full article in the terminal.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Keybindings in article reader:",
+                    classes="help-item",
+                )
+                yield Static(
+                    "  Esc / q            Close reader and return to news",
+                    classes="help-item",
+                )
+                yield Static(
+                    "  j / k              Scroll line by line",
+                    classes="help-item",
+                )
+                yield Static(
+                    "  PageUp / PageDown  Scroll page by page",
+                    classes="help-item",
+                )
+                yield Static(
+                    "  Home / End         Jump to top / bottom",
+                    classes="help-item",
+                )
+                yield Static(
+                    "  o                  Open in browser",
+                    classes="help-item",
+                )
+                yield Static(
+                    "  r                  Retry fetching article",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Clean, distraction-free reading without leaving the terminal.",
                     classes="help-item",
                 )
 
@@ -187,6 +231,10 @@ class HelpScreen(ModalScreen[None]):
                 )
                 yield Static(
                     "• News feed with headlines and browser integration",
+                    classes="help-item",
+                )
+                yield Static(
+                    "• In-app article reader for distraction-free reading",
                     classes="help-item",
                 )
                 yield Static(

@@ -72,7 +72,7 @@
     {
       "id": "VPR-060",
       "title": "Create ArticleReader service for content extraction",
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "New file: viper/services/article_reader.py",
         "Add trafilatura to dependencies (pyproject.toml)",
@@ -95,7 +95,7 @@
     {
       "id": "VPR-061",
       "title": "Create ArticleReaderPanel widget",
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "New file: viper/widgets/article_reader_panel.py",
         "ArticleReaderPanel extends Textual Widget",
@@ -118,7 +118,7 @@
     {
       "id": "VPR-062",
       "title": "Integrate ArticleReaderPanel with NewsPanel",
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Modify NewsPanel: Enter key now calls open_in_reader() instead of browser",
         "Add new keybinding 'o' to NewsPanel for 'open in browser' (old behavior)",
@@ -146,7 +146,7 @@
     {
       "id": "VPR-063",
       "title": "Error handling and fallback behavior",
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "If article extraction fails, show error in reader with clear message",
         "Error panel offers 'press o to try opening in browser'",
@@ -166,7 +166,7 @@
     {
       "id": "VPR-064",
       "title": "Polish, documentation, and comprehensive testing",
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Manual testing with real news articles (5+ different sources)",
         "Test sites: Reuters, CNBC, Bloomberg, Yahoo Finance, TechCrunch",

@@ -1,14 +1,20 @@
 {
-  "currentFeature": "feature-6",
-  "featureName": "In-App Article Reader Mode",
-  "prdPath": "features/feature-6.prd.json",
-  "branch": "viper/feature-6-article-reader",
+  "currentFeature": null,
+  "featureName": null,
+  "prdPath": null,
+  "branch": null,
   "status": "planning",
-  "startedAt": null,
-  "description": "Fetch and display news article content directly in terminal. Reader mode strips ads/navigation and renders clean text. Enter opens reader, 'o' opens browser.",
-  "stories": ["VPR-060", "VPR-061", "VPR-062", "VPR-063", "VPR-064"],
-  "nextFeature": null,
   "completedFeatures": [
+    {
+      "feature": "feature-6",
+      "featureName": "In-App Article Reader Mode",
+      "prdPath": "features/feature-6.prd.json",
+      "branch": "viper/feature-6-article-reader",
+      "status": "complete",
+      "completedAt": "2026-01-10",
+      "description": "Fetch and display news article content directly in terminal. Reader mode strips ads/navigation and renders clean text. Enter opens reader, 'o' opens browser.",
+      "stories": 5
+    }
     {
       "feature": "feature-5",
       "name": "Chart Architecture Refactoring",
@@ -73,9 +79,21 @@
       "effort": "Large",
       "notes": "Feature 3 implemented SMA, EMA, RSI with overlay and sub-panel framework. MACD and Bollinger Bands deferred to future features.",
       "status": "PARTIALLY_COMPLETED_FEATURE_3",
-      "assignedStories": ["VPR-033", "VPR-034", "VPR-035", "VPR-036", "VPR-037", "VPR-038", "VPR-039"],
+      "assignedStories": [
+        "VPR-033",
+        "VPR-034",
+        "VPR-035",
+        "VPR-036",
+        "VPR-037",
+        "VPR-038",
+        "VPR-039"
+      ],
       "completedAt": "2026-01-08",
-      "remaining": ["MACD", "Bollinger Bands", "Stochastic"]
+      "remaining": [
+        "MACD",
+        "Bollinger Bands",
+        "Stochastic"
+      ]
     },
     {
       "id": "FE-004",
@@ -157,28 +175,6 @@
       "relatedFeature": "feature-1",
       "effort": "Large",
       "notes": "Requires paid API (Alpaca, Polygon.io) or complex websocket setup with free sources"
-    },
-    {
-      "id": "FE-014",
-      "title": "In-app article reader mode",
-      "description": "Fetch and display news article content directly in terminal instead of opening browser. Reader mode strips ads/chrome and renders clean text.",
-      "priority": "Medium",
-      "relatedFeature": "feature-2",
-      "effort": "Medium",
-      "notes": "Essential for headless/server environments without display. Avoids eye strain from bright browser. Libraries: newspaper3k, readability-lxml, or trafilatura for article extraction. Render with Rich/Textual markdown support.",
-      "status": "IN_PROGRESS_FEATURE_6",
-      "assignedStories": ["VPR-060", "VPR-061", "VPR-062", "VPR-063", "VPR-064"],
-      "implementation": {
-        "libraries": ["trafilatura (primary)", "newspaper3k (fallback)"],
-        "features": [
-          "Fetch article HTML from URL",
-          "Extract main content (strip ads, nav, sidebars)",
-          "Convert to markdown/plain text",
-          "Display in scrollable panel with word wrap",
-          "Keybinding: Enter on news item opens reader instead of browser",
-          "Keybinding: 'o' opens in browser (fallback)"
-        ]
-      }
     }
   ]
 }

@@ -665,3 +665,164 @@ async def test_no_welcome_screen_on_subsequent_runs() -> None:
 
             # Welcome screen should NOT be shown
             assert not isinstance(app.screen, HelpScreen)
+
+
+@pytest.mark.asyncio
+async def test_article_reader_integration() -> None:
+    """Test the complete flow from news panel to article reader and back."""
+    from datetime import datetime, timezone
+    from unittest.mock import MagicMock
+
+    from viper.services.article_reader import ArticleResult
+    from viper.services.news import NewsItem
+    from viper.widgets import ArticleReaderPanel, NewsPanel
+
+    app = ViperApp()
+
+    # Mock article reader fetch_article to avoid actual HTTP requests
+    mock_result = ArticleResult(
+        title="Test Article",
+        content="Test content for the article. This is a longer piece of text to simulate article content.",
+        author="Test Author",
+        date="2024-01-09",
+        source_url="https://example.com/test",
+        word_count=100,
+    )
+
+    # Mock stock quote to set a ticker
+    mock_quote = StockQuote(
+        ticker="AAPL",
+        price=150.00,
+        change=5.00,
+        change_percent=3.45,
+        volume=50000000,
+        market_cap=2500000000000,
+        high_52w=180.00,
+        low_52w=120.00,
+    )
+
+    with (
+        patch("viper.widgets.article_reader_panel.fetch_article", return_value=mock_result),
+        patch("viper.app.fetch_quote", return_value=mock_quote),
+        patch("viper.app.fetch_stock_info", return_value=StockError(ticker="AAPL", error_message="Not needed")),
+    ):
+        async with app.run_test() as pilot:
+            await pilot.pause()
+
+            # Verify initial state - news panel hidden, article reader hidden
+            news_container = app.query_one("#news-container")
+            reader_container = app.query_one("#article-reader-container")
+            assert news_container.styles.display == "none"
+            assert reader_container.styles.display == "none"
+            assert not app._news_panel_visible
+            assert not app._article_reader_visible
+
+            # Set current ticker directly
+            app._current_ticker = "AAPL"
+
+            # Show news panel directly
+            news_container.styles.display = "block"
+            app._news_panel_visible = True
+
+            # Create a test news item
+            test_item = NewsItem(
+                title="Test Article",
+                url="https://example.com/test",
+                source="Test Source",
+                published_at=datetime.now(timezone.utc),
+                summary="Test summary",
+            )
+
+            # Get news panel and set up test news
+            news_panel = app.query_one(NewsPanel)
+            news_panel._news_items = [test_item]
+            news_panel._selected_index = 0
+            news_panel._state = "success"
+
+            # Simulate pressing Enter to open article reader
+            # This posts ArticleOpenRequested message
+            news_panel.action_open_in_reader()
+            await pilot.pause()
+
+            # Verify news panel is hidden and article reader is visible
+            assert news_container.styles.display == "none"
+            assert reader_container.styles.display == "block"
+            assert not app._news_panel_visible
+            assert app._article_reader_visible
+
+            # Verify article reader panel received the article
+            reader_panel = app.query_one(ArticleReaderPanel)
+            assert reader_panel._url == test_item.url
+
+            # Simulate closing the article reader
+            reader_panel.action_close()
+            await pilot.pause()
+
+            # Verify article reader is hidden and news panel is visible again
+            assert news_container.styles.display == "block"
+            assert reader_container.styles.display == "none"
+            assert app._news_panel_visible
+            assert not app._article_reader_visible
+
+
+@pytest.mark.asyncio
+async def test_article_reader_browser_fallback() -> None:
+    """Test that pressing 'o' in news panel still opens browser."""
+    from datetime import datetime, timezone
+    from unittest.mock import MagicMock, patch
+
+    from viper.services.news import NewsItem
+    from viper.widgets import NewsPanel
+
+    app = ViperApp()
+
+    # Mock stock quote to set a ticker
+    mock_quote = StockQuote(
+        ticker="AAPL",
+        price=150.00,
+        change=5.00,
+        change_percent=3.45,
+        volume=50000000,
+        market_cap=2500000000000,
+        high_52w=180.00,
+        low_52w=120.00,
+    )
+
+    with (
+        patch("viper.app.fetch_quote", return_value=mock_quote),
+        patch("viper.app.fetch_stock_info", return_value=StockError(ticker="AAPL", error_message="Not needed")),
+    ):
+        async with app.run_test() as pilot:
+            await pilot.pause()
+
+            # Set current ticker directly
+            app._current_ticker = "AAPL"
+
+            # Show news panel directly
+            news_container = app.query_one("#news-container")
+            news_container.styles.display = "block"
+            app._news_panel_visible = True
+
+            # Create a test news item
+            test_item = NewsItem(
+                title="Test Article",
+                url="https://example.com/test",
+                source="Test Source",
+                published_at=datetime.now(timezone.utc),
+                summary="Test summary",
+            )
+
+            # Get news panel and set up test news
+            news_panel = app.query_one(NewsPanel)
+            news_panel._news_items = [test_item]
+            news_panel._selected_index = 0
+            news_panel._state = "success"
+
+            # Mock webbrowser.open
+            with patch("viper.widgets.news_panel.webbrowser.open") as mock_open:
+                # Simulate pressing 'o' to open in browser
+                news_panel.action_open_in_browser()
+                await pilot.pause()
+
+                # Verify webbrowser.open was called
+                mock_open.assert_called_once_with(test_item.url)
