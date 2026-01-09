@@ -1,6 +1,9 @@
 """Configuration management for Viper Terminal."""
 
-import tomllib
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib  # type: ignore[import-not-found]
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
