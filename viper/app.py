@@ -18,7 +18,7 @@ from viper.utils import (
     mark_first_run_complete,
     setup_logging,
 )
-from viper.widgets import ChartPanel, HelpScreen, InfoPanel, NewsPanel, QuotePanel, StatusBar, TickerInput, WatchlistPanel
+from viper.widgets import ArticleReaderPanel, ChartPanel, HelpScreen, InfoPanel, NewsPanel, QuotePanel, StatusBar, TickerInput, WatchlistPanel
 
 
 class ViperApp(App[None]):
@@ -130,6 +130,17 @@ class ViperApp(App[None]):
     #news-container:focus-within {
         border: double $accent;
     }
+
+    #article-reader-container {
+        width: 70%;
+        border: solid $accent;
+        padding: 0;
+        display: none;
+    }
+
+    #article-reader-container:focus-within {
+        border: double $accent;
+    }
     """
 
     # Green on black color theme
@@ -183,6 +194,7 @@ class ViperApp(App[None]):
         self._info_panel_visible = False
         self._chart_panel_visible = False
         self._news_panel_visible = False
+        self._article_reader_visible = False
         self._current_ticker: str | None = None
 
     def on_resize(self, event: object) -> None:
@@ -228,6 +240,8 @@ class ViperApp(App[None]):
                     yield ChartPanel()
                 with Container(id="news-container"):
                     yield NewsPanel()
+                with Container(id="article-reader-container"):
+                    yield ArticleReaderPanel()
         yield TickerInput(history_manager=self.history_manager)
         yield StatusBar()
         yield Footer()
@@ -422,6 +436,68 @@ class ViperApp(App[None]):
         status_bar = self.query_one(StatusBar)
         status_bar.set_message("Opening in browser...")
         self.logger.info(f"Opening news URL: {event.url}")
+
+    async def on_news_panel_article_open_requested(
+        self, event: NewsPanel.ArticleOpenRequested
+    ) -> None:
+        """Handle article open request from news panel.
+
+        Args:
+            event: The article open requested event with NewsItem.
+        """
+        # Hide news panel, show article reader
+        news_container = self.query_one("#news-container")
+        reader_container = self.query_one("#article-reader-container")
+
+        news_container.display = False
+        self._news_panel_visible = False
+
+        reader_container.display = True
+        self._article_reader_visible = True
+
+        # Get the article reader panel and show the article
+        reader_panel = self.query_one(ArticleReaderPanel)
+        await reader_panel.show_article(event.news_item.url)
+
+        # Update status
+        status_bar = self.query_one(StatusBar)
+        status_bar.set_message(f"Loading article: {event.news_item.title[:50]}...")
+        self.logger.info(f"Opening article reader for: {event.news_item.url}")
+
+    def on_article_reader_panel_close_requested(
+        self, event: ArticleReaderPanel.CloseRequested
+    ) -> None:
+        """Handle close request from article reader panel.
+
+        Args:
+            event: The close requested event.
+        """
+        # Hide article reader, show news panel
+        reader_container = self.query_one("#article-reader-container")
+        news_container = self.query_one("#news-container")
+
+        reader_container.display = False
+        self._article_reader_visible = False
+
+        news_container.display = True
+        self._news_panel_visible = True
+
+        # Update status
+        status_bar = self.query_one(StatusBar)
+        status_bar.set_message("Returned to news")
+        self.logger.info("Closed article reader")
+
+    def on_article_reader_panel_browser_opening(
+        self, event: ArticleReaderPanel.BrowserOpening
+    ) -> None:
+        """Handle browser opening from article reader panel.
+
+        Args:
+            event: The browser opening event with URL.
+        """
+        status_bar = self.query_one(StatusBar)
+        status_bar.set_message("Opening in browser...")
+        self.logger.info(f"Opening article URL in browser: {event.url}")
 
     async def on_watchlist_panel_ticker_selected(
         self, event: WatchlistPanel.TickerSelected

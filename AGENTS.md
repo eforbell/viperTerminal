@@ -2188,3 +2188,156 @@ All states use dynamic mounting (not `compose()`), enabling seamless transitions
 
 All bindings set `priority=True` for reliable widget-level handling.
 
+
+## VPR-062: Article Reader Integration with News Panel
+
+### Overview
+Integrated ArticleReaderPanel with NewsPanel to allow reading articles in-terminal instead of opening browser. Key UX change: Enter now opens reader, 'o' opens browser.
+
+### News Panel Message Pattern
+NewsPanel emits custom messages for different actions:
+```python
+class ArticleOpenRequested(Message):
+    """Event for opening article in reader."""
+    def __init__(self, news_item: NewsItem) -> None:
+        self.news_item = news_item
+        super().__init__()
+
+# Post message when user presses Enter
+def action_open_in_reader(self) -> None:
+    item = self.get_selected_item()
+    if item and item.url:
+        self.post_message(self.ArticleOpenRequested(item))
+```
+
+### App-Level Panel Switching
+App handles panel visibility toggling through message handlers:
+```python
+async def on_news_panel_article_open_requested(
+    self, event: NewsPanel.ArticleOpenRequested
+) -> None:
+    # Hide news panel
+    news_container.display = False
+    self._news_panel_visible = False
+    
+    # Show article reader
+    reader_container.display = True
+    self._article_reader_visible = True
+    
+    # Load article
+    reader_panel = self.query_one(ArticleReaderPanel)
+    await reader_panel.show_article(event.news_item.url)
+```
+
+### Two-Way Navigation
+Article reader posts CloseRequested to return to news:
+```python
+def on_article_reader_panel_close_requested(
+    self, event: ArticleReaderPanel.CloseRequested
+) -> None:
+    # Hide reader, show news
+    reader_container.display = False
+    self._article_reader_visible = False
+    news_container.display = True
+    self._news_panel_visible = True
+```
+
+### Multiple Message Handlers
+Same widget can have multiple message types handled by app:
+- `on_news_panel_article_open_requested()` - Enter key
+- `on_news_panel_browser_opening()` - 'o' key
+
+Both messages coexist without conflicts.
+
+### Keybinding Changes
+- Changed NewsPanel BINDINGS: Enter → "open_in_reader", added 'o' → "open_in_browser"
+- action_open_in_browser() still works, just triggered by 'o' instead of Enter
+- User hint text updated: "press Enter to read full article" instead of "open in browser"
+
+### Help Screen Organization
+Added new ARTICLE READER section after NEWS section:
+- List all reader-specific keybindings (Esc/q, j/k, PageUp/Down, Home/End, o, r)
+- Keep NEWS section focused on news panel keybindings only
+- Updated FEATURES section to include "In-app article reader for distraction-free reading"
+
+### Integration Testing Pattern
+Test news → reader → news flow:
+```python
+# Set up app state
+app._current_ticker = "AAPL"
+news_container.styles.display = "block"
+app._news_panel_visible = True
+
+# Create test news item
+test_item = NewsItem(title="Test", url="https://...", ...)
+news_panel._news_items = [test_item]
+news_panel._selected_index = 0
+
+# Trigger reader open
+news_panel.action_open_in_reader()
+await pilot.pause()
+
+# Verify state changes
+assert reader_container.styles.display == "block"
+assert app._article_reader_visible
+
+# Close reader
+reader_panel.action_close()
+await pilot.pause()
+
+# Verify return to news
+assert news_container.styles.display == "block"
+assert app._news_panel_visible
+```
+
+### Test Data Type Matching
+ArticleResult requires specific types:
+- `date` must be `str` not `datetime` (e.g., "2024-01-09")
+- `word_count` must be `int`
+- All other fields are strings
+
+Don't use MagicMock for ArticleResult - create actual instance with correct types to avoid Textual rendering errors.
+
+### Action Methods Are Synchronous
+NewsPanel actions don't return awaitables:
+```python
+# Wrong
+await news_panel.action_open_in_reader()
+
+# Correct
+news_panel.action_open_in_reader()
+await pilot.pause()  # Wait for message processing
+```
+
+### Container Display Style
+Use `container.display = False` (not `styles.display = "none"`):
+```python
+# Both work but display property is preferred
+news_container.display = False  # Preferred
+news_container.styles.display = "none"  # Also works
+```
+
+### State Variable Tracking
+Add state variable for new panel alongside existing ones:
+```python
+self._info_panel_visible = False
+self._chart_panel_visible = False
+self._news_panel_visible = False
+self._article_reader_visible = False  # New state
+```
+
+Keep visibility state consistent with CSS display property.
+
+### CSS for Hidden Containers
+Add CSS for new container with `display: none` initially:
+```css
+#article-reader-container {
+    width: 70%;
+    border: solid $accent;
+    padding: 0;
+    display: none;  /* Hidden by default */
+}
+```
+
+Match pattern used by other right-panel containers (info, chart, news).
+
