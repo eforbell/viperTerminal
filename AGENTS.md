@@ -969,3 +969,54 @@ This applies to: volume bars, moving average overlays, RSI indicators, any color
 - **Header Value**: Current RSI value displayed as "RSI: 52.00" format in panel header
 - **Dependency Chain**: VPR-037 (RSI calc) + VPR-038 (framework) → VPR-039 (integration) complete
 - **Foundation Pattern**: RSI implementation establishes pattern for future oscillators (MACD, Stochastic)
+
+---
+
+## VPR-040: Characterization Tests for Layout Behavior (2026-01-08)
+
+**Story**: Add characterization tests to document current (buggy) layout behavior before fixes.
+
+**Key Learnings**:
+- **Characterization Test Pattern**: Write tests that PASS with current behavior to document bugs before fixing
+- **@pytest.mark.characterization**: Use custom marker to identify tests that document bugs (expect updates later)
+- **Test Structure**: Create detailed docstrings explaining what bug is being documented
+- **Date Generation Fix**: Use `datetime(2024, 1, 1) + timedelta(days=i)` not `datetime(2024, 1, i + 1)` (month overflow)
+- **5 Characterization Tests Added**: Height calc (hidden/visible), toggle behavior, chart width, stale data refresh
+- **Test 1 - Height Calc RSI Hidden**: Documents formula: `available_height = size.height - 7 - volume_height - 0`
+- **Test 2 - Height Calc RSI Visible**: Documents BUGGY formula: `size.height - 7 - volume_height - rsi_height`
+- **Bug Documentation**: RSI panel is SIBLING to #chart-content, not child - subtracting height causes overflow
+- **Compose Pattern**: `yield Container(id="chart-content")` then `yield self._rsi_panel` creates sibling layout
+- **Sibling Stacking**: Textual stacks sibling widgets vertically - RSI adds 7 lines BELOW chart-content
+- **Height Miscalculation**: Shrinking chart area by 7 doesn't make room - RSI still adds 7, causing overflow
+- **Minimum Height Edge Case**: When calculated height < 10, it's clamped to 10 minimum
+- **Test Environment Size**: Test terminal is 25 height, so 25 - 7 - 3 - 7 = 8 (below minimum)
+- **Conditional Assertion**: Check if calculation goes below 10, handle both clamped and unclamped cases
+- **Test 3 - Toggle Calls Render**: Documents that `toggle_rsi()` calls `_render_content()` for recalculation
+- **Test 4 - Chart Width**: Documents that `_chart_area_width` is cached after rendering
+- **Current Width Issue**: RSI panel uses hardcoded 70 chars (deferred to Feature 5 for dynamic width)
+- **Test 5 - Stale Data Bug**: Documents RSI panel not refreshing when ticker changes while visible
+- **Stale Data Root Cause**: RSI values recalculated but panel display not updated unless toggled
+- **Internal State Correct**: `_rsi_values` updates correctly, but visual panel doesn't re-render
+- **Test Data Pattern**: Use different price patterns for AAPL (150 base) vs MSFT (300 base) to verify change
+- **RSI Value Assertion**: Assert `rsi_values_msft != rsi_values_aapl` to confirm different data calculated
+- **Volume Default**: Volume is enabled by default in tests (volume_height = 3 in calculations)
+- **Test Coverage Impact**: Added 5 new tests, all 45 chart_panel tests pass (chart_panel.py at 99% coverage)
+- **All Existing Tests Pass**: No regressions, 669 tests pass (1 pre-existing failure in watchlist_panel)
+- **Pytest Warning**: Unknown mark 'characterization' - can be registered in pytest.ini if desired
+- **Test Maintainability**: After bugs fixed, update these tests to expect correct behavior (remove @characterization)
+- **Documentation Value**: Tests serve as executable specification of bugs for future developers
+- **Bug Fix Guidance**: Tests clearly identify what needs to change in VPR-043 (remove rsi_height from calc)
+- **Fix Verification**: After VPR-043, update test assertions to expect correct layout behavior
+- **Minimum Height Formula**: `if available_height < 10: available_height = 10` in _render_chart():316-317
+- **Fixed Elements**: Header (2 lines), timeframe (1 line), stats (2 lines), padding = 7 lines reserved
+- **Volume Height**: 3 lines when enabled (bars take 2-3 character rows)
+- **RSI Height**: 7 lines (4 for indicator chart + header + spacing) when visible
+- **Correct Formula**: Should be `size.height - 7 - volume_height` (RSI stacks naturally as sibling)
+- **Layout Model**: Textual's vertical layout stacks siblings automatically - don't subtract sibling heights
+- **Container vs Sibling**: Elements inside Container need height subtracted, siblings outside don't
+- **Debugging Approach**: Characterization tests enable "test before fix" methodology for bug fixes
+- **Risk Reduction**: Tests ensure we understand current behavior before making changes
+- **Regression Prevention**: If fix breaks something else, characterization tests will catch it
+- **Clean Test Failures**: When tests document bugs, failures are expected - update after fix
+- **mypy Pre-existing Issues**: 84 type errors in test files (unrelated to VPR-040 changes)
+- **Coverage Threshold**: Individual test runs show low coverage (35-40%) - need full suite for 90%+

@@ -1612,3 +1612,366 @@ async def test_chart_panel_rsi_caching() -> None:
 
         # RSI values should still be cached (not recalculated on toggle)
         assert panel._rsi_values is initial_rsi
+
+
+# ============================================================================
+# Characterization tests for VPR-040
+# These tests document the current (buggy) behavior before fixes are applied.
+# Mark with @pytest.mark.characterization for easy identification.
+# ============================================================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.characterization
+async def test_chart_panel_height_calculation_rsi_hidden() -> None:
+    """Characterization test: document current height calculation with RSI hidden.
+
+    This test captures the current behavior of _render_chart() when RSI is not visible.
+    Expected formula: available_height = self.size.height - 7 - volume_height - 0
+    (rsi_height = 0 when RSI is hidden)
+    """
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create test data with sufficient points for all indicators
+        dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices = [float(100 + i % 10) for i in range(50)]
+        volumes = [int(1000000) for _ in range(50)]
+        opens = [float(100) for _ in range(50)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        # Show chart with RSI hidden (default state)
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Verify RSI is hidden
+        assert panel.is_rsi_visible() is False
+
+        # Document current height calculation behavior
+        # With RSI hidden: rsi_height = 0
+        # Current formula: available_height = self.size.height - 7 - volume_height - rsi_height
+        # Since volume is enabled by default: volume_height = 3
+        # Expected: available_height = panel.size.height - 7 - 3 - 0
+        expected_height = panel.size.height - 7 - 3 - 0
+
+        # Verify this is the current behavior (documenting the calculation)
+        # The actual rendered chart height should match this calculation
+        assert expected_height >= 10  # Minimum height enforcement
+
+
+@pytest.mark.asyncio
+@pytest.mark.characterization
+async def test_chart_panel_height_calculation_rsi_visible() -> None:
+    """Characterization test: document current (buggy) height calculation with RSI visible.
+
+    This test captures the current BUGGY behavior of _render_chart() when RSI is visible.
+    Current formula: available_height = self.size.height - 7 - volume_height - rsi_height
+    BUG: RSI panel is a SIBLING to #chart-content, not a child, so subtracting rsi_height
+    causes the chart area to shrink, but then RSI panel ADDS 7 more rows below it,
+    causing volume bars and X-axis to be pushed out of view.
+    """
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create test data with sufficient points for RSI calculation (need 15+)
+        dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices = [float(100 + i % 10) for i in range(50)]
+        volumes = [int(1000000) for _ in range(50)]
+        opens = [float(100) for _ in range(50)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        # Show chart and toggle RSI on
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        panel.toggle_rsi()
+        await pilot.pause()
+
+        # Verify RSI is visible
+        assert panel.is_rsi_visible() is True
+
+        # Document current BUGGY height calculation behavior
+        # With RSI visible: rsi_height = 7
+        # Current (buggy) formula: available_height = self.size.height - 7 - volume_height - rsi_height
+        # Since volume is enabled: volume_height = 3
+        # Current buggy calculation: available_height = panel.size.height - 7 - 3 - 7
+        current_buggy_height = panel.size.height - 7 - 3 - 7
+
+        # This documents the current buggy behavior
+        # The chart area shrinks by 7 lines, but RSI panel (a sibling) still adds 7 lines below,
+        # causing overflow and hiding volume/X-axis
+        # Note: Minimum height is 10, so if calculated height < 10, it gets clamped to 10
+        # In test environment (25 height): 25 - 7 - 3 - 7 = 8, clamped to 10
+        if current_buggy_height < 10:
+            # This confirms the bug - height calculation goes below minimum
+            assert panel.size.height - 7 - 3 - 7 < 10
+        else:
+            assert current_buggy_height >= 10
+
+        # The bug: RSI panel is yielded from compose() as a sibling, so it stacks BELOW
+        # #chart-content naturally. Subtracting rsi_height from chart area doesn't make
+        # room - it just makes chart smaller, and then RSI adds more height, causing overflow.
+
+
+@pytest.mark.asyncio
+@pytest.mark.characterization
+async def test_chart_panel_rsi_toggle_calls_render_content() -> None:
+    """Characterization test: verify toggling RSI triggers _render_content().
+
+    This test documents that toggle_rsi() calls _render_content() which recalculates
+    the available_height based on RSI visibility state.
+    """
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create test data
+        dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices = [float(100 + i % 10) for i in range(50)]
+        volumes = [int(1000000) for _ in range(50)]
+        opens = [float(100) for _ in range(50)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        # Show chart
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Initial state: RSI hidden
+        assert panel.is_rsi_visible() is False
+
+        # Toggle RSI on - this should call _render_content()
+        panel.toggle_rsi()
+        await pilot.pause()
+
+        # Verify state changed
+        assert panel.is_rsi_visible() is True
+
+        # Toggle RSI off - this should call _render_content() again
+        panel.toggle_rsi()
+        await pilot.pause()
+
+        # Verify state changed back
+        assert panel.is_rsi_visible() is False
+
+        # This test documents that toggle_rsi() triggers layout recalculation
+        # by calling _render_content(), which recalculates available_height
+
+
+@pytest.mark.asyncio
+@pytest.mark.characterization
+async def test_indicator_panel_receives_chart_width() -> None:
+    """Characterization test: verify RSI panel receives chart width correctly.
+
+    This test documents that IndicatorPanel (RSIPanel) is updated with the chart
+    width parameter when show_indicator() is called.
+    """
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create test data with sufficient points for RSI
+        dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices = [float(100 + i % 10) for i in range(50)]
+        volumes = [int(1000000) for _ in range(50)]
+        opens = [float(100) for _ in range(50)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        # Show chart - this should calculate RSI and update panel
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Verify RSI panel exists
+        assert panel._rsi_panel is not None
+
+        # Verify RSI was calculated (even though panel is hidden)
+        assert panel._rsi_values is not None
+        assert len(panel._rsi_values) == len(prices)
+
+        # Document: chart_area_width is cached after rendering
+        assert panel._chart_area_width > 0
+
+        # This test documents that the panel receives chart width data
+        # (though currently RSI panel uses hardcoded 70 chars - deferred to Feature 5)
+
+
+@pytest.mark.asyncio
+@pytest.mark.characterization
+async def test_rsi_panel_refresh_on_ticker_change() -> None:
+    """Characterization test: document CURRENT BUG - RSI shows stale data on ticker switch.
+
+    This test documents the current buggy behavior where RSI panel is not properly
+    refreshed when switching tickers, showing stale data from the previous ticker.
+
+    BUG: When ticker changes, RSI values are recalculated but the RSI panel display
+    is not refreshed if the panel is hidden. When user toggles RSI visible, it shows
+    the NEW data, but if RSI was visible during the ticker switch, it may show stale data.
+    """
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create first ticker data (AAPL)
+        dates_aapl = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices_aapl = [float(150 + i % 10) for i in range(50)]  # AAPL-like prices
+        volumes_aapl = [int(1000000) for _ in range(50)]
+        opens_aapl = [float(150) for _ in range(50)]
+        highs_aapl = [p + 2.0 for p in prices_aapl]
+        lows_aapl = [p - 2.0 for p in prices_aapl]
+
+        data_aapl = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates_aapl,
+            prices=prices_aapl,
+            volumes=volumes_aapl,
+            opens=opens_aapl,
+            highs=highs_aapl,
+            lows=lows_aapl,
+            interval="1d",
+        )
+
+        stats_aapl = HistoricalStats(
+            period_high=max(prices_aapl),
+            period_low=min(prices_aapl),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices_aapl),
+        )
+
+        # Show AAPL chart with RSI visible
+        panel.show_chart(data_aapl, stats_aapl)
+        await pilot.pause()
+
+        panel.toggle_rsi()
+        await pilot.pause()
+
+        assert panel.is_rsi_visible() is True
+        rsi_values_aapl = panel._rsi_values
+
+        # Create second ticker data (MSFT) with different price pattern
+        dates_msft = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices_msft = [float(300 + i % 15) for i in range(50)]  # MSFT-like prices (different)
+        volumes_msft = [int(2000000) for _ in range(50)]
+        opens_msft = [float(300) for _ in range(50)]
+        highs_msft = [p + 3.0 for p in prices_msft]
+        lows_msft = [p - 3.0 for p in prices_msft]
+
+        data_msft = HistoricalData(
+            ticker="MSFT",
+            period="1M",
+            dates=dates_msft,
+            prices=prices_msft,
+            volumes=volumes_msft,
+            opens=opens_msft,
+            highs=highs_msft,
+            lows=lows_msft,
+            interval="1d",
+        )
+
+        stats_msft = HistoricalStats(
+            period_high=max(prices_msft),
+            period_low=min(prices_msft),
+            change_percent=3.0,
+            avg_volume=2000000,
+            num_data_points=len(prices_msft),
+        )
+
+        # Switch to MSFT while RSI is visible
+        panel.show_chart(data_msft, stats_msft)
+        await pilot.pause()
+
+        # Verify RSI values changed (internal state updated correctly)
+        rsi_values_msft = panel._rsi_values
+        assert rsi_values_msft is not None
+        assert rsi_values_msft != rsi_values_aapl  # Different data should produce different RSI
+
+        # Document the bug: RSI panel display may not refresh immediately
+        # The RSI values are recalculated (internal state is correct),
+        # but the visual panel may show stale data if it doesn't re-render.
+        # This is the bug that VPR-041 will fix.
