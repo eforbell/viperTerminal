@@ -691,7 +691,12 @@ class ChartRenderer:
             Chart lines with Y-axis prepended
         """
         num_labels = min(len(chart_lines), 5)  # Show up to 5 price labels
-        labels_at_rows = [i * len(chart_lines) // num_labels for i in range(num_labels)]
+        # Distribute labels evenly from row 0 (top) to row len-1 (bottom)
+        # so that min/max labels align with the actual data range
+        if num_labels > 1:
+            labels_at_rows = [i * (len(chart_lines) - 1) // (num_labels - 1) for i in range(num_labels)]
+        else:
+            labels_at_rows = [0]
 
         result_lines = []
         for row_idx, line in enumerate(chart_lines):
