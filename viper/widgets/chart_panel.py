@@ -15,6 +15,7 @@ from viper.services.history_data import (
     fetch_historical_data,
 )
 from viper.services.indicators import calculate_rsi, calculate_sma
+from viper.widgets.chart_context import ChartContext
 from viper.widgets.chart_renderer import (
     ChartDimensions,
     ChartRenderer,
@@ -137,6 +138,8 @@ class ChartPanel(Widget):
         self._rsi_values: list[float | None] | None = None  # Cached RSI values
         self._rsi_panel: RSIPanel | None = None  # RSI panel widget
         self._chart_area_width: int = 70  # Cached for RSI panel updates
+        # ChartContext - single source of truth for dimensions and data
+        self._chart_context: ChartContext | None = None
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -317,12 +320,11 @@ class ChartPanel(Widget):
         if available_width < 40:
             available_width = 40
 
-        # Render the chart
-        dimensions = ChartDimensions(
+        # Create ChartContext - single source of truth for dimensions and data
+        self._chart_context = ChartContext.from_historical_data(
+            data=data,
             width=available_width,
             height=available_height,
-            include_y_axis=True,
-            include_x_axis=True,
         )
 
         # Build overlay list based on MA mode
@@ -340,12 +342,10 @@ class ChartPanel(Widget):
                 name="SMA50"
             ))
 
+        # Render using ChartContext (modern path)
         rendered = self._renderer.render(
-            prices=data.prices,
-            dates=data.dates,
-            dimensions=dimensions,
-            period=self._current_period,
             overlays=overlays if overlays else None,
+            context=self._chart_context,
         )
 
         # Mount each line of the chart
@@ -354,9 +354,9 @@ class ChartPanel(Widget):
         for line in rendered.lines:
             container.mount(Label(line, classes="chart-line", markup=has_overlays))
 
-        # Calculate chart area width (used by volume and RSI)
-        chart_area_width = available_width - dimensions.y_axis_width
-        self._chart_area_width = chart_area_width  # Cache for RSI toggle
+        # Cache chart area width for volume and RSI (derived from ChartContext)
+        chart_area_width = self._chart_context.chart_area_width
+        self._chart_area_width = chart_area_width
 
         # Render volume bars (always shown)
         if len(data.volumes) > 0:
@@ -366,7 +366,7 @@ class ChartPanel(Widget):
                 closes=data.prices,
                 width=chart_area_width,
                 height=volume_height,
-                y_axis_width=dimensions.y_axis_width,
+                y_axis_width=self._chart_context.y_axis_width,
                 style=self._renderer.style,  # Pass the chart style for proper alignment
                 interpolated_count=rendered.interpolated_count,  # Pass interpolation info for alignment
             )
@@ -374,10 +374,12 @@ class ChartPanel(Widget):
                 # Volume lines use Rich markup for colors, so markup=True (default)
                 container.mount(Label(line, classes="chart-line"))
 
-        # Update RSI panel with correct width (even if hidden, so it's ready when toggled)
+        # Update RSI panel with ChartContext (even if hidden, so it's ready when toggled)
         if self._rsi_panel and self._rsi_values:
             current_rsi = next((v for v in reversed(self._rsi_values) if v is not None), None)
-            self._rsi_panel.show_indicator(self._rsi_values, current_rsi, chart_width=chart_area_width)
+            self._rsi_panel.show_indicator(
+                self._rsi_values, current_rsi, context=self._chart_context
+            )
 
     def _format_number(self, value: float, decimals: int) -> str:
         """Format a number with commas and specified decimal places.
@@ -481,11 +483,11 @@ class ChartPanel(Widget):
         """Toggle RSI indicator panel visibility."""
         if self._rsi_panel:
             self._rsi_panel.toggle_visibility()
-            # If panel is now visible and we have RSI data, update it with correct width
-            if self._rsi_panel.is_visible() and self._rsi_values:
+            # If panel is now visible and we have RSI data and context, update it
+            if self._rsi_panel.is_visible() and self._rsi_values and self._chart_context:
                 current_rsi = next((v for v in reversed(self._rsi_values) if v is not None), None)
                 self._rsi_panel.show_indicator(
-                    self._rsi_values, current_rsi, chart_width=self._chart_area_width
+                    self._rsi_values, current_rsi, context=self._chart_context
                 )
             # Re-render chart to adjust height for RSI panel
             self._render_content()

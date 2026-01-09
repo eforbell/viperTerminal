@@ -1,9 +1,14 @@
 """Chart rendering engine with Braille and block character support."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import TypeVar, cast, overload
+from typing import TYPE_CHECKING, TypeVar, cast, overload
+
+if TYPE_CHECKING:
+    from viper.widgets.chart_context import ChartContext
 
 
 class ChartStyle(Enum):
@@ -57,6 +62,7 @@ class ChartRenderer:
         """
         self.style = style
 
+    @overload
     def render(
         self,
         prices: list[float],
@@ -66,21 +72,70 @@ class ChartRenderer:
         opens: list[float] | None = None,
         period: str | None = None,
         overlays: list[OverlayData] | None = None,
+        *,
+        context: None = None,
+    ) -> RenderedChart: ...
+
+    @overload
+    def render(
+        self,
+        prices: None = None,
+        dates: None = None,
+        dimensions: None = None,
+        volumes: None = None,
+        opens: None = None,
+        period: None = None,
+        overlays: list[OverlayData] | None = None,
+        *,
+        context: ChartContext,
+    ) -> RenderedChart: ...
+
+    def render(
+        self,
+        prices: list[float] | None = None,
+        dates: list[datetime] | None = None,
+        dimensions: ChartDimensions | None = None,
+        volumes: list[int] | None = None,
+        opens: list[float] | None = None,
+        period: str | None = None,
+        overlays: list[OverlayData] | None = None,
+        *,
+        context: ChartContext | None = None,
     ) -> RenderedChart:
         """Render price data as a chart.
 
+        This method supports two calling styles:
+        1. Legacy: Pass individual parameters (prices, dates, dimensions, etc.)
+        2. Modern: Pass ChartContext via context= parameter (recommended)
+
         Args:
-            prices: List of price values to render
-            dates: Optional list of datetime objects (same length as prices)
-            dimensions: Chart dimensions (default: 80x20 with axes)
-            volumes: Optional list of volume values (same length as prices)
-            opens: Optional list of open prices (for volume bar coloring)
-            period: Optional time period for date formatting (1W, 1M, 1Y, etc.)
+            prices: List of price values to render (legacy)
+            dates: Optional list of datetime objects (legacy)
+            dimensions: Chart dimensions (legacy, default: 80x20 with axes)
+            volumes: Optional list of volume values (legacy)
+            opens: Optional list of open prices (legacy)
+            period: Optional time period for date formatting (legacy)
             overlays: Optional list of overlay data (e.g., moving averages)
+            context: ChartContext with all data and dimensions (modern, recommended)
 
         Returns:
             RenderedChart with lines ready for display
         """
+        # Modern path: use ChartContext
+        if context is not None:
+            prices = context.prices
+            dates = context.dates
+            dimensions = ChartDimensions(
+                width=context.total_width,
+                height=context.total_height,
+                include_y_axis=True,
+                include_x_axis=True,
+                y_axis_width=context.y_axis_width,
+            )
+            period = context.period
+            # Note: volumes and opens not used in render(), but stored in context
+
+        # Legacy path: use individual parameters
         if not prices:
             return RenderedChart(lines=["No data"], width=7, height=1, min_value=0.0, max_value=0.0)
 

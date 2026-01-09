@@ -732,3 +732,48 @@
   - **Alignment Contract**: chart_area_width becomes the alignment contract between all components
   - **Future-Proof**: Design supports future indicators (MACD, Stochastic) with same context
 ---
+
+## 2026-01-09 - VPR-051
+- **What was implemented**: Integrated ChartContext into ChartPanel, ChartRenderer, and IndicatorPanel for perfect alignment
+- **Files changed**:
+  - `viper/widgets/chart_renderer.py`: Added ChartContext parameter with @overload for backward compatibility
+  - `viper/widgets/chart_panel.py`: Create ChartContext from HistoricalData, pass to renderer and RSI panel
+  - `viper/widgets/indicator_panel.py`: Accept ChartContext parameter, extract chart_area_width and y_axis_width
+  - `scripts/ralph/features/feature-5.prd.json`: Marked VPR-051 as complete (passes: true)
+  - `AGENTS.md`: Added comprehensive VPR-051 learnings section
+- **Learnings**:
+  - **@overload Pattern**: Use function overloading to maintain backward compatibility during refactoring
+  - **Keyword-Only Parameters**: Use `*` before `context` parameter to force keyword-only usage
+  - **TYPE_CHECKING Import**: Use `if TYPE_CHECKING:` to avoid circular imports while keeping type hints
+  - **Factory Method Usage**: ChartContext.from_historical_data() creates context from domain data cleanly
+  - **Single Source of Truth**: ChartContext holds all dimensions, eliminates duplicate calculations
+  - **Property-Based Dimensions**: chart_area_width as @property ensures consistent derivation
+  - **Frozen Dataclass**: immutable context prevents accidental mutations, safe to share
+  - **Dual Path Implementation**: Support both legacy (individual params) and modern (context) calling styles
+  - **Modern Path First**: Check `if context is not None:` before falling back to legacy parameters
+  - **Attribute Extraction**: Extract dimensions early: `chart_width = context.chart_area_width`
+  - **State Caching**: Store `self._chart_context` on ChartPanel for reuse by child components
+  - **Context Propagation**: Pass context to all child components (IndicatorPanel, RSIPanel)
+  - **Dynamic Y-axis Padding**: Replace `" " * 12` with `" " * self._y_axis_width` from context
+  - **Attribute Initialization**: Add `_y_axis_width: int = 12` attribute with sensible default
+  - **Optional Parameters**: Use `context: ChartContext | None = None` for backward-compatible additions
+  - **Conditional State Updates**: Only update internal state when context is provided
+  - **Documentation Updates**: Update docstrings to explain both legacy and modern usage patterns
+  - **Width Mismatch Fix**: RSI panel now uses context.chart_area_width instead of hardcoded 70
+  - **Perfect Alignment**: All components derive width from same context.chart_area_width value
+  - **Test Preservation**: All 692 existing tests pass without modification (full backward compatibility)
+  - **Type Safety**: mypy --strict validates all modified files with no errors
+  - **Coverage Maintained**: 91.10% overall coverage, all modified files >95%
+  - **Future-Proof Design**: ChartContext can be extended with new fields without breaking existing code
+  - **Incremental Migration**: Both old and new APIs coexist during transition period
+  - **Implementation Pattern**: Check context first, extract fields, fall back to legacy params
+  - **Overload Signature**: One overload for legacy (prices required), one for modern (context required)
+  - **Zero Tests Broken**: Complete backward compatibility means no test updates needed
+- All 692 tests passing with 91.10% overall coverage
+- mypy --strict validates with no issues
+- chart_panel.py at 99% coverage, chart_renderer.py at 95%, indicator_panel.py at 96%
+- **Architecture Improvement**: ChartContext is now single source of truth for all dimensions
+- **Width Alignment Fixed**: RSI panel width now matches price chart width perfectly (no hardcoded 70)
+- **Y-axis Padding Fixed**: IndicatorPanel now uses dynamic y_axis_width from context
+- **Foundation Complete**: Ready for VPR-052 (X-axis extraction) which will use context for alignment
+---

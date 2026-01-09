@@ -4,12 +4,18 @@ This module provides a framework for displaying oscillator-type indicators
 (like RSI, MACD, Stochastic) in a sub-panel below the price chart.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
 from textual.containers import Container
 from textual.widget import Widget
 from textual.widgets import Label
+
+if TYPE_CHECKING:
+    from viper.widgets.chart_context import ChartContext
 
 
 @dataclass
@@ -89,26 +95,43 @@ class IndicatorPanel(Widget):
         self._indicator_values: list[float | None] | None = None
         self._current_value: float | None = None
         self._chart_width: int = 70  # Default, updated by show_indicator()
+        self._y_axis_width: int = 12  # Default, updated by show_indicator() with ChartContext
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
         yield Container(id="indicator-content")
 
     def show_indicator(
-        self, values: list[float | None], current_value: float | None = None,
-        chart_width: int | None = None
+        self,
+        values: list[float | None],
+        current_value: float | None = None,
+        chart_width: int | None = None,
+        context: ChartContext | None = None,
     ) -> None:
         """Display indicator values.
+
+        Supports two calling styles:
+        1. Legacy: Pass chart_width directly
+        2. Modern: Pass ChartContext via context= parameter (recommended)
 
         Args:
             values: List of indicator values to display (None = no data at that point)
             current_value: Optional current/latest value for header display
-            chart_width: Width of the chart area in characters (for alignment with price chart)
+            chart_width: Width of the chart area in characters (legacy)
+            context: ChartContext with dimensions and data (modern, recommended)
         """
         self._indicator_values = values
         self._current_value = current_value
-        if chart_width is not None:
+
+        # Modern path: extract dimensions from ChartContext
+        if context is not None:
+            self._chart_width = context.chart_area_width
+            self._y_axis_width = context.y_axis_width
+        # Legacy path: use chart_width parameter
+        elif chart_width is not None:
             self._chart_width = chart_width
+            # Keep existing y_axis_width (default 12)
+
         # Always re-render content when data changes (even if hidden, so it's ready when toggled visible)
         self._render_content()
 
@@ -155,8 +178,8 @@ class IndicatorPanel(Widget):
             container.mount(Label("No data", classes="empty-state"))
             return
 
-        # Y-axis padding to align with price chart (12 chars to match chart_renderer.py)
-        y_axis_padding = " " * 12
+        # Y-axis padding to align with price chart (from ChartContext or default)
+        y_axis_padding = " " * self._y_axis_width
 
         # Build header text with current value if available
         header_text = self._name
@@ -318,8 +341,8 @@ class IndicatorPanel(Widget):
                 grid[target_row][char_idx] = f"[cyan]{braille_char}[/cyan]"
 
         # Convert grid to strings with Y-axis padding for alignment with price chart
-        # Y-axis width is 12 characters to match chart_renderer.py
-        y_axis_padding = " " * 12
+        # Y-axis width from ChartContext (via show_indicator) or default 12
+        y_axis_padding = " " * self._y_axis_width
         chart_lines = [y_axis_padding + "".join(line) for line in grid]
 
         return chart_lines

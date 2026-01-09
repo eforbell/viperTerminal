@@ -100,7 +100,7 @@
         "All existing tests still pass"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-050"],
       "notes": "Combines former VPR-045 and VPR-046. ChartContext becomes the contract between components. Fixes rsi-defect-1-width-mismatch."

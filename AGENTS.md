@@ -1388,3 +1388,169 @@ def from_historical_data(
 - Remove hardcoded y_axis_padding in indicator_panel.py
 - All existing tests should still pass (backward compatible transition)
 
+
+---
+
+## VPR-051: ChartContext Integration
+
+**Date**: 2026-01-09
+**Task**: Integrate ChartContext into ChartPanel, ChartRenderer, and IndicatorPanel
+
+### Key Learnings
+
+1. **Backward Compatible Refactoring**: Use @overload to maintain existing API while introducing new patterns
+2. **Factory Method Pattern**: ChartContext.from_historical_data() provides clean creation from domain data
+3. **Single Source of Truth**: ChartContext eliminates duplicate dimension calculations across components
+4. **TYPE_CHECKING Pattern**: Use `if TYPE_CHECKING:` for circular import avoidance with type hints
+5. **Keyword-Only Parameters**: Use `*` in signatures to enforce `context=` being explicit (prevents positional confusion)
+6. **Incremental Migration**: Both old and new calling styles work during transition period
+7. **Property-Based Dimensions**: `chart_area_width` as computed property ensures consistency
+8. **Frozen Dataclass Safety**: immutable context prevents accidental state mutations
+9. **Explicit Attribute Initialization**: Set `self._chart_context: ChartContext | None = None` in __init__
+10. **Contextual State Caching**: Store `_chart_context` on ChartPanel for reuse by child components
+11. **Modern vs Legacy Paths**: Document both paths in docstrings for clarity
+12. **Parameter Extraction**: Extract dimensions from context early in method for clean code flow
+13. **Null Safety Checks**: Check `if context is not None:` before extracting attributes
+14. **Attribute Updates**: Add new attributes (`_y_axis_width`) with sensible defaults (12)
+15. **Remove Magic Numbers**: Replace hardcoded `" " * 12` with `" " * self._y_axis_width`
+16. **Context Propagation**: Pass context down to all child components (IndicatorPanel, RSIPanel)
+17. **Alignment Fix**: RSI panel now uses `context.chart_area_width` instead of cached `_chart_area_width`
+18. **Volume Bars**: Use `context.y_axis_width` instead of dimensions.y_axis_width
+19. **Test Preservation**: All 692 existing tests pass without modification (backward compatibility)
+20. **Type Safety Maintained**: mypy --strict passes on all modified files
+21. **Coverage Maintained**: 91.10% overall coverage (above 90% threshold)
+22. **Future-Proof API**: ChartContext can be extended with new fields without breaking existing code
+23. **Optional Parameters**: Use `param: Type | None = None` for optional backward-compatible additions
+24. **Conditional Updates**: Update internal state only when context is provided
+25. **Documentation Updates**: Update docstrings to explain both legacy and modern calling styles
+
+### Implementation Pattern
+
+**ChartRenderer.render() - Dual Path**:
+```python
+@overload
+def render(self, prices: list[float], dates: ..., *, context: None = None) -> RenderedChart: ...
+
+@overload
+def render(self, prices: None = None, dates: None = None, *, context: ChartContext) -> RenderedChart: ...
+
+def render(self, prices: list[float] | None = None, ..., *, context: ChartContext | None = None):
+    # Modern path
+    if context is not None:
+        prices = context.prices
+        dates = context.dates
+        dimensions = ChartDimensions(width=context.total_width, height=context.total_height, ...)
+    # Legacy path
+    elif prices:
+        # existing code
+```
+
+**ChartPanel._render_chart() - Create Context**:
+```python
+# Create ChartContext once
+self._chart_context = ChartContext.from_historical_data(
+    data=data,
+    width=available_width,
+    height=available_height,
+)
+
+# Use context for rendering
+rendered = self._renderer.render(overlays=overlays, context=self._chart_context)
+
+# Pass to child components
+self._rsi_panel.show_indicator(values, current_rsi, context=self._chart_context)
+```
+
+**IndicatorPanel.show_indicator() - Extract Dimensions**:
+```python
+def show_indicator(self, values, current_value, chart_width=None, context=None):
+    # Modern path
+    if context is not None:
+        self._chart_width = context.chart_area_width
+        self._y_axis_width = context.y_axis_width
+    # Legacy path
+    elif chart_width is not None:
+        self._chart_width = chart_width
+        # Keep existing self._y_axis_width
+```
+
+### Architecture Improvement
+
+**Before (VPR-050)**:
+- ChartPanel: passes `prices`, `dates`, `dimensions`, `volumes`, `opens` separately
+- ChartRenderer: receives 7 separate parameters
+- IndicatorPanel: receives `chart_width=70` (hardcoded default)
+- Hardcoded: `y_axis_padding = " " * 12` in indicator_panel.py
+
+**After (VPR-051)**:
+- ChartPanel: creates `ChartContext` once, stores as `self._chart_context`
+- ChartRenderer: receives `context=` (or legacy parameters for backward compat)
+- IndicatorPanel: extracts `chart_area_width` and `y_axis_width` from context
+- Dynamic: `y_axis_padding = " " * self._y_axis_width` (from context)
+
+### Backward Compatibility
+
+All existing code continues to work:
+- ChartRenderer.render(prices, dates, dimensions) still works
+- IndicatorPanel.show_indicator(values, current_value, chart_width=70) still works
+- Tests don't need updates - they use legacy API and work correctly
+
+New code uses modern API:
+- ChartRenderer.render(context=chart_context)
+- IndicatorPanel.show_indicator(values, current_value, context=chart_context)
+
+### Test Results
+
+- All 692 tests pass (no test changes required)
+- mypy --strict validates all modified files with no errors
+- Coverage: 91.10% overall (maintained above 90% threshold)
+- chart_panel.py: 99% coverage
+- chart_renderer.py: 95% coverage
+- indicator_panel.py: 96% coverage
+- chart_context.py: 100% coverage
+
+### Files Modified
+
+- `viper/widgets/chart_renderer.py` - Added ChartContext overload, TYPE_CHECKING import
+- `viper/widgets/chart_panel.py` - Create and store ChartContext, pass to components
+- `viper/widgets/indicator_panel.py` - Accept ChartContext, extract dimensions, dynamic y_axis_padding
+- `scripts/ralph/features/feature-5.prd.json` - Marked VPR-051 passes: true
+
+### Width Mismatch Fix
+
+**Root Cause**: RSI panel hardcoded `_chart_width = 70`, didn't update with terminal resize
+**Fix**: Extract `chart_area_width` from ChartContext (dynamically calculated)
+**Result**: Perfect horizontal alignment between price chart and RSI indicator
+
+**Before**: Price chart width = 88 chars, RSI width = 70 chars (misaligned!)
+**After**: Both use `context.chart_area_width` = 88 chars (perfectly aligned!)
+
+### Y-axis Padding Fix
+
+**Root Cause**: IndicatorPanel hardcoded `y_axis_padding = " " * 12`
+**Fix**: Use `self._y_axis_width` from ChartContext (default 12, configurable)
+**Result**: Y-axis padding matches chart renderer's y_axis_width exactly
+
+### Complexity Metrics
+
+- Lines changed: ~100 lines across 4 files
+- New attributes: `_chart_context`, `_y_axis_width`
+- New parameters: `context: ChartContext | None = None`
+- Overloads added: 2 in ChartRenderer.render()
+- Tests broken: 0 (100% backward compatible)
+
+### Architecture Benefits
+
+1. **Perfect Alignment**: All components use same chart_area_width from context
+2. **Maintainability**: Change dimension calculation once in ChartContext.from_historical_data()
+3. **Extensibility**: Add new indicators by passing context (no dimension calculations)
+4. **Type Safety**: mypy enforces correct context usage at compile time
+5. **Testability**: Mock ChartContext instead of 7 separate parameters
+6. **Documentation**: context.chart_area_width is self-documenting (vs hardcoded 70)
+
+### Next Steps (VPR-052)
+
+- Extract X-axis rendering to shared function (render_x_axis(context))
+- Remove X-axis from individual renders (include_x_axis=False)
+- ChartPanel renders X-axis once at bottom after all panels
+- Ensures X-axis always visible regardless of indicator toggles
