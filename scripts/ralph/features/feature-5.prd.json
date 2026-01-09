@@ -119,7 +119,7 @@
         "Test: Date labels align with chart data correctly"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-051"],
       "notes": "Ensures X-axis is always visible at bottom regardless of which indicators are shown. Future-proofs for MACD panel stacking."
@@ -139,10 +139,10 @@
         "Coverage remains above 90%"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-051", "VPR-052"],
-      "notes": "Final verification pass. All the structural work is done, this is polish and documentation."
+      "notes": "Final verification pass completed. All 698 tests pass with 90.92% coverage. Architecture documented in AGENTS.md. Feature 5 COMPLETE."
     }
   ],
   "technicalNotes": {
