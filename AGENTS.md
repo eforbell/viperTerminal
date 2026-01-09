@@ -1267,3 +1267,124 @@ Feature 5 will introduce:
 - Extracted X-axis component for consistency
 - Dynamic RSI panel width matching chart width
 - Additional architectural improvements
+
+---
+
+## VPR-050: ChartContext Dataclass (2026-01-09)
+
+**Story**: Create ChartContext dataclass as single source of truth for chart dimensions and data.
+
+**Implementation**: Created immutable dataclass to hold all chart-related data and dimensions, establishing the foundation for perfect alignment between price chart, volume bars, indicators, and X-axis.
+
+### Key Patterns
+
+**Frozen Dataclass Pattern**:
+```python
+@dataclass(frozen=True)
+class ChartContext:
+    """Immutable chart context - single source of truth."""
+    ticker: str
+    period: str
+    dates: list[datetime]
+    prices: list[float]
+    volumes: list[int]
+    # ... other OHLCV fields
+    total_width: int
+    total_height: int
+    y_axis_width: int = 12  # Default parameter
+```
+
+**Computed Property for Derived Values**:
+```python
+@property
+def chart_area_width(self) -> int:
+    """Critical dimension for alignment."""
+    return self.total_width - self.y_axis_width
+```
+
+**Factory Method Pattern**:
+```python
+@classmethod
+def from_historical_data(
+    cls,
+    data: HistoricalData,
+    width: int,
+    height: int,
+    y_axis_width: int = 12,
+) -> "ChartContext":
+    """Standard way to create context from market data."""
+    return cls(
+        ticker=data.ticker,
+        period=data.period,
+        dates=data.dates,
+        prices=data.prices,
+        # ... extract all fields
+        total_width=width,
+        total_height=height,
+        y_axis_width=y_axis_width,
+    )
+```
+
+### Learnings
+
+1. **Immutability via frozen=True**: Prevents accidental mutation - safe to pass context around without side effects
+2. **Single Source of Truth**: All components use same ChartContext instance for consistent dimensions
+3. **Computed Properties**: Use @property for derived values like chart_area_width (calculated, not stored)
+4. **Factory Method**: @classmethod provides clean interface for creating context from HistoricalData
+5. **Default Parameters**: Field default (y_axis_width: int = 12) also used as factory method default
+6. **Full OHLCV Data**: Include all market data (dates, prices, volumes, opens, closes, highs, lows)
+7. **Closes = Prices**: Set closes=data.prices for symmetry with opens field
+8. **Testing Immutability**: Use `with pytest.raises(AttributeError)` to verify frozen=True
+9. **FrozenInstanceError vs AttributeError**: Frozen dataclass raises AttributeError when modified (not FrozenInstanceError)
+10. **Test Organization**: 5 test classes - Basics, Factory, Dimensions, DataLengths, EdgeCases
+11. **100% Test Coverage**: 16 comprehensive tests covering all scenarios and edge cases
+12. **Stock and Crypto**: Tested both stock ("AAPL") and crypto ("BTC-USD", "ETH-USD") ticker formats
+13. **All Timeframes**: Tested all period strings ("1D", "1W", "1M", "3M", "6M", "1Y", "5Y", "MAX")
+14. **Terminal Sizes**: Minimum (80x24 → chart_area_width=68), large (200x60 → chart_area_width=188)
+15. **Edge Cases**: Empty lists, single data point, 250+ points, zero y_axis_width all work
+16. **Type Safety**: mypy --strict validates with no errors - all fields properly annotated
+17. **No Integration Yet**: VPR-050 creates foundation in isolation - no changes to existing code
+18. **Alignment Contract**: chart_area_width becomes the alignment contract between all components
+19. **Documentation**: Comprehensive module docstring explaining design principles and usage
+20. **Docstring Examples**: Include practical usage examples in both module and method docstrings
+21. **Future-Proof Design**: Supports future indicators (MACD, Stochastic) with same context structure
+22. **Incremental Refactoring**: Create foundation first, integrate in next story (VPR-051)
+23. **Test Count Tracking**: Added 16 new tests, total now 692 tests passing
+24. **Coverage Maintenance**: 91.07% overall (above 90% threshold), new module at 100%
+
+### Test Results
+- All 692 tests pass (16 new ChartContext tests + 676 existing)
+- mypy --strict validates chart_context.py and test_chart_context.py with no errors
+- Coverage: 91.07% overall, chart_context.py at 100%
+- chart_context.py: 23 statements, all covered
+
+### Files Created
+- `viper/widgets/chart_context.py` - ChartContext dataclass (23 lines)
+- `tests/test_chart_context.py` - Comprehensive test suite (16 tests, 5 test classes)
+
+### Files Modified
+- `scripts/ralph/features/feature-5.prd.json` (marked VPR-050 passes: true)
+- `scripts/ralph/progress.txt` (added VPR-050 learnings)
+
+### Architecture Benefits
+
+**Before (implicit state)**:
+- ChartPanel passes individual parameters (width, height, prices, volumes)
+- Each component calculates its own dimensions
+- Risk of misalignment between components
+- Difficult to add new indicators with consistent alignment
+
+**After (explicit context)**:
+- ChartContext is single source of truth for all dimensions
+- All components receive same context instance
+- Perfect alignment guaranteed via chart_area_width property
+- Easy to add new indicators - just pass the context
+
+### Next Steps (VPR-051)
+- Integrate ChartContext into ChartPanel._render_chart()
+- Update ChartRenderer.render() to accept ChartContext
+- Update IndicatorPanel.show_indicator() to use ChartContext
+- Fix RSI panel width mismatch (use context.chart_area_width instead of hardcoded 70)
+- Remove hardcoded y_axis_padding in indicator_panel.py
+- All existing tests should still pass (backward compatible transition)
+
