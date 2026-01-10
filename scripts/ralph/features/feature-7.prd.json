@@ -1,0 +1,299 @@
+{
+  "branchName": "viper/feature-7-macd-indicator",
+  "projectName": "Viper Terminal - Feature 7",
+  "description": "MACD Indicator: Add Moving Average Convergence Divergence (MACD) technical indicator with dedicated sub-panel. Follows the established IndicatorPanel pattern from RSI (Feature 3) and leverages ChartContext architecture (Feature 5).",
+  "principles": [
+    "Rock-solid quality over speed - every feature must be bulletproof before moving on",
+    "Comprehensive test coverage - unit tests, integration tests, edge cases",
+    "All tests must pass before a story is marked complete",
+    "Follow established patterns - reuse IndicatorPanel and ChartContext",
+    "Apply learnings from AGENTS.md and RSI implementation",
+    "MACD uses NEGATIVE scale (-10 to +10 typical) unlike RSI (0-100)"
+  ],
+  "CRITICAL_RENDERING_NOTES": {
+    "warning": "⚠️ READ THIS BEFORE ANY WIDGET/RENDERING WORK ⚠️",
+    "textual_colors": "Textual uses Rich markup, NOT ANSI escape codes!",
+    "correct_syntax": "[green]text[/green], [cyan]char[/cyan], [red]value[/red]",
+    "wrong_syntax": "\\033[32m (ANSI codes will BREAK rendering in Textual widgets)",
+    "label_markup": "When Label contains Rich markup, you MUST set markup=True",
+    "macd_colors": "MACD line: [cyan], Signal line: [yellow], Histogram: [green] for positive, [red] for negative",
+    "reference_line": "Zero line at y=0 should be [white] or [dim white]"
+  },
+  "techStack": {
+    "language": "Python 3.11+",
+    "tui": "Textual (built on Rich)",
+    "indicators": "Custom calculations in services/indicators.py",
+    "testing": "pytest + pytest-asyncio + pytest-cov",
+    "mocking": "pytest-mock",
+    "typecheck": "mypy --strict",
+    "linting": "ruff"
+  },
+  "background": {
+    "macdOverview": "MACD (Moving Average Convergence Divergence) is a trend-following momentum indicator that shows the relationship between two moving averages of a security's price.",
+    "macdComponents": {
+      "macd_line": "12-period EMA minus 26-period EMA (fast line)",
+      "signal_line": "9-period EMA of the MACD line (slow line, trigger)",
+      "histogram": "MACD line minus Signal line (visual representation of divergence)"
+    },
+    "macdInterpretation": {
+      "bullish_crossover": "MACD crosses above Signal line (potential buy signal)",
+      "bearish_crossover": "MACD crosses below Signal line (potential sell signal)",
+      "divergence": "Price makes new high/low but MACD doesn't (trend reversal warning)",
+      "zero_line": "MACD crossing zero indicates trend direction change"
+    },
+    "existingFoundation": [
+      "IndicatorPanel base class (VPR-038) - handles rendering, reference lines, braille charts",
+      "ChartContext (Feature 5) - provides chart_area_width for perfect alignment",
+      "EMA calculation (VPR-034) - needed for MACD and Signal line",
+      "RSI implementation (VPR-039) - pattern to follow for MACD"
+    ],
+    "keyDifferences": {
+      "scale": "MACD uses centered scale around zero (-10 to +10 typical) vs RSI (0-100)",
+      "components": "MACD has 3 visual elements (line, signal, histogram) vs RSI (1 line)",
+      "reference_lines": "MACD needs zero line, RSI has overbought/oversold at 70/30",
+      "height": "MACD needs more height (7 lines) due to histogram + lines vs RSI (4 lines)"
+    }
+  },
+  "userStories": [
+    {
+      "id": "VPR-070",
+      "title": "Implement prefix keybinding system for technical indicators",
+      "acceptanceCriteria": [
+        "Implement prefix key system: 't' (technical) as first key, then indicator-specific key",
+        "Add _technical_prefix_active: bool flag to track if 't' was pressed",
+        "On 't' key press: set flag, show temporary hint in status bar ('Technical: r=RSI, a=MA')",
+        "On second key press: route to indicator action, clear flag",
+        "If any other key pressed after 't', clear flag (cancel prefix)",
+        "Refactor existing 'm' keybinding: remove from BINDINGS, implement as 't-a' action",
+        "Refactor existing 'r' keybinding: remove from BINDINGS, implement as 't-r' action",
+        "cycle_ma_display() now triggered by 't-a' sequence",
+        "toggle_rsi() now triggered by 't-r' sequence",
+        "Each indicator action requires full prefix (t-a, t-a to cycle MA again)",
+        "Update help_screen.py: document 't' prefix system, update RSI and MA keybindings",
+        "Test: 't-r' toggles RSI on/off",
+        "Test: 't-a' cycles MA (off → SMA20 → SMA50 → both → off)",
+        "Test: pressing 't' then any non-indicator key clears prefix state",
+        "All existing indicator functionality works with new prefix system"
+      ],
+      "priority": 1,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": [],
+      "notes": "Establishes the prefix key pattern BEFORE adding MACD. Refactors existing indicator keybindings (RSI, MA) to use 't' prefix. This story has NO MACD code - just the keybinding infrastructure. Thoroughly test with existing indicators."
+    },
+    {
+      "id": "VPR-071",
+      "title": "Add MACD calculation to indicators service",
+      "acceptanceCriteria": [
+        "New function: calculate_macd(prices, fast_period=12, slow_period=26, signal_period=9)",
+        "Returns tuple: (macd_line, signal_line, histogram) - all list[float | None]",
+        "MACD line: EMA(fast) - EMA(slow) using existing calculate_ema()",
+        "Signal line: 9-period EMA of MACD line",
+        "Histogram: macd_line[i] - signal_line[i] for all i",
+        "Handle None values: propagate None through calculations",
+        "First 33 values are None: (26-1) + (9-1) + 1 = 33",
+        "Validation: fast_period < slow_period, all periods > 0",
+        "Raise ValueError for invalid periods",
+        "100% test coverage on new function",
+        "Tests: basic calculation, edge cases (empty, single point, flat prices), known values",
+        "Test: verify None count is exactly 33 for default periods",
+        "Test: MACD can be negative (unlike RSI which is 0-100)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "estimatedEffort": "Small",
+      "dependencies": [],
+      "notes": "Pure calculation function, no UI. Reuse calculate_ema() from VPR-034. MACD can be negative, unlike RSI. First 33 values are None because: 25 None from slow EMA + 8 None from signal EMA = 33 total."
+    },
+    {
+      "id": "VPR-072",
+      "title": "Create MACDPanel widget",
+      "acceptanceCriteria": [
+        "New file: viper/widgets/macd_panel.py",
+        "Class MACDPanel extends IndicatorPanel",
+        "Configure in __init__: min_value=-10.0, max_value=10.0, height=7 (extra height for histogram)",
+        "Reference lines: zero line at y=0 (white, solid)",
+        "Add show_macd(macd_line, signal_line, histogram, context=None) method",
+        "Render MACD line in cyan, Signal line in yellow",
+        "Render histogram bars: green for positive values, red for negative",
+        "Histogram bars centered at zero line (not bottom-aligned like volume)",
+        "Header format: 'MACD: 1.23  Signal: 0.87  Hist: 0.36'",
+        "Extract current values from end of each list (skip None values)",
+        "Handle all None values gracefully (show 'No data')",
+        "Use ChartContext.chart_area_width for horizontal alignment",
+        "100% test coverage: initialization, all 3 lines render, colors, zero line",
+        "Export MACDPanel from viper/widgets/__init__.py"
+      ],
+      "priority": 3,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-071"],
+      "notes": "Similar to RSIPanel but with 3 data series instead of 1. Histogram rendering is new - use vertical bars like volume but centered at zero. Yellow for signal line distinguishes it from cyan MACD line."
+    },
+    {
+      "id": "VPR-073",
+      "title": "Integrate MACD into ChartPanel",
+      "acceptanceCriteria": [
+        "Import MACDPanel in chart_panel.py",
+        "Add _macd_panel: MACDPanel | None = None attribute",
+        "ChartPanel compose() yields MACDPanel after RSI panel",
+        "Initialize MACDPanel in compose(): self._macd_panel = MACDPanel()",
+        "Call _macd_panel.hide() initially (starts hidden like RSI)",
+        "Calculate MACD in show_chart(): macd, signal, hist = calculate_macd(prices, 12, 26, 9)",
+        "Cache values: _macd_line, _signal_line, _histogram",
+        "Require minimum 34 prices (33 None + 1 value) before calculating",
+        "Pass ChartContext to _macd_panel.show_macd() for alignment",
+        "Update MACD panel even when hidden (avoid stale data like RSI bug)",
+        "Add toggle_macd() method similar to toggle_rsi()",
+        "Add is_macd_visible() helper method",
+        "Test: Both RSI and MACD can be visible simultaneously",
+        "Test: MACD updates on ticker change (no stale data)",
+        "Test: Insufficient data (<34 prices) handled gracefully"
+      ],
+      "priority": 4,
+      "passes": false,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-072"],
+      "notes": "Follow RSI integration pattern from VPR-039. Both RSI and MACD can be visible simultaneously - they stack vertically. Make sure to update MACD panel even when hidden to avoid stale data bug that RSI had."
+    },
+    {
+      "id": "VPR-074",
+      "title": "Add MACD to prefix keybinding system and update help docs",
+      "acceptanceCriteria": [
+        "Add 't-m' keybinding for MACD using existing prefix system from VPR-070",
+        "Route 't-m' to chart_panel.toggle_macd() method",
+        "Update status bar hint to include MACD: 'Technical: r=RSI, m=MACD, a=MA'",
+        "Update help_screen.py KEYBINDINGS section: add 't-m - Toggle MACD'",
+        "Update help_screen.py TECHNICAL INDICATORS section with MACD description",
+        "Document MACD components: MACD line (cyan), Signal line (yellow), Histogram (green/red)",
+        "Document interpretation: Crossovers indicate trend changes, zero line crosses show direction",
+        "Note: Both RSI and MACD can be visible at same time (stacked vertically)",
+        "Update FEATURES section to mention MACD support",
+        "Test: 't-m' toggles MACD on/off",
+        "Test: 't-m' works alongside 't-r' and 't-a' (no conflicts)"
+      ],
+      "priority": 5,
+      "passes": false,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-070", "VPR-073"],
+      "notes": "Much simpler than original VPR-073 since prefix system is already implemented in VPR-070. Just add MACD to the existing routing and update documentation."
+    },
+    {
+      "id": "VPR-075",
+      "title": "Testing and visual polish",
+      "acceptanceCriteria": [
+        "Integration tests: toggle MACD on/off with RSI visible",
+        "Test: MACD and RSI visible simultaneously, both align with price chart",
+        "Test: MACD updates on ticker change (no stale data)",
+        "Test: Insufficient data (<34 prices) handled gracefully",
+        "Test: MACD with all timeframes (1W through MAX)",
+        "Test: MACD works with both stocks (AAPL) and crypto (BTC-USD)",
+        "Manual testing: verify histogram colors (green/red) render correctly",
+        "Manual testing: verify MACD/Signal crossovers are visually clear",
+        "Manual testing: verify zero line is visible and distinct",
+        "Screenshot: MACD + RSI + Volume all visible together",
+        "Visual test at 80x24 minimum terminal size",
+        "All existing tests still pass (no regressions)",
+        "Coverage ≥ 90%",
+        "mypy --strict passes with no errors"
+      ],
+      "priority": 6,
+      "passes": false,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-074"],
+      "notes": "Ensure MACD plays nicely with existing indicators. Test stacking order: Price+Volume, RSI, MACD, X-axis. Verify all components render correctly at minimum terminal size."
+    }
+  ],
+  "technicalNotes": {
+    "macdCalculation": {
+      "formula": "MACD = EMA(12) - EMA(26), Signal = EMA(MACD, 9), Histogram = MACD - Signal",
+      "none_count": "First 33 values are None: (26-1 for slow EMA) + (9-1 for signal EMA) + 1 for first subtraction = 33",
+      "calculation_steps": [
+        "1. Calculate fast_ema = calculate_ema(prices, 12)",
+        "2. Calculate slow_ema = calculate_ema(prices, 26)",
+        "3. Calculate macd_line = fast_ema[i] - slow_ema[i] for each i",
+        "4. Calculate signal_line = calculate_ema(macd_line, 9)",
+        "5. Calculate histogram = macd_line[i] - signal_line[i] for each i"
+      ],
+      "negative_values": "MACD line, signal, and histogram can all be negative - handle in rendering",
+      "none_handling": "If either fast_ema[i] or slow_ema[i] is None, macd_line[i] is None. Propagate None through all calculations."
+    },
+    "histogramRendering": {
+      "approach": "Use vertical bars similar to volume bars, but centered at zero line instead of bottom-aligned",
+      "positive_bars": "Render above zero line in green (bullish signal)",
+      "negative_bars": "Render below zero line in red (bearish signal)",
+      "character_set": "Use block characters: ▁▂▃▄▅▆▇█ for varying heights",
+      "alignment": "Histogram bars should align with MACD/Signal line data points horizontally",
+      "zero_line": "Histogram extends up/down from zero line, not from bottom of panel"
+    },
+    "panelConfiguration": {
+      "height": "7 lines (RSI uses 4, MACD needs more for histogram + 2 lines)",
+      "scale": "min_value=-10.0, max_value=10.0 (typical range, adjust if data exceeds)",
+      "reference_lines": "[HorizontalLine(value=0.0, label='0', style='solid', color='white')]",
+      "macd_line_color": "cyan (consistent with other indicators)",
+      "signal_line_color": "yellow (distinguish from MACD line)",
+      "histogram_colors": "green for positive, red for negative"
+    },
+    "integrationPattern": {
+      "compose_order": "yield chart_content, yield rsi_panel, yield macd_panel (stacks vertically)",
+      "cache_values": "Store _macd_line, _signal_line, _histogram to avoid recalculation on toggle",
+      "minimum_data": "MACD requires 34 prices minimum (33 None + 1 value)",
+      "context_passing": "Pass ChartContext to show_macd() for chart_area_width alignment",
+      "stale_data_prevention": "Update MACD panel in show_chart() even when panel hidden",
+      "visibility_management": "Use panel.hide() and panel.show() or panel.toggle_visibility()"
+    },
+    "prefixKeySystem": {
+      "prefix": "t (for technical indicators)",
+      "implementation": "Track first key press in app state, then route second key to appropriate action",
+      "new_bindings": "t-r (RSI), t-m (MACD), t-a (cycle MA)",
+      "stateless": "Each indicator action requires full prefix (t-a, t-a to cycle MA, not mode-based)",
+      "extensibility": "Future: t-s (Stochastic), t-b (Bollinger Bands), t-v (Volume indicators)",
+      "preserve_existing": "Keep i for info panel, c for chart, n for news, w for watchlist commands"
+    },
+    "testingStrategy": [
+      "Unit tests: calculate_macd() with known values, edge cases, None handling",
+      "Widget tests: MACDPanel rendering, histogram colors, zero line, header format",
+      "Integration tests: toggle MACD, simultaneous with RSI, ticker changes",
+      "Visual tests: manual verification of crossovers, histogram rendering, colors",
+      "Coverage tests: ensure ≥ 90% coverage on all new code"
+    ],
+    "filesToModify": [
+      "viper/services/indicators.py - add calculate_macd() function",
+      "viper/widgets/chart_panel.py - integrate MACD panel, add toggle method",
+      "viper/app.py - add 'm' keybinding and action_toggle_macd()",
+      "viper/widgets/help_screen.py - document MACD in keybindings and indicators sections",
+      "viper/widgets/__init__.py - export MACDPanel"
+    ],
+    "newFiles": [
+      "viper/widgets/macd_panel.py - MACDPanel widget class",
+      "tests/test_macd_calculation.py - unit tests for calculate_macd() (Optional: can add to test_indicators.py)",
+      "tests/test_macd_panel.py - widget tests for MACDPanel"
+    ]
+  },
+  "outOfScope": [
+    "MACD configuration (12/26/9 periods) - use standard defaults only",
+    "Histogram style options - simple bars only, no fill or gradient",
+    "MACD divergence detection - visual only, no automated alerts",
+    "MACD color themes - use standard cyan/yellow/green/red",
+    "Other indicators (Stochastic, Bollinger Bands) - separate features"
+  ],
+  "successMetrics": [
+    "MACD indicator displays correctly with 3 components (line, signal, histogram)",
+    "Histogram colors (green/red) render correctly for positive/negative values",
+    "MACD aligns horizontally with price chart and RSI panel (via ChartContext)",
+    "Toggle 'm' key works smoothly with RSI also visible",
+    "MACD updates immediately when ticker changes (no stale data)",
+    "Crossovers between MACD and Signal lines are visually clear",
+    "Zero line is visible and distinct from data lines",
+    "All tests pass (unit, widget, integration)",
+    "Coverage remains ≥ 90%",
+    "No mypy --strict errors",
+    "Works at 80x24 minimum terminal size",
+    "Both RSI and MACD can be visible simultaneously without layout issues"
+  ],
+  "storyDependencyGraph": {
+    "description": "Linear dependency chain with keybinding infrastructure first",
+    "flow": "VPR-070 (prefix keys) → VPR-071 (MACD calc) → VPR-072 (widget) → VPR-073 (integrate) → VPR-074 (add to keys) → VPR-075 (test)",
+    "parallelization": "VPR-071 independent of VPR-070 (can work in parallel), rest are sequential"
+  }
+}

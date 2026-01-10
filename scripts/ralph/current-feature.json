@@ -1,9 +1,12 @@
 {
-  "currentFeature": null,
-  "featureName": null,
-  "prdPath": null,
-  "branch": null,
-  "status": "planning",
+  "currentFeature": "feature-7",
+  "featureName": "MACD Indicator",
+  "prdPath": "features/feature-7.prd.json",
+  "branch": "viper/feature-7-macd-indicator",
+  "status": "started",
+  "startedAt": "2026-01-09",
+  "description": "Add MACD (Moving Average Convergence Divergence) technical indicator with histogram. Implements prefix keybinding system ('t' for technical) and refactors existing indicator keys. MACD shows trend direction with 3 components: MACD line, Signal line, and Histogram.",
+  "stories": ["VPR-070", "VPR-071", "VPR-072", "VPR-073", "VPR-074", "VPR-075"],
   "completedFeatures": [
     {
       "feature": "feature-6",
