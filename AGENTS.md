@@ -1979,6 +1979,141 @@ Benefits:
 
 ---
 
+## Focus Management and Tab Navigation (2026-01-10)
+
+### Problem
+Two related issues discovered after Feature 6 rollout:
+1. **Priority**: Pressing 'n' for news (or 'i'/'c' for info/chart) caused focus to be lost
+2. **Secondary**: Tab navigation between panels was slow and confusing
+
+### Root Cause Analysis
+
+**Focus Loss Issue:**
+- Toggle actions (`action_toggle_news`, `action_toggle_info`, `action_toggle_chart`) changed panel visibility but never set focus to the newly shown panel
+- When a panel was shown, focus remained on the previously focused widget (now hidden), causing it to be lost
+- User would press 'n' → news panel appears → but can't navigate with j/k because no widget has focus
+
+**Tab Slowness Issue:**
+- All 6 panels (WatchlistPanel, QuotePanel, InfoPanel, ChartPanel, NewsPanel, ArticleReaderPanel) have `can_focus = True` by default
+- Even though hidden panels use `display: none`, they remained in the DOM with `can_focus = True`
+- Tab key cycles through ALL focusable widgets, including hidden panels
+- User experience: press Tab → nothing happens → press Tab again → still nothing → press Tab 4 more times → finally reaches visible widget
+- With 3-4 hidden panels at any time, tab navigation felt broken
+
+### The Fix
+
+**Two-part solution** implemented via dynamic `can_focus` management:
+
+1. **Set focus explicitly** when showing a panel:
+   ```python
+   # Show panel
+   panel_container.styles.display = "block"
+   panel.can_focus = True  # Add to tab order
+   panel.focus()  # Set focus immediately
+   ```
+
+2. **Remove hidden panels from tab order**:
+   ```python
+   # Hide panel
+   panel_container.styles.display = "none"
+   panel.can_focus = False  # Remove from tab order
+   ```
+
+**Implementation Pattern:**
+```python
+def action_toggle_news(self) -> None:
+    # Get all panels upfront for can_focus management
+    news_panel = self.query_one(NewsPanel)
+    info_panel = self.query_one(InfoPanel)
+    chart_panel = self.query_one(ChartPanel)
+    
+    if self._news_panel_visible:
+        # Hiding news
+        news_container.styles.display = "none"
+        news_panel.can_focus = False  # Remove from tab order
+    else:
+        # Hide other panels and remove from tab order
+        if self._info_panel_visible:
+            info_container.styles.display = "none"
+            info_panel.can_focus = False
+        if self._chart_panel_visible:
+            chart_container.styles.display = "none"
+            chart_panel.can_focus = False
+        
+        # Show news panel and set focus
+        news_container.styles.display = "block"
+        news_panel.can_focus = True  # Add to tab order
+        news_panel.focus()  # Give it focus immediately
+```
+
+**Initialization in `on_mount()`:**
+```python
+def on_mount(self) -> None:
+    # Hidden panels start with can_focus=False
+    self.query_one(InfoPanel).can_focus = False
+    self.query_one(ChartPanel).can_focus = False
+    self.query_one(NewsPanel).can_focus = False
+    self.query_one(ArticleReaderPanel).can_focus = False
+    
+    # Only visible panels (WatchlistPanel, QuotePanel) remain focusable
+    self.query_one(TickerInput).focus()  # Start with input focused
+```
+
+### Key Learnings
+
+1. **Display vs Focusability**: `display: none` hides widgets visually but doesn't affect `can_focus` - they remain in tab order
+2. **Focus Follows Visibility**: Always set `can_focus` to match visibility state for consistent UX
+3. **Explicit Focus Required**: After showing a panel, explicitly call `.focus()` - don't assume Textual will focus it
+4. **Query Panels Upfront**: Get panel references at the start of toggle methods to avoid repeated queries
+5. **Initialize Hidden State**: Set `can_focus = False` in `on_mount()` for initially hidden panels
+6. **Article Reader Transitions**: Handle `can_focus` when transitioning between news panel and article reader
+7. **All or Nothing**: Apply pattern to ALL toggle actions (info, chart, news, reader) for consistency
+
+### Testing
+
+**Verified behavior:**
+- Pressing 'n' → news panel appears → focus is on news panel → j/k navigation works immediately ✓
+- Pressing 'i' → info panel appears → focus is on info panel → can tab to other visible widgets ✓
+- Pressing 'c' → chart panel appears → focus is on chart panel → number keys work for timeframe ✓
+- Tab key only cycles through visible widgets (WatchlistPanel, QuotePanel, TickerInput, visible panel) ✓
+- No more "ghost tabs" through hidden panels ✓
+
+**All 32 app tests pass** - no regressions introduced by focus management changes.
+
+### User Impact
+
+**Before fix:**
+- User: presses 'n' → news appears but can't navigate (focus lost)
+- User: presses Tab 6 times → finally reaches visible widget (slow, confusing)
+
+**After fix:**
+- User: presses 'n' → news appears → j/k navigation works immediately (focus set)
+- User: presses Tab → cycles only through visible widgets (fast, predictable)
+
+### Files Modified
+
+- `viper/app.py`: Updated `action_toggle_info()`, `action_toggle_chart()`, `action_toggle_news()`, `on_news_panel_article_open_requested()`, `on_article_reader_panel_close_requested()`, and `on_mount()`
+- Total changes: ~50 lines added (focus management + can_focus toggling)
+
+### Architecture Pattern
+
+This establishes a **focus management pattern** for panel-based UIs in Textual:
+
+```python
+# When showing a panel:
+1. Hide competing panels (set display="none", can_focus=False)
+2. Show target panel (set display="block", can_focus=True)
+3. Set focus explicitly (panel.focus())
+
+# When hiding a panel:
+1. Set display="none"
+2. Set can_focus=False  # Critical for tab order
+```
+
+**Rule**: `can_focus` property MUST follow visibility state for optimal UX in apps with dynamic panel visibility.
+
+---
+
 ## Feature 6: In-App Article Reader Mode
 
 ### VPR-061: ArticleReaderPanel Widget (2026-01-09)

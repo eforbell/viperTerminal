@@ -303,6 +303,10 @@ class ViperApp(App[None]):
             info_container.styles.display = "block"
             self._info_panel_visible = True
 
+            # Set focus to info panel
+            info_panel = self.query_one(InfoPanel)
+            info_panel.focus()
+
             # If we have a current ticker, fetch and display info
             if self._current_ticker:
                 self.run_worker(self._fetch_and_display_info(self._current_ticker))
@@ -334,9 +338,12 @@ class ViperApp(App[None]):
             chart_container.styles.display = "block"
             self._chart_panel_visible = True
 
+            # Set focus to chart panel
+            chart_panel = self.query_one(ChartPanel)
+            chart_panel.focus()
+
             # If we have a current ticker, fetch and display chart
             if self._current_ticker:
-                chart_panel = self.query_one(ChartPanel)
                 self.run_worker(chart_panel.load_chart(self._current_ticker, "1M"))
 
     def action_toggle_news(self) -> None:
@@ -366,9 +373,12 @@ class ViperApp(App[None]):
             news_container.styles.display = "block"
             self._news_panel_visible = True
 
+            # Set focus to news panel
+            news_panel = self.query_one(NewsPanel)
+            news_panel.focus()
+
             # If we have a current ticker, fetch and display news
             if self._current_ticker:
-                news_panel = self.query_one(NewsPanel)
                 self.run_worker(news_panel.load_news(self._current_ticker))
 
     def _change_chart_timeframe(self, key: str) -> None:
