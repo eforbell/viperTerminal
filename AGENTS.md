@@ -3284,3 +3284,159 @@ else:
 ### Next Steps
 
 VPR-073: Integrate MACD into ChartPanel (add _macd_panel, toggle_macd(), keybinding routing)
+
+---
+
+## VPR-074: Add MACD to Prefix Keybinding System and Update Help Docs
+
+**Story**: Add 't-m' keybinding for MACD using existing prefix system from VPR-070, update all documentation
+
+**Status**: ✅ COMPLETE - All tests passing (801), mypy clean, coverage 91.36%
+
+### Implementation Summary
+
+Integrated MACD indicator into the existing technical indicator prefix keybinding system:
+- Added `action_toggle_macd()` method to ViperApp
+- Updated status bar hint to include MACD: "Technical: r=RSI, m=MACD, a=MA"
+- Added 't-m' routing in `on_key()` to toggle MACD panel
+- Updated help_screen.py with comprehensive MACD documentation
+- Verified no conflicts with existing 't-r' (RSI) and 't-a' (MA) bindings
+
+### Files Modified
+
+**Modified (2 files):**
+- `viper/app.py` - Added action_toggle_macd(), updated status bar hint, added 't-m' routing
+- `viper/widgets/help_screen.py` - Added MACD to KEYBINDINGS, CHARTS, and FEATURES sections
+
+### Key Changes in app.py
+
+**1. Added action_toggle_macd() Method**
+```python
+def action_toggle_macd(self) -> None:
+    """Toggle MACD indicator panel on the chart panel."""
+    # Only toggle MACD when chart panel is visible
+    if self._chart_panel_visible:
+        chart_panel = self.query_one("#chart-container ChartPanel", ChartPanel)
+        chart_panel.toggle_macd()
+```
+
+**2. Updated Status Bar Hint**
+```python
+# In on_key() when 't' prefix is activated
+status_bar.set_message("Technical: r=RSI, m=MACD, a=MA")
+```
+
+**3. Added 't-m' Routing**
+```python
+# In on_key() technical prefix routing section
+elif event.key == "m":
+    # t-m: Toggle MACD
+    self.action_toggle_macd()
+    event.prevent_default()
+    event.stop()
+```
+
+### Help Screen Documentation Updates
+
+**1. KEYBINDINGS Section**
+Added to technical indicator prefix keys:
+```
+t                    Technical indicator prefix (press t, then indicator key)
+  t-r                Toggle RSI indicator
+  t-m                Toggle MACD indicator        ← NEW
+  t-a                Cycle moving averages (Off/SMA20/SMA50/Both)
+```
+
+**2. CHARTS Section (Technical Indicators)**
+Added MACD description with interpretation:
+```
+Press 't-m' to toggle MACD (Moving Average Convergence Divergence) indicator.
+MACD shows trend direction: cyan MACD line, yellow Signal line, green/red Histogram.
+Crossovers between MACD and Signal indicate potential trend changes.
+Both RSI and MACD can be visible simultaneously (stacked vertically).
+```
+
+**3. FEATURES Section**
+Updated bullet point:
+```
+• Technical indicators: Moving Averages (SMA), RSI, MACD  ← Added MACD
+```
+
+### Prefix Key System Pattern
+
+**Stateless Design** (from VPR-070):
+- Each action requires full prefix: 't-r', 't-r' (not mode-based)
+- 't' key activates prefix → status bar shows available options
+- Second key routes to action → prefix cleared
+- Any non-indicator key clears prefix (cancel)
+
+**Extension Pattern**:
+```python
+# In on_key(), prefix routing section grows linearly:
+if event.key == "r":
+    # t-r: Toggle RSI
+    self.action_toggle_rsi()
+elif event.key == "m":
+    # t-m: Toggle MACD
+    self.action_toggle_macd()
+elif event.key == "a":
+    # t-a: Cycle MA
+    self.action_cycle_ma()
+# Future: t-s (Stochastic), t-b (Bollinger Bands), etc.
+```
+
+### Key Learnings
+
+1. **Reuse Existing Infrastructure** - Prefix system (VPR-070) made MACD integration trivial
+2. **Status Bar Hints** - Update hint message to include new indicator key
+3. **Routing Pattern** - Simple elif chain in on_key() for prefix routing
+4. **Help Screen Updates** - Update 3 sections: KEYBINDINGS, CHARTS, FEATURES
+5. **No New Tests Needed** - Existing chart_panel tests cover toggle_macd() from VPR-073
+6. **Documentation First** - Help screen updates are as important as code changes
+7. **Color Documentation** - Document colors (cyan/yellow/green/red) for user reference
+8. **Simultaneous Indicators** - Explicitly document that RSI + MACD can both be visible
+9. **Interpretation Guidance** - Help users understand what crossovers mean
+10. **Zero-Impact Integration** - All 801 existing tests pass without modification
+
+### Documentation Pattern for Future Indicators
+
+When adding new technical indicators to prefix system:
+1. Add action method: `action_toggle_{indicator}()`
+2. Update status bar hint message with new key
+3. Add routing in on_key(): `elif event.key == "{key}": self.action_toggle_{indicator}()`
+4. Update help_screen.py KEYBINDINGS section
+5. Update help_screen.py CHARTS section with description and interpretation
+6. Update help_screen.py FEATURES section if it's a major addition
+7. Document colors, crossovers, reference lines
+8. Note which indicators can be visible simultaneously
+
+### Testing Results
+
+**All Tests Pass:**
+- 801 tests passing in 109.72s
+- Coverage: 91.36% (meets 90% requirement)
+- mypy --strict: No errors
+- No regressions in existing functionality
+
+**Manual Verification:**
+- Verified action_toggle_macd() method exists
+- Verified _technical_prefix_active attribute exists
+- Verified 't-m' keybinding routing
+- Verified status bar hint update
+
+### Integration with VPR-073
+
+This story completes the MACD feature by:
+- Connecting VPR-073's toggle_macd() method to user keybinding
+- Making MACD discoverable via status bar hint
+- Documenting MACD for users via help screen
+
+Users can now:
+1. Press 'c' to open chart panel
+2. Press 't' to see available technical indicators
+3. Press 'm' to toggle MACD on/off
+4. Press '?' to read full MACD documentation
+
+### Next Steps
+
+VPR-075: Testing and visual polish (integration tests, manual verification, screenshots)

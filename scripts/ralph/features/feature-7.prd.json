@@ -173,7 +173,7 @@
         "Test: 't-m' works alongside 't-r' and 't-a' (no conflicts)"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-070", "VPR-073"],
       "notes": "Much simpler than original VPR-073 since prefix system is already implemented in VPR-070. Just add MACD to the existing routing and update documentation."

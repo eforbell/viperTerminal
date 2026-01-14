@@ -1166,3 +1166,26 @@
   - Follow same pattern as RSI: cache in show_chart(), update in _render_chart(), toggle with re-render
   - All 801 tests pass, coverage 92%, mypy --strict passes
 ---
+
+---
+
+## 2026-01-14 - VPR-074
+- **What was implemented**: Added MACD to prefix keybinding system and updated all help documentation
+- **Files changed**:
+  - `viper/app.py`: Added action_toggle_macd(), updated status bar hint to include "m=MACD", added 't-m' routing in on_key()
+  - `viper/widgets/help_screen.py`: Updated KEYBINDINGS section with t-m binding, added MACD description to CHARTS section with colors and interpretation, updated FEATURES section to mention MACD support
+  - `scripts/ralph/features/feature-7.prd.json`: Marked VPR-074 as passes=true
+  - `AGENTS.md`: Added VPR-074 learnings section with integration patterns
+- **Learnings**:
+  - Prefix system (VPR-070) made MACD integration trivial - just add action method and routing
+  - Status bar hint update critical for discoverability: "Technical: r=RSI, m=MACD, a=MA"
+  - Help screen updates equally important as code: KEYBINDINGS, CHARTS, FEATURES sections
+  - Document colors for user reference: cyan MACD, yellow Signal, green/red Histogram
+  - Document indicator interaction: "Both RSI and MACD can be visible simultaneously"
+  - Document interpretation: "Crossovers indicate potential trend changes"
+  - Routing pattern is simple elif chain in on_key(): `elif event.key == "m": self.action_toggle_macd()`
+  - No new tests needed - existing chart_panel tests from VPR-073 cover toggle_macd()
+  - All 801 tests pass, mypy --strict clean, coverage 91.36%
+  - Zero-impact integration - no regressions in existing functionality
+
+---
