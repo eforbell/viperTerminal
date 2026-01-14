@@ -151,7 +151,7 @@
         "Test: Insufficient data (<34 prices) handled gracefully"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-072"],
       "notes": "Follow RSI integration pattern from VPR-039. Both RSI and MACD can be visible simultaneously - they stack vertically. Make sure to update MACD panel even when hidden to avoid stale data bug that RSI had."

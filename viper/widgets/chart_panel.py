@@ -14,7 +14,7 @@ from viper.services.history_data import (
     calculate_stats,
     fetch_historical_data,
 )
-from viper.services.indicators import calculate_rsi, calculate_sma
+from viper.services.indicators import calculate_macd, calculate_rsi, calculate_sma
 from viper.widgets.chart_context import ChartContext
 from viper.widgets.chart_renderer import (
     ChartDimensions,
@@ -23,6 +23,7 @@ from viper.widgets.chart_renderer import (
     OverlayData,
     render_x_axis,
 )
+from viper.widgets.macd_panel import MACDPanel
 from viper.widgets.rsi_panel import RSIPanel
 
 
@@ -143,7 +144,12 @@ class ChartPanel(Widget):
         # RSI indicator state
         self._rsi_values: list[float | None] | None = None  # Cached RSI values
         self._rsi_panel: RSIPanel | None = None  # RSI panel widget
-        self._chart_area_width: int = 70  # Cached for RSI panel updates
+        # MACD indicator state
+        self._macd_line: list[float | None] | None = None  # Cached MACD line
+        self._signal_line: list[float | None] | None = None  # Cached Signal line
+        self._histogram: list[float | None] | None = None  # Cached Histogram
+        self._macd_panel: MACDPanel | None = None  # MACD panel widget
+        self._chart_area_width: int = 70  # Cached for indicator panel updates
         # ChartContext - single source of truth for dimensions and data
         self._chart_context: ChartContext | None = None
 
@@ -154,6 +160,10 @@ class ChartPanel(Widget):
         self._rsi_panel = RSIPanel()
         self._rsi_panel.hide()
         yield self._rsi_panel
+        # MACD panel starts hidden
+        self._macd_panel = MACDPanel()
+        self._macd_panel.hide()
+        yield self._macd_panel
         # X-axis container - rendered AFTER all indicator panels (at very bottom)
         yield Container(id="x-axis-container")
 
@@ -185,6 +195,8 @@ class ChartPanel(Widget):
         self._calculate_moving_averages(data.prices)
         # Calculate RSI when chart loads (cache for toggles)
         self._calculate_rsi(data.prices)
+        # Calculate MACD when chart loads (cache for toggles)
+        self._calculate_macd(data.prices)
         self._render_content()
 
     def show_error(self, error: HistoricalDataError) -> None:
@@ -318,11 +330,13 @@ class ChartPanel(Widget):
         # Reserve space for header (2 lines), timeframe bar (1 line), stats (2 lines), padding (2 lines)
         # Reserve 3 lines for volume bars (always shown)
         # When RSI is visible, it takes 8 lines (7 height + 1 margin-top) from #chart-content's space
+        # When MACD is visible, it takes 8 lines (7 height + 1 margin-top) from #chart-content's space
         # We must account for this because self.size.height is ChartPanel's full height,
-        # but #chart-content (where we render) gets reduced when RSI is visible
+        # but #chart-content (where we render) gets reduced when indicators are visible
         volume_height = 3
         rsi_overhead = 8 if self.is_rsi_visible() else 0
-        available_height = self.size.height - 7 - volume_height - rsi_overhead
+        macd_overhead = 8 if self.is_macd_visible() else 0
+        available_height = self.size.height - 7 - volume_height - rsi_overhead - macd_overhead
         available_width = self.size.width - 4  # Account for padding
 
         # Ensure minimum dimensions
@@ -390,6 +404,12 @@ class ChartPanel(Widget):
             current_rsi = next((v for v in reversed(self._rsi_values) if v is not None), None)
             self._rsi_panel.show_indicator(
                 self._rsi_values, current_rsi, context=self._chart_context
+            )
+
+        # Update MACD panel with ChartContext (even if hidden, so it's ready when toggled)
+        if self._macd_panel and self._macd_line and self._signal_line and self._histogram:
+            self._macd_panel.show_macd(
+                self._macd_line, self._signal_line, self._histogram, context=self._chart_context
             )
 
         # Render X-axis in dedicated container at very bottom (after all indicator panels)
@@ -494,6 +514,24 @@ class ChartPanel(Widget):
         self._rsi_values = calculate_rsi(prices, 14) if len(prices) >= 15 else None
         # Note: RSI panel is updated in _render_chart() where we have the correct chart width
 
+    def _calculate_macd(self, prices: list[float]) -> None:
+        """Calculate and cache MACD for the current chart data.
+
+        Args:
+            prices: List of price values
+        """
+        # Calculate MACD (requires at least 34 prices: 33 None + 1 for first value)
+        if len(prices) >= 34:
+            macd_line, signal_line, histogram = calculate_macd(prices, 12, 26, 9)
+            self._macd_line = macd_line
+            self._signal_line = signal_line
+            self._histogram = histogram
+        else:
+            self._macd_line = None
+            self._signal_line = None
+            self._histogram = None
+        # Note: MACD panel is updated in _render_chart() where we have the correct chart width
+
     def cycle_ma_display(self) -> None:
         """Cycle through moving average display modes: off -> sma20 -> sma50 -> both -> off."""
         # Define cycle order
@@ -532,3 +570,29 @@ class ChartPanel(Widget):
             True if RSI is visible, False otherwise
         """
         return self._rsi_panel.is_visible() if self._rsi_panel else False
+
+    def toggle_macd(self) -> None:
+        """Toggle MACD indicator panel visibility."""
+        if self._macd_panel:
+            self._macd_panel.toggle_visibility()
+            # If panel is now visible and we have MACD data and context, update it
+            if (
+                self._macd_panel.is_visible()
+                and self._macd_line
+                and self._signal_line
+                and self._histogram
+                and self._chart_context
+            ):
+                self._macd_panel.show_macd(
+                    self._macd_line, self._signal_line, self._histogram, context=self._chart_context
+                )
+            # Re-render chart to adjust height for MACD panel
+            self._render_content()
+
+    def is_macd_visible(self) -> bool:
+        """Check if MACD panel is currently visible.
+
+        Returns:
+            True if MACD is visible, False otherwise
+        """
+        return self._macd_panel.is_visible() if self._macd_panel else False

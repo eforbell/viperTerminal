@@ -1148,3 +1148,21 @@
   - **Visual Design**: Cyan MACD line, yellow Signal line, green/red histogram matches PRD color scheme
   - **Foundation Complete**: All 3 rendering layers (histogram bars, reference lines, indicator lines) working
 ---
+
+## 2026-01-14 - VPR-073
+- **What was implemented**: Integrated MACD panel into ChartPanel with caching and toggle support
+- **Files changed**:
+  - `viper/widgets/chart_panel.py`: Added MACDPanel import, attributes (_macd_line, _signal_line, _histogram, _macd_panel), compose() yields MACD panel, _calculate_macd() method, MACD panel update in _render_chart(), toggle_macd() and is_macd_visible() methods, accounted for MACD overhead in height calculation
+  - `scripts/ralph/features/feature-7.prd.json`: Marked VPR-073 as passes: true
+- **Learnings**:
+  - MACD requires minimum 34 prices (33 None values + 1 for first calculation)
+  - calculate_macd() returns tuple of (macd_line, signal_line, histogram) - all list[float | None]
+  - Must cache all three MACD components separately (_macd_line, _signal_line, _histogram)
+  - MACD panel takes 8 lines overhead (7 height + 1 margin-top) like RSI
+  - Both RSI and MACD can be visible simultaneously - they stack vertically
+  - Must update MACD panel in _render_chart() even when hidden to avoid stale data
+  - Must account for macd_overhead in available_height calculation alongside rsi_overhead
+  - MACD panel uses show_macd() method (vs show_indicator() for RSI) with 3 data series
+  - Follow same pattern as RSI: cache in show_chart(), update in _render_chart(), toggle with re-render
+  - All 801 tests pass, coverage 92%, mypy --strict passes
+---
