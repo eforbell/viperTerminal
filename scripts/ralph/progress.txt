@@ -1112,3 +1112,39 @@
   - 21 comprehensive tests: basic calc, None counts, pos/neg values, histogram verification, crossovers, zero crossing, edge cases
   - All 78 indicator tests pass, mypy --strict clean, 100% coverage on MACD calculation
 ---
+
+## 2026-01-14 - VPR-072
+- **What was implemented**: Created MACDPanel widget with 3-component rendering (MACD, Signal, Histogram)
+- **Files changed**:
+  - `viper/widgets/macd_panel.py`: New MACDPanel class extending IndicatorPanel (366 lines)
+  - `tests/test_macd_panel.py`: Comprehensive test suite with 19 tests (497 lines)
+  - `viper/widgets/__init__.py`: Added MACDPanel to exports
+  - `scripts/ralph/features/feature-7.prd.json`: Marked VPR-072 as passes: true
+- **Learnings**:
+  - **3-Component Rendering**: Override _render_content() to show custom header with all 3 values
+  - **Custom Header Format**: "MACD: 1.23  Signal: 0.87  Hist: 0.36" instead of single-value format
+  - **show_macd() Method**: Store all 3 series (_macd_line, _signal_line, _histogram) then call show_indicator()
+  - **_get_last_value() Helper**: Extract last non-None value from list for header display
+  - **Histogram Rendering**: Use _render_histogram_bars() with zero-centered vertical bars
+  - **Zero Line Positioning**: Calculate zero_row from normalized value (0.0 - min_value) / value_range
+  - **Bar Direction Logic**: Positive bars extend upward from zero (green), negative extend downward (red)
+  - **Block Characters**: Use ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"] for histogram bar heights
+  - **Layer Ordering**: Histogram first (background), then reference lines, then MACD/Signal lines (foreground)
+  - **Braille Line Rendering**: Separate _render_line() method for MACD (cyan) and Signal (yellow) lines
+  - **Overwrite Pattern**: Lines overwrite histogram bars (use assignment, not conditional check)
+  - **_prepare_data_series() Method**: Filter None values + resample to match chart width
+  - **All None Handling**: Show "MACD: No data" instead of "MACD: N/A  Signal: N/A  Hist: N/A"
+  - **Empty List Check**: Handle empty lists ([]) differently from all-None lists
+  - **ChartContext Support**: Pass context parameter to show_macd() for alignment (forwards to show_indicator())
+  - **Centered Scale**: min_value=-10.0, max_value=10.0 (vs RSI 0-100)
+  - **Height Difference**: MACD uses height=7 (RSI uses 4) for histogram + 2 lines
+  - **Reference Line Config**: Single zero line (white, solid) vs RSI two dashed lines (70/30)
+  - **Test Coverage**: 19 tests covering initialization, visibility, positive/negative values, crossovers, zero crossing, extremes, divergence, histogram transitions, edge cases
+  - **95% Coverage**: MACDPanel achieved 95% coverage (7 lines uncovered: error branches)
+  - **All Tests Pass**: 19 MACD panel tests + 801 total tests all passing
+  - **Type Safety**: mypy --strict passes with no errors
+  - **Export Pattern**: Added to viper/widgets/__init__.py even though RSIPanel is not (following acceptance criteria)
+  - **Integration Ready**: MACDPanel follows IndicatorPanel pattern, ready for ChartPanel integration (VPR-073)
+  - **Visual Design**: Cyan MACD line, yellow Signal line, green/red histogram matches PRD color scheme
+  - **Foundation Complete**: All 3 rendering layers (histogram bars, reference lines, indicator lines) working
+---

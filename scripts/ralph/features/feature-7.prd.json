@@ -125,7 +125,7 @@
         "Export MACDPanel from viper/widgets/__init__.py"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-071"],
       "notes": "Similar to RSIPanel but with 3 data series instead of 1. Histogram rendering is new - use vertical bars like volume but centered at zero. Yellow for signal line distinguishes it from cyan MACD line."

@@ -3066,3 +3066,221 @@ MACD calculation **reuses existing `calculate_ema()`** function:
 
 VPR-072: Create MACDPanel widget (will render all 3 components with histogram bars)
 
+
+---
+
+## VPR-072: Create MACDPanel Widget (2026-01-14)
+
+### Story Overview
+
+Implemented MACDPanel widget extending IndicatorPanel with 3-component rendering (MACD line, Signal line, Histogram). MACDPanel is similar to RSIPanel but requires rendering three data series simultaneously with custom header format and histogram bars centered at zero line.
+
+### Key Implementation Patterns
+
+**1. Three-Component Widget Design**
+
+MACDPanel stores and renders three separate data series:
+```python
+# Store all three components
+self._macd_line: list[float | None] | None = None
+self._signal_line: list[float | None] | None = None
+self._histogram: list[float | None] | None = None
+```
+
+**2. Custom show_macd() Method**
+
+Unlike single-value indicators (RSI), MACD needs custom method:
+```python
+def show_macd(
+    self,
+    macd_line: list[float | None],
+    signal_line: list[float | None],
+    histogram: list[float | None],
+    context: ChartContext | None = None,
+) -> None:
+    """Display MACD indicator values."""
+    # Store all three components
+    self._macd_line = macd_line
+    self._signal_line = signal_line
+    self._histogram = histogram
+    
+    # Call base class with MACD line for infrastructure
+    self.show_indicator(values=macd_line, context=context)
+```
+
+**3. Custom Header Format Override**
+
+Override _render_content() to show all three component values:
+```python
+def _render_content(self) -> None:
+    """Render MACD panel with custom header format."""
+    # Extract current values
+    macd_current = self._get_last_value(self._macd_line)
+    signal_current = self._get_last_value(self._signal_line)
+    hist_current = self._get_last_value(self._histogram)
+    
+    # Custom header: "MACD: 1.23  Signal: 0.87  Hist: 0.36"
+    header_text = f"MACD: {macd_str}  Signal: {signal_str}  Hist: {hist_str}"
+```
+
+**4. Helper Method: _get_last_value()**
+
+Extract last non-None value from a list for header display:
+```python
+def _get_last_value(self, values: list[float | None]) -> float | None:
+    """Extract the last non-None value from a list."""
+    for value in reversed(values):
+        if value is not None:
+            return value
+    return None
+```
+
+**5. Histogram Rendering: Zero-Centered Vertical Bars**
+
+Histogram bars extend from zero line (not bottom):
+```python
+# Calculate zero line row position
+zero_normalized = (0.0 - self._min_value) / value_range
+zero_row_pos = int(zero_normalized * (self._height * 4 - 1))
+zero_row = (self._height * 4 - 1 - zero_row_pos) // 4
+
+# Block characters for histogram
+blocks = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+
+# Determine bar direction and color
+if value >= 0:
+    # Positive: green bar extending upward from zero line
+    color = "green"
+    start_row = min(value_row, zero_row)
+    end_row = zero_row
+else:
+    # Negative: red bar extending downward from zero line
+    color = "red"
+    start_row = zero_row
+    end_row = max(value_row, zero_row)
+```
+
+**6. Layer Rendering Order**
+
+Render in correct order for proper visual hierarchy:
+1. Reference lines (zero line)
+2. Histogram bars (background)
+3. MACD line (cyan, foreground)
+4. Signal line (yellow, foreground)
+
+Lines overwrite histogram bars (assignment without conditional):
+```python
+# Histogram: only draw if space (don't overwrite reference lines)
+if grid[target_row][char_idx] == " ":
+    grid[target_row][char_idx] = f"[{color}]{block_char}[/{color}]"
+
+# Lines: overwrite histogram (no conditional check)
+grid[target_row][char_idx] = f"[{color}]{braille_char}[/{color}]"
+```
+
+**7. Data Series Preparation**
+
+Separate method to filter None values and resample:
+```python
+def _prepare_data_series(
+    self, values: list[float | None], target_count: int
+) -> list[float]:
+    """Prepare data series for rendering (filter None, resample)."""
+    data_points = [v for v in values if v is not None]
+    if not data_points:
+        return []
+    
+    # Resample to match chart width
+    if len(data_points) > target_count:
+        data_points = self._downsample(data_points, target_count)
+    elif len(data_points) < target_count:
+        data_points = self._upsample(data_points, target_count)
+    
+    return data_points
+```
+
+**8. All-None vs Empty List Handling**
+
+Differentiate between no data types:
+```python
+if self._macd_line is None or self._signal_line is None or self._histogram is None:
+    # show_macd() not called yet
+    container.mount(Label("No data", classes="empty-state"))
+    return
+
+# Extract current values
+if macd_current is None and signal_current is None and hist_current is None:
+    # All values are None (insufficient data)
+    header_text = "MACD: No data"
+else:
+    # Show component values
+    header_text = f"MACD: {macd_str}  Signal: {signal_str}  Hist: {hist_str}"
+```
+
+### Configuration Differences from RSIPanel
+
+| Aspect | RSI | MACD |
+|--------|-----|------|
+| Height | 4 lines | 7 lines (needs space for histogram) |
+| Scale | 0-100 (fixed) | -10 to +10 (centered around zero) |
+| Reference Lines | 2 dashed (70/30 overbought/oversold) | 1 solid (zero line) |
+| Components | 1 line | 3 components (MACD, Signal, Histogram) |
+| Color Scheme | Cyan line only | Cyan MACD, Yellow Signal, Green/Red Histogram |
+
+### Test Coverage Strategy
+
+**19 Comprehensive MACDPanel Tests:**
+- Initialization (config, reference lines, colors)
+- Visibility toggling (show/hide/toggle)
+- Positive values (bullish signal)
+- Negative values (bearish signal)
+- MACD/Signal crossover (buy/sell signal)
+- All None values (insufficient data)
+- Partial None values (first 33 None)
+- Zero crossing (trend direction change)
+- Extreme values (near -10/+10 limits)
+- Reference line rendering
+- Large dataset downsampling
+- Realistic values (typical stock trend)
+- Empty data handling
+- Hidden panel data storage
+- Divergence pattern
+- Histogram color transition (green to red)
+- _get_last_value() helper method
+- Flat values (constant)
+
+**Coverage Results:**
+- 95% coverage on macd_panel.py (7 lines uncovered: error branches)
+- All 19 tests passing
+- All 801 total tests passing
+- mypy --strict clean
+
+### Files Modified
+
+**Created (2 files):**
+- `viper/widgets/macd_panel.py` - MACDPanel widget class (366 lines)
+- `tests/test_macd_panel.py` - Comprehensive test suite (497 lines, 19 tests)
+
+**Modified (1 file):**
+- `viper/widgets/__init__.py` - Added MACDPanel to exports
+
+### Key Learnings
+
+1. **Override _render_content()** - Required for custom header format with multiple values
+2. **show_macd() Pattern** - Store all 3 series, then call base show_indicator() for infrastructure
+3. **Layer Ordering** - Histogram first, then reference lines, then indicator lines (foreground)
+4. **Zero-Centered Bars** - Calculate zero_row position, extend bars up/down from zero
+5. **Overwrite vs Conditional** - Lines overwrite histogram, histogram respects reference lines
+6. **_get_last_value() Helper** - Clean pattern for extracting current value from series
+7. **_prepare_data_series()** - Separate method for None filtering + resampling
+8. **All-None Handling** - Show "MACD: No data" for better UX vs "MACD: N/A  Signal: N/A"
+9. **Empty List Check** - Handle [] differently from [None, None, None]
+10. **ChartContext Forwarding** - Pass context from show_macd() to show_indicator()
+11. **Color Scheme** - Cyan MACD, Yellow Signal, Green/Red Histogram (matches PRD)
+12. **Block Characters** - Use ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"] for varying bar heights
+13. **Export Pattern** - Add to __init__.py even though RSIPanel isn't (follow acceptance criteria)
+14. **Integration Ready** - Follows IndicatorPanel pattern, ready for ChartPanel (VPR-073)
+
+### Next Steps
+
+VPR-073: Integrate MACD into ChartPanel (add _macd_panel, toggle_macd(), keybinding routing)
