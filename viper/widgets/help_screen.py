@@ -115,8 +115,9 @@ class HelpScreen(ModalScreen[None]):
                 yield Static("i                    Toggle info panel", classes="help-item")
                 yield Static("c                    Toggle chart panel", classes="help-item")
                 yield Static("n                    Toggle news panel", classes="help-item")
-                yield Static("m                    Cycle moving averages (Off/SMA20/SMA50/Both)", classes="help-item")
-                yield Static("r                    Toggle RSI indicator", classes="help-item")
+                yield Static("t                    Technical indicator prefix (press t, then indicator key)", classes="help-item")
+                yield Static("  t-r                Toggle RSI indicator", classes="help-item")
+                yield Static("  t-a                Cycle moving averages (Off/SMA20/SMA50/Both)", classes="help-item")
                 yield Static("e                    Expand news item (show summary)", classes="help-item")
                 yield Static("1-7                  Select timeframe (chart)", classes="help-item")
                 yield Static("? / F1               Show this help screen", classes="help-item")
@@ -141,11 +142,15 @@ class HelpScreen(ModalScreen[None]):
                     classes="help-item",
                 )
                 yield Static(
-                    "Press 'm' to cycle moving averages: Off -> SMA20 -> SMA50 -> Both.",
+                    "Technical indicators use prefix keys: press 't' first, then indicator key.",
                     classes="help-item",
                 )
                 yield Static(
-                    "Press 'r' to toggle RSI (Relative Strength Index) indicator panel.",
+                    "Press 't-a' to cycle moving averages: Off -> SMA20 -> SMA50 -> Both.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Press 't-r' to toggle RSI (Relative Strength Index) indicator panel.",
                     classes="help-item",
                 )
                 yield Static(

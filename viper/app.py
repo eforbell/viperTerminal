@@ -158,8 +158,6 @@ class ViperApp(App[None]):
         ("i", "toggle_info", "Toggle Info"),
         ("c", "toggle_chart", "Toggle Chart"),
         ("n", "toggle_news", "Toggle News"),
-        ("m", "cycle_ma", "Cycle MA"),
-        ("r", "toggle_rsi", "Toggle RSI"),
         ("1", "timeframe_1", "1W"),
         ("2", "timeframe_2", "1M"),
         ("3", "timeframe_3", "3M"),
@@ -196,6 +194,7 @@ class ViperApp(App[None]):
         self._news_panel_visible = False
         self._article_reader_visible = False
         self._current_ticker: str | None = None
+        self._technical_prefix_active = False
 
     def on_resize(self, event: object) -> None:
         """Handle terminal resize to show/hide watchlist on narrow screens.
@@ -263,6 +262,13 @@ class ViperApp(App[None]):
 
     def action_clear_or_close(self) -> None:
         """Clear input or close overlays when Escape is pressed."""
+        # Clear technical prefix if active
+        if self._technical_prefix_active:
+            self._technical_prefix_active = False
+            status_bar = self.query_one(StatusBar)
+            status_bar.set_message("")
+            return
+
         # Get the ticker input widget
         ticker_input = self.query_one(TickerInput)
 
@@ -436,6 +442,55 @@ class ViperApp(App[None]):
         if self._chart_panel_visible:
             chart_panel = self.query_one("#chart-container ChartPanel", ChartPanel)
             chart_panel.toggle_rsi()
+
+    def on_key(self, event: object) -> None:
+        """Handle key presses for prefix system routing.
+
+        Args:
+            event: The key event from Textual.
+        """
+        # Import Key type for type checking
+        from textual.events import Key
+
+        # Type guard
+        if not isinstance(event, Key):
+            return
+
+        # Handle 't' key to activate prefix (when not already active)
+        if event.key == "t" and not self._technical_prefix_active:
+            self._technical_prefix_active = True
+            try:
+                status_bar = self.query_one(StatusBar)
+                status_bar.set_message("Technical: r=RSI, a=MA")
+            except Exception:
+                # StatusBar not yet mounted, but prefix is still active
+                pass
+            event.prevent_default()
+            event.stop()
+            return
+
+        # If technical prefix is active, route to appropriate indicator action
+        if self._technical_prefix_active:
+            # Clear prefix state
+            self._technical_prefix_active = False
+            try:
+                status_bar = self.query_one(StatusBar)
+                status_bar.set_message("")
+            except Exception:
+                pass
+
+            # Route based on second key
+            if event.key == "r":
+                # t-r: Toggle RSI
+                self.action_toggle_rsi()
+                event.prevent_default()
+                event.stop()
+            elif event.key == "a":
+                # t-a: Cycle MA
+                self.action_cycle_ma()
+                event.prevent_default()
+                event.stop()
+            # Any other key: prefix is cleared (no action)
 
     def on_news_panel_browser_opening(self, event: NewsPanel.BrowserOpening) -> None:
         """Handle browser opening event from news panel.
