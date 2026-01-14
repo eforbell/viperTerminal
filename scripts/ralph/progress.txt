@@ -1092,3 +1092,23 @@
   - **Test Duration**: 8 prefix tests run in ~10 seconds, full suite in 105 seconds
   - **Foundation Ready**: Infrastructure complete for VPR-074 to add 't-m' for MACD
 ---
+
+## 2026-01-14 - VPR-071
+- **What was implemented**: Added MACD calculation function to indicators service
+- **Files changed**:
+  - `viper/services/indicators.py`: Added calculate_macd() function (89 lines)
+  - `tests/test_indicators.py`: Added TestCalculateMACD class with 21 comprehensive tests (313 lines)
+  - `AGENTS.md`: Added VPR-071 section documenting MACD patterns and learnings
+  - `scripts/ralph/features/feature-7.prd.json`: Marked VPR-071 as passes: true
+- **Learnings**:
+  - MACD has 3 components: MACD line (fast EMA - slow EMA), Signal line (EMA of MACD), Histogram (MACD - Signal)
+  - None count for signal line is (slow_period - 1) + (signal_period - 1) = 33 (for 12/26/9), NOT 34
+  - MACD can be negative (unlike RSI which is 0-100) - represents downtrend when fast EMA < slow EMA
+  - Type safety with mypy --strict: extract values before subtraction to narrow types from `float | None` to `float`
+  - List concatenation requires explicit typing: `none_padding: list[float | None] = [None] * count`
+  - Signal line calculation pattern: extract non-None MACD values, calculate EMA, then reconstruct with None padding
+  - Reuse calculate_ema() for consistency - no duplicate logic needed
+  - Validation: all periods > 0, fast_period < slow_period
+  - 21 comprehensive tests: basic calc, None counts, pos/neg values, histogram verification, crossovers, zero crossing, edge cases
+  - All 78 indicator tests pass, mypy --strict clean, 100% coverage on MACD calculation
+---

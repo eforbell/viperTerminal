@@ -100,7 +100,7 @@
         "Test: MACD can be negative (unlike RSI which is 0-100)"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": [],
       "notes": "Pure calculation function, no UI. Reuse calculate_ema() from VPR-034. MACD can be negative, unlike RSI. First 33 values are None because: 25 None from slow EMA + 8 None from signal EMA = 33 total."
