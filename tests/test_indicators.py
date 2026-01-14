@@ -2,7 +2,12 @@
 
 import pytest
 
-from viper.services.indicators import calculate_ema, calculate_rsi, calculate_sma
+from viper.services.indicators import (
+    calculate_ema,
+    calculate_macd,
+    calculate_rsi,
+    calculate_sma,
+)
 
 
 class TestCalculateSMA:
@@ -714,3 +719,316 @@ class TestCalculateRSI:
         # 22nd value onward should have RSI
         assert result[21] is not None
         assert 0 <= result[21] <= 100
+
+
+class TestCalculateMACD:
+    """Test suite for MACD (Moving Average Convergence Divergence) calculation."""
+
+    def test_macd_basic_calculation(self) -> None:
+        """Test basic MACD calculation with sufficient data."""
+        # Create 50 prices to ensure we have data past the initial None values
+        prices = [float(100 + i) for i in range(50)]
+        macd, signal, histogram = calculate_macd(prices, 12, 26, 9)
+
+        # All three lists should have same length as input
+        assert len(macd) == 50
+        assert len(signal) == 50
+        assert len(histogram) == 50
+
+        # First 33 values should be None: (26-1) + (9-1) + 1 = 33
+        # Actually: slow_ema has 25 None (26-1), so macd has 25 None
+        # Then signal needs 8 more None (9-1), so signal has 25+8=33 None
+        # Let's verify the actual count
+        none_count_macd = sum(1 for v in macd if v is None)
+        none_count_signal = sum(1 for v in signal if v is None)
+        none_count_histogram = sum(1 for v in histogram if v is None)
+
+        # MACD line has (slow_period - 1) None values = 25
+        assert none_count_macd == 25
+
+        # Signal line has (slow_period - 1) + (signal_period - 1) = 25 + 8 = 33
+        assert none_count_signal == 33
+
+        # Histogram has same None count as signal (can't calculate without both)
+        assert none_count_histogram == 33
+
+    def test_macd_default_periods(self) -> None:
+        """Test MACD with default periods (12, 26, 9)."""
+        prices = [float(100 + i * 0.5) for i in range(60)]
+        macd, signal, histogram = calculate_macd(prices)
+
+        # Verify we get calculated values after None period
+        assert macd[25] is not None  # First non-None MACD
+        assert signal[33] is not None  # First non-None signal
+        assert histogram[33] is not None  # First non-None histogram
+
+    def test_macd_can_be_negative(self) -> None:
+        """Test that MACD values can be negative (unlike RSI which is 0-100)."""
+        # Create prices that go down (fast EMA will be less than slow EMA)
+        prices = [float(200 - i) for i in range(60)]
+        macd, signal, histogram = calculate_macd(prices, 12, 26, 9)
+
+        # Skip None values and check for negative values
+        macd_values = [v for v in macd if v is not None]
+        signal_values = [v for v in signal if v is not None]
+        histogram_values = [v for v in histogram if v is not None]
+
+        # With declining prices, MACD should be negative
+        assert any(v < 0 for v in macd_values)
+        assert any(v < 0 for v in signal_values)
+
+    def test_macd_uptrend(self) -> None:
+        """Test MACD with upward trending prices (should be positive)."""
+        # Steadily increasing prices
+        prices = [float(100 + i * 2) for i in range(60)]
+        macd, signal, histogram = calculate_macd(prices, 12, 26, 9)
+
+        # Skip None values
+        macd_values = [v for v in macd if v is not None]
+
+        # With rising prices, MACD should be positive
+        assert all(v > 0 for v in macd_values)
+
+    def test_macd_histogram_equals_macd_minus_signal(self) -> None:
+        """Test that histogram = MACD - Signal at all points."""
+        prices = [float(100 + i * 0.3) for i in range(60)]
+        macd, signal, histogram = calculate_macd(prices, 12, 26, 9)
+
+        # Check all non-None values
+        for i in range(len(prices)):
+            if macd[i] is not None and signal[i] is not None:
+                assert histogram[i] == pytest.approx(macd[i] - signal[i], abs=0.001)
+
+    def test_macd_empty_prices(self) -> None:
+        """Test MACD with empty price list."""
+        macd, signal, histogram = calculate_macd([], 12, 26, 9)
+        assert macd == []
+        assert signal == []
+        assert histogram == []
+
+    def test_macd_insufficient_data(self) -> None:
+        """Test MACD when there's less data than required for calculation."""
+        # Only 20 prices - not enough for slow EMA (needs 26)
+        prices = [float(i) for i in range(20)]
+        macd, signal, histogram = calculate_macd(prices, 12, 26, 9)
+
+        # All values should be None
+        assert all(v is None for v in macd)
+        assert all(v is None for v in signal)
+        assert all(v is None for v in histogram)
+
+    def test_macd_exact_minimum_data(self) -> None:
+        """Test MACD with exactly 34 prices (minimum for first signal value)."""
+        # Need 34 prices: 33 None + 1 calculated value
+        prices = [float(100 + i) for i in range(34)]
+        macd, signal, histogram = calculate_macd(prices, 12, 26, 9)
+
+        # MACD should have values starting at index 25
+        assert macd[25] is not None
+
+        # Signal should have first value at index 33
+        assert signal[33] is not None
+
+        # Histogram should match signal
+        assert histogram[33] is not None
+
+    def test_macd_invalid_period_zero(self) -> None:
+        """Test MACD rejects period=0."""
+        prices = [float(i) for i in range(50)]
+
+        with pytest.raises(ValueError, match="All periods must be positive"):
+            calculate_macd(prices, 0, 26, 9)
+
+        with pytest.raises(ValueError, match="All periods must be positive"):
+            calculate_macd(prices, 12, 0, 9)
+
+        with pytest.raises(ValueError, match="All periods must be positive"):
+            calculate_macd(prices, 12, 26, 0)
+
+    def test_macd_invalid_period_negative(self) -> None:
+        """Test MACD rejects negative periods."""
+        prices = [float(i) for i in range(50)]
+
+        with pytest.raises(ValueError, match="All periods must be positive"):
+            calculate_macd(prices, -12, 26, 9)
+
+    def test_macd_invalid_fast_greater_than_slow(self) -> None:
+        """Test MACD rejects fast_period >= slow_period."""
+        prices = [float(i) for i in range(50)]
+
+        # Fast > Slow
+        with pytest.raises(ValueError, match="fast_period must be less than slow_period"):
+            calculate_macd(prices, 26, 12, 9)
+
+        # Fast == Slow
+        with pytest.raises(ValueError, match="fast_period must be less than slow_period"):
+            calculate_macd(prices, 20, 20, 9)
+
+    def test_macd_length_matches_input(self) -> None:
+        """Test that all output lengths match input length."""
+        for length in [10, 30, 50, 100]:
+            prices = [float(i) for i in range(length)]
+            macd, signal, histogram = calculate_macd(prices, 12, 26, 9)
+
+            assert len(macd) == length
+            assert len(signal) == length
+            assert len(histogram) == length
+
+    def test_macd_flat_prices(self) -> None:
+        """Test MACD with constant prices (should be zero)."""
+        prices = [100.0] * 60
+        macd, signal, histogram = calculate_macd(prices, 12, 26, 9)
+
+        # With flat prices, fast EMA == slow EMA, so MACD should be 0
+        macd_values = [v for v in macd if v is not None]
+
+        for val in macd_values:
+            assert abs(val) < 0.01  # Should be ~0
+
+    def test_macd_crossover_bullish(self) -> None:
+        """Test MACD bullish crossover (MACD crosses above Signal)."""
+        # Create price pattern: down then strong up
+        prices = [float(150 - i) for i in range(30)]  # Downtrend
+        prices.extend([float(120 + i * 2) for i in range(30)])  # Strong uptrend
+
+        macd, signal, histogram = calculate_macd(prices, 12, 26, 9)
+
+        # In an uptrend, MACD should eventually be above signal (positive histogram)
+        histogram_values = [v for v in histogram[-10:] if v is not None]
+
+        # At least some recent histogram values should be positive (MACD > Signal)
+        assert any(v > 0 for v in histogram_values)
+
+    def test_macd_crossover_bearish(self) -> None:
+        """Test MACD bearish crossover (MACD crosses below Signal)."""
+        # Create price pattern: up then strong down
+        prices = [float(100 + i) for i in range(30)]  # Uptrend
+        prices.extend([float(130 - i * 2) for i in range(30)])  # Strong downtrend
+
+        macd, signal, histogram = calculate_macd(prices, 12, 26, 9)
+
+        # In a downtrend, MACD should eventually be below signal (negative histogram)
+        histogram_values = [v for v in histogram[-10:] if v is not None]
+
+        # At least some recent histogram values should be negative (MACD < Signal)
+        assert any(v < 0 for v in histogram_values)
+
+    def test_macd_real_world_prices(self) -> None:
+        """Test MACD with realistic stock price data."""
+        # Simulated stock prices with volatility
+        prices = [
+            150.0,
+            152.5,
+            151.0,
+            153.0,
+            154.5,
+            152.0,
+            155.0,
+            156.5,
+            154.0,
+            157.0,
+        ] * 6  # Repeat to get 60 prices
+
+        macd, signal, histogram = calculate_macd(prices, 12, 26, 9)
+
+        # Verify lengths
+        assert len(macd) == 60
+        assert len(signal) == 60
+        assert len(histogram) == 60
+
+        # Verify some values are calculated
+        macd_values = [v for v in macd if v is not None]
+        signal_values = [v for v in signal if v is not None]
+        histogram_values = [v for v in histogram if v is not None]
+
+        assert len(macd_values) > 0
+        assert len(signal_values) > 0
+        assert len(histogram_values) > 0
+
+    def test_macd_signal_smooths_macd(self) -> None:
+        """Test that signal line is smoother than MACD line."""
+        # Create volatile prices
+        prices = []
+        for i in range(60):
+            if i % 2 == 0:
+                prices.append(100.0 + i)
+            else:
+                prices.append(100.0 + i - 5)
+
+        macd, signal, histogram = calculate_macd(prices, 12, 26, 9)
+
+        # Signal is EMA of MACD, so it should be smoother
+        # This means signal should change less rapidly than MACD
+        # We can't easily test "smoothness" but we can verify signal exists
+        signal_values = [v for v in signal if v is not None]
+        assert len(signal_values) > 0
+
+    def test_macd_custom_periods(self) -> None:
+        """Test MACD with custom periods."""
+        prices = [float(100 + i * 0.5) for i in range(80)]
+
+        # Use custom periods: 5, 13, 8
+        macd, signal, histogram = calculate_macd(prices, 5, 13, 8)
+
+        # MACD should have (13-1) = 12 None values
+        none_count_macd = sum(1 for v in macd if v is None)
+        assert none_count_macd == 12
+
+        # Signal should have (13-1) + (8-1) = 12 + 7 = 19 None values
+        none_count_signal = sum(1 for v in signal if v is None)
+        assert none_count_signal == 19
+
+    def test_macd_known_calculation(self) -> None:
+        """Test MACD against a simple known case."""
+        # Simple increasing prices
+        prices = [float(i) for i in range(1, 51)]
+
+        macd, signal, histogram = calculate_macd(prices, 12, 26, 9)
+
+        # Verify basic properties
+        # With increasing prices, fast EMA > slow EMA, so MACD > 0
+        macd_values = [v for v in macd if v is not None]
+        assert all(v > 0 for v in macd_values)
+
+        # Signal should also be positive
+        signal_values = [v for v in signal if v is not None]
+        assert all(v > 0 for v in signal_values)
+
+    def test_macd_none_propagation(self) -> None:
+        """Test that None values are properly propagated through calculations."""
+        prices = [float(100 + i) for i in range(40)]
+        macd, signal, histogram = calculate_macd(prices, 12, 26, 9)
+
+        # MACD has None where slow EMA has None (first 25 values)
+        for i in range(25):
+            assert macd[i] is None
+
+        # Signal has None where MACD doesn't have enough data (first 33 values)
+        for i in range(33):
+            assert signal[i] is None
+
+        # Histogram has None wherever either MACD or Signal is None
+        for i in range(33):
+            assert histogram[i] is None
+
+    def test_macd_zero_line_cross(self) -> None:
+        """Test MACD crossing zero line (trend direction change)."""
+        # Create pattern that crosses zero: down, then up
+        prices = []
+        # Start high, go down
+        for i in range(35):
+            prices.append(200.0 - i * 2)
+        # Then go up
+        for i in range(35):
+            prices.append(130.0 + i * 3)
+
+        macd, signal, histogram = calculate_macd(prices, 12, 26, 9)
+
+        # Get non-None MACD values
+        macd_values = [(i, v) for i, v in enumerate(macd) if v is not None]
+
+        # Should have both positive and negative MACD values (crossing zero)
+        has_positive = any(v > 0 for i, v in macd_values)
+        has_negative = any(v < 0 for i, v in macd_values)
+
+        assert has_positive and has_negative

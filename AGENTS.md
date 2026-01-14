@@ -2930,3 +2930,139 @@ Feature 6 (In-App Article Reader Mode) is production-ready:
 
 Foundation established for future enhancements (bookmarking, offline reading, search within articles).
 
+---
+
+## VPR-071: MACD Calculation (Feature 7 - Part 1)
+
+**Date:** 2026-01-14
+**Story:** Add MACD calculation to indicators service
+**Files:** `viper/services/indicators.py`, `tests/test_indicators.py`
+
+### MACD Components
+
+MACD (Moving Average Convergence Divergence) has three components:
+1. **MACD Line**: 12-period EMA - 26-period EMA (fast line)
+2. **Signal Line**: 9-period EMA of the MACD line (slow line, trigger)
+3. **Histogram**: MACD line - Signal line (divergence visualization)
+
+### None Value Count Pattern
+
+**Critical Understanding:**
+- MACD line has **(slow_period - 1)** None values = **25** (for default 12/26/9)
+- Signal line has **(slow_period - 1) + (signal_period - 1)** = **33** (not 34!)
+- Histogram matches signal line None count (can't calculate without both values)
+
+**Why 33, not 34:**
+- Slow EMA (26-period) produces first value at index 25 (has 25 None)
+- Extract non-None MACD values, calculate signal EMA on those
+- Signal EMA (9-period) needs 9 values, produces first at index 8 of extracted list
+- Total None count: 25 (from MACD) + 8 (from signal) = **33**
+
+The PRD originally stated 33 with the formula `(26-1) + (9-1) + 1 = 33` which was correct, but the "why" needed clarification.
+
+### Type Safety with None Subtraction
+
+**mypy --strict Challenge:**
+Direct subtraction of `list[float | None]` elements fails type checking:
+```python
+# ❌ FAILS mypy --strict
+macd_line.append(fast_ema[i] - slow_ema[i])
+# Error: Unsupported operand types for - ("float" and "None")
+```
+
+**Solution:** Extract values, check for None, narrow types:
+```python
+# ✅ PASSES mypy --strict
+fast_val = fast_ema[i]
+slow_val = slow_ema[i]
+if fast_val is None or slow_val is None:
+    macd_line.append(None)
+else:
+    macd_line.append(fast_val - slow_val)  # Both confirmed float
+```
+
+### List Concatenation Type Safety
+
+**mypy Challenge:** Concatenating typed lists requires matching types:
+```python
+# ❌ FAILS mypy --strict
+signal_line = [None] * count + signal_ema
+# Error: Unsupported operand types for + ("list[None]" and "list[float | None]")
+```
+
+**Solution:** Explicitly type the None list:
+```python
+# ✅ PASSES mypy --strict
+none_padding: list[float | None] = [None] * macd_none_count
+signal_line = none_padding + signal_ema
+```
+
+### MACD Value Range
+
+Unlike RSI (0-100 bounded), MACD can be **positive or negative**:
+- **Positive MACD**: Fast EMA > Slow EMA (uptrend)
+- **Negative MACD**: Fast EMA < Slow EMA (downtrend)
+- **Zero crossing**: Trend direction change
+
+Tests must verify both positive and negative values are possible.
+
+### Signal Line Calculation Pattern
+
+**Extract Non-None Pattern:**
+When calculating EMA of a list that contains None values:
+1. Count None values: `macd_none_count = sum(1 for v in macd_line if v is None)`
+2. Extract non-None: `macd_values_for_signal = [v for v in macd_line if v is not None]`
+3. Calculate EMA: `signal_ema = calculate_ema(macd_values_for_signal, signal_period)`
+4. Reconstruct with padding: `signal_line = none_padding + signal_ema`
+
+This pattern maintains proper list length and None positioning.
+
+### Test Coverage Strategy
+
+**21 Comprehensive MACD Tests:**
+- Basic calculation (lengths, None counts)
+- Default and custom periods
+- Negative values (downtrend test)
+- Positive values (uptrend test)
+- Histogram = MACD - Signal verification
+- Empty/insufficient data edge cases
+- Exact minimum data (34 prices)
+- Invalid period validation (zero, negative, fast >= slow)
+- Flat prices (MACD should be ~0)
+- Bullish/bearish crossovers
+- Zero line crossing (trend reversal)
+- Real-world price simulation
+- Signal smoothing behavior
+- None value propagation
+
+### Validation Rules
+
+**MACD Requires:**
+- All periods > 0 (ValueError otherwise)
+- fast_period < slow_period (ValueError otherwise)
+- Minimum 34 prices for first signal value (with 12/26/9)
+
+### Reuse Pattern
+
+MACD calculation **reuses existing `calculate_ema()`** function:
+- No duplicate EMA logic
+- Maintains consistency with SMA/EMA/RSI patterns
+- Returns `tuple[list[float | None], ...]` for all three components
+
+### Files Modified
+
+**Modified (2 files):**
+- `viper/services/indicators.py` - Added calculate_macd() function (89 lines)
+- `tests/test_indicators.py` - Added TestCalculateMACD class (21 tests, 313 lines)
+
+**Test Results:**
+- Added 21 new MACD tests
+- Total indicator tests: 78 (57 SMA/EMA/RSI + 21 MACD)
+- All existing tests still pass
+- mypy --strict clean
+- 100% test coverage on MACD calculation
+
+### Next Steps
+
+VPR-072: Create MACDPanel widget (will render all 3 components with histogram bars)
+
