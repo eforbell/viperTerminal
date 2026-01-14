@@ -1054,3 +1054,41 @@
   - **Polish Complete**: Feature 6 ready for production use, all acceptance criteria met
 ---
 
+
+## 2026-01-14 - VPR-070
+- **What was implemented**: Prefix keybinding system for technical indicators ('t' prefix + indicator key)
+- **Files changed**:
+  - `viper/app.py`: Added _technical_prefix_active flag, on_key() handler for prefix routing, removed 'm' and 'r' from BINDINGS
+  - `viper/widgets/ticker_input.py`: Modified on_key() to allow single-char keys to bubble when input is empty
+  - `viper/widgets/help_screen.py`: Updated keybindings and charts sections to document new prefix system
+  - `tests/test_app.py`: Added 8 comprehensive tests for prefix behavior (all passing)
+  - `scripts/ralph/features/feature-7.prd.json`: Marked VPR-070 as complete (passes: true)
+- **Learnings**:
+  - **Prefix Key Pattern**: Use 't' (technical) as first key, then indicator-specific key ('r' for RSI, 'a' for MA)
+  - **Stateless Design**: Each action requires full t-X sequence, not modal (no sticky prefix state)
+  - **Visual Feedback**: Show "Technical: r=RSI, a=MA" hint in status bar when 't' pressed
+  - **Event Bubbling Challenge**: Input widgets consume keypresses - must allow bubbling in on_key()
+  - **TickerInput Modification**: Added check for empty input (`not self.value`) + single-char key to allow bubbling
+  - **Prevent Default Pattern**: Call `event.prevent_default()` but NOT `event.stop()` to allow bubbling to app
+  - **App-Level Handler**: Use `on_key()` method in App instead of BINDINGS for prefix routing
+  - **Prefix Cancellation**: Any non-indicator key after 't' clears prefix state (including Escape)
+  - **Status Bar Safety**: Wrap status_bar access in try/except (may not be mounted in tests)
+  - **Type Safety**: Import Key type inside on_key() method to avoid circular imports
+  - **Test Pattern**: Direct state manipulation (`app._chart_panel_visible = True`) for reliable testing
+  - **Mock Simplification**: Use minimal StockQuote fields (removed pe_ratio, asset_type - not in dataclass)
+  - **Sequential Testing**: Press 't', pause, then press second key, pause again for reliable results
+  - **Full Cycle Test**: Verify 't-a, t-a' requires two full sequences (not 't-a, a')
+  - **Independence Test**: Both RSI and MA can be toggled with t-r and t-a without conflicts
+  - **Coverage**: Added 8 new tests, all 761 tests passing with 91.30% coverage
+  - **Type Checking**: mypy --strict passes with no errors
+  - **Single-Char Filter**: Use `len(event.key) == 1` to filter single-character keys for bubbling
+  - **Future Extensibility**: Pattern supports t-m (MACD), t-s (Stochastic), t-b (Bollinger Bands)
+  - **Help Documentation**: Document both in KEYBINDINGS section and relevant feature sections (CHARTS)
+  - **Binding Removal**: Removed 'm' and 'r' from BINDINGS list (now handled via prefix only)
+  - **Defensive Coding**: Check `self._technical_prefix_active` before handling second key
+  - **Event Flow**: TickerInput.on_key() → App.on_key() → action_toggle_rsi() / action_cycle_ma()
+  - **No Action Method**: No need for action_technical_prefix() - handle 't' directly in on_key()
+  - **Escape Integration**: Added prefix clearing to existing action_clear_or_close() method
+  - **Test Duration**: 8 prefix tests run in ~10 seconds, full suite in 105 seconds
+  - **Foundation Ready**: Infrastructure complete for VPR-074 to add 't-m' for MACD
+---

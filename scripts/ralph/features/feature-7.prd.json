@@ -76,7 +76,7 @@
         "All existing indicator functionality works with new prefix system"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": [],
       "notes": "Establishes the prefix key pattern BEFORE adding MACD. Refactors existing indicator keybindings (RSI, MA) to use 't' prefix. This story has NO MACD code - just the keybinding infrastructure. Thoroughly test with existing indicators."
