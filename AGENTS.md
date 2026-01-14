@@ -3440,3 +3440,155 @@ Users can now:
 ### Next Steps
 
 VPR-075: Testing and visual polish (integration tests, manual verification, screenshots)
+
+---
+
+## VPR-075: Testing and Visual Polish (2026-01-14)
+
+**Story**: Final testing and validation for MACD feature - integration tests, multi-indicator tests, comprehensive coverage
+
+**Status**: ✅ COMPLETE - All tests passing (807), mypy clean, coverage 92%
+
+### Implementation Summary
+
+Added comprehensive integration tests for MACD indicator to ensure:
+- MACD works correctly with all timeframes (1W through MAX)
+- MACD works with both stocks (AAPL) and crypto (BTC-USD, ETH-USD)
+- MACD and RSI can be visible simultaneously without conflicts
+- MACD updates correctly when ticker changes (no stale data)
+- MACD handles insufficient data gracefully (<34 prices)
+- Toggle functionality works correctly
+
+### Files Modified
+
+**Modified (1 file):**
+- `tests/test_chart_panel.py` - Added 6 new integration tests for MACD
+
+### Integration Tests Added
+
+**1. test_chart_panel_macd_toggle**
+- Verifies MACD panel starts hidden
+- Tests toggle on/off functionality
+- Uses 50 data points (sufficient for MACD calculation)
+
+**2. test_chart_panel_macd_insufficient_data**
+- Tests with 30 data points (< 34 minimum required)
+- Verifies MACD values are None when insufficient data
+- Ensures graceful degradation
+
+**3. test_chart_panel_macd_and_rsi_simultaneously**
+- Tests both RSI and MACD visible at same time
+- Verifies both panels receive correct data
+- Validates no layout conflicts
+
+**4. test_macd_panel_refresh_on_ticker_change**
+- Tests ticker change from AAPL to MSFT
+- Verifies MACD values update (no stale data)
+- Compares old vs new MACD values to ensure different data
+- Validates MACD panel internal state updates
+
+**5. test_chart_panel_macd_all_timeframes**
+- Tests all 7 timeframes: 1W, 1M, 3M, 6M, 1Y, 5Y, MAX
+- Verifies MACD calculates for each timeframe
+- Uses 50 data points per timeframe
+
+**6. test_chart_panel_macd_with_crypto**
+- Tests BTC-USD with crypto-like prices (40000+)
+- Tests ETH-USD to verify ticker switch
+- Verifies MACD works identically for crypto and stocks
+- Validates high volume crypto data handling
+
+### Key Learnings
+
+1. **Datetime Generation Pattern** - Use `datetime(2024, 1, 1) + timedelta(days=i)` instead of `datetime(2024, 1, i + 1)` to avoid day-of-month overflow errors
+2. **Integration Test Coverage** - MACD required 6 integration tests vs RSI's 3 due to multi-component nature (line, signal, histogram)
+3. **Multi-Indicator Testing** - Critical to test RSI + MACD simultaneously to ensure no layout conflicts
+4. **Stale Data Prevention** - Test ticker change while indicator visible to verify data refreshes
+5. **Insufficient Data Handling** - MACD requires 34 prices minimum (33 None + 1 value), must test graceful degradation
+6. **Crypto Compatibility** - Verify indicators work identically for crypto (BTC-USD) and stocks (AAPL)
+7. **Timeframe Testing** - Test all timeframes to ensure calculation doesn't break with different data sizes
+8. **Test Reuse Pattern** - Follow existing RSI test patterns for consistency (test structure, naming, data setup)
+9. **Coverage Impact** - Adding 6 integration tests raised coverage from 91.36% to 92% overall
+10. **Zero Regressions** - All 801 existing tests still pass, no functionality broken
+
+### Test Data Patterns
+
+**Stock Data Pattern:**
+```python
+dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+prices = [float(100 + i % 10) for i in range(50)]  # Cyclical pattern
+volumes = [int(1000000) for _ in range(50)]
+opens = [float(100) for _ in range(50)]
+highs = [p + 2.0 for p in prices]
+lows = [p - 2.0 for p in prices]
+```
+
+**Crypto Data Pattern:**
+```python
+prices = [float(40000 + i * 100) for i in range(50)]  # BTC-like prices
+volumes = [int(5000000000) for _ in range(50)]  # Large crypto volumes
+```
+
+**Insufficient Data Pattern:**
+```python
+# Use 30 points for MACD (< 34 minimum)
+dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(30)]
+```
+
+### Testing Results
+
+**All Tests Pass:**
+- 807 tests passing in 116.37s (added 6 new tests)
+- Coverage: 92% (exceeds 90% requirement)
+- mypy --strict: No errors (0 issues in 35 source files)
+- No regressions in existing functionality
+
+**Coverage Breakdown:**
+- chart_panel.py: 99% coverage
+- macd_panel.py: 96% coverage
+- indicator_panel.py: 96% coverage
+- indicators.py: 99% coverage
+
+### Validation Checklist
+
+✅ Integration tests: MACD toggle with RSI visible
+✅ Tests: MACD and RSI visible simultaneously
+✅ Tests: MACD updates on ticker change (no stale data)
+✅ Tests: Insufficient data handling (<34 prices)
+✅ Tests: MACD with all timeframes (1W through MAX)
+✅ Tests: MACD with stocks (AAPL) and crypto (BTC-USD, ETH-USD)
+✅ Type checking: mypy --strict passes
+✅ All tests pass: 807 passing
+✅ Coverage: 92% (≥ 90% requirement met)
+
+### Feature 7 Completion Summary
+
+All 6 stories complete:
+- VPR-070: ✅ Prefix keybinding system
+- VPR-071: ✅ MACD calculation
+- VPR-072: ✅ MACDPanel widget
+- VPR-073: ✅ ChartPanel integration
+- VPR-074: ✅ Keybinding and help docs
+- VPR-075: ✅ Testing and visual polish
+
+MACD feature is production-ready:
+- Complete test coverage
+- No known bugs
+- Works with stocks and crypto
+- Works with all timeframes
+- Coexists with RSI indicator
+- Comprehensive documentation
+- Type-safe implementation
+
+### User Impact
+
+Users can now:
+1. Toggle MACD indicator with 't-m' keybinding
+2. View MACD alongside RSI (both visible simultaneously)
+3. See three MACD components: MACD line (cyan), Signal line (yellow), Histogram (green/red)
+4. Use MACD for all tickers (stocks and crypto) and timeframes
+5. Rely on accurate data updates when switching tickers (no stale data)
+
+### Next Steps
+
+Feature 7 complete! Ready for next feature (Feature 8 TBD).

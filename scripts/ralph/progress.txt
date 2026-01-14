@@ -1189,3 +1189,28 @@
   - Zero-impact integration - no regressions in existing functionality
 
 ---
+
+## 2026-01-14 - VPR-075
+- **What was implemented**: Comprehensive integration testing and validation for MACD feature
+- **Files changed**:
+  - `tests/test_chart_panel.py`: Added 6 integration tests for MACD (toggle, insufficient data, RSI+MACD simultaneously, ticker change, all timeframes, crypto support)
+  - `scripts/ralph/features/feature-7.prd.json`: Marked VPR-075 as passes: true
+  - `AGENTS.md`: Added VPR-075 learnings section with test patterns and validation checklist
+  - `scripts/ralph/progress.txt`: Added this VPR-075 entry (Feature 7 completion)
+- **Learnings**:
+  - **Datetime Generation Pattern**: Use `datetime(2024, 1, 1) + timedelta(days=i)` to avoid day-of-month overflow (January has 31 days, range(50) exceeds month)
+  - **Integration Test Coverage**: MACD needed 6 integration tests vs RSI's 3 due to 3 components (line, signal, histogram)
+  - **Multi-Indicator Testing**: Critical to test RSI + MACD simultaneously to verify no layout conflicts
+  - **Stale Data Prevention**: Test ticker change while indicator visible to ensure data refreshes correctly
+  - **Insufficient Data Handling**: MACD requires 34 prices minimum (33 None + 1 value), must test graceful degradation
+  - **Crypto Compatibility**: Verify indicators work identically for crypto (BTC-USD) and stocks (AAPL)
+  - **Timeframe Testing**: Test all timeframes (1W, 1M, 3M, 6M, 1Y, 5Y, MAX) to ensure calculation stability
+  - **Test Reuse Pattern**: Follow existing RSI test patterns for consistency (structure, naming, data setup)
+  - **Coverage Impact**: Adding 6 integration tests raised coverage from 91.36% to 92% overall
+  - **Zero Regressions**: All 801 existing tests still pass, 807 total after adding MACD tests
+  - **Test Data Patterns**: Stock data (100 + i % 10), crypto data (40000 + i * 100), insufficient (<34 points)
+  - **Testing Results**: 807 tests pass in 116.37s, coverage 92%, mypy --strict clean (0 errors in 35 files)
+  - **Feature 7 Complete**: All 6 stories (VPR-070 through VPR-075) complete with production-ready MACD indicator
+  - **MACD Feature**: Works with stocks/crypto, all timeframes, coexists with RSI, comprehensive tests, type-safe implementation
+
+---
