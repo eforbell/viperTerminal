@@ -117,6 +117,7 @@ class HelpScreen(ModalScreen[None]):
                 yield Static("n                    Toggle news panel", classes="help-item")
                 yield Static("t                    Technical indicator prefix (press t, then indicator key)", classes="help-item")
                 yield Static("  t-r                Toggle RSI indicator", classes="help-item")
+                yield Static("  t-m                Toggle MACD indicator", classes="help-item")
                 yield Static("  t-a                Cycle moving averages (Off/SMA20/SMA50/Both)", classes="help-item")
                 yield Static("e                    Expand news item (show summary)", classes="help-item")
                 yield Static("1-7                  Select timeframe (chart)", classes="help-item")
@@ -151,6 +152,22 @@ class HelpScreen(ModalScreen[None]):
                 )
                 yield Static(
                     "Press 't-r' to toggle RSI (Relative Strength Index) indicator panel.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Press 't-m' to toggle MACD (Moving Average Convergence Divergence) indicator.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "MACD shows trend direction: cyan MACD line, yellow Signal line, green/red Histogram.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Crossovers between MACD and Signal indicate potential trend changes.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Both RSI and MACD can be visible simultaneously (stacked vertically).",
                     classes="help-item",
                 )
                 yield Static(
@@ -232,6 +249,10 @@ class HelpScreen(ModalScreen[None]):
                 )
                 yield Static(
                     "• Volume overlay for price/volume correlation",
+                    classes="help-item",
+                )
+                yield Static(
+                    "• Technical indicators: Moving Averages (SMA), RSI, MACD",
                     classes="help-item",
                 )
                 yield Static(

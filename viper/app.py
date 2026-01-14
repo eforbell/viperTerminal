@@ -443,6 +443,13 @@ class ViperApp(App[None]):
             chart_panel = self.query_one("#chart-container ChartPanel", ChartPanel)
             chart_panel.toggle_rsi()
 
+    def action_toggle_macd(self) -> None:
+        """Toggle MACD indicator panel on the chart panel."""
+        # Only toggle MACD when chart panel is visible
+        if self._chart_panel_visible:
+            chart_panel = self.query_one("#chart-container ChartPanel", ChartPanel)
+            chart_panel.toggle_macd()
+
     def on_key(self, event: object) -> None:
         """Handle key presses for prefix system routing.
 
@@ -461,7 +468,7 @@ class ViperApp(App[None]):
             self._technical_prefix_active = True
             try:
                 status_bar = self.query_one(StatusBar)
-                status_bar.set_message("Technical: r=RSI, a=MA")
+                status_bar.set_message("Technical: r=RSI, m=MACD, a=MA")
             except Exception:
                 # StatusBar not yet mounted, but prefix is still active
                 pass
@@ -483,6 +490,11 @@ class ViperApp(App[None]):
             if event.key == "r":
                 # t-r: Toggle RSI
                 self.action_toggle_rsi()
+                event.prevent_default()
+                event.stop()
+            elif event.key == "m":
+                # t-m: Toggle MACD
+                self.action_toggle_macd()
                 event.prevent_default()
                 event.stop()
             elif event.key == "a":
