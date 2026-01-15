@@ -80,6 +80,22 @@ class MACDPanel(IndicatorPanel):
         self._signal_line = signal_line
         self._histogram = histogram
 
+        # Calculate dynamic scale from actual data
+        # MACD values scale with asset price, so we can't use fixed bounds
+        all_values = [
+            v for v in (macd_line + signal_line + histogram)
+            if v is not None
+        ]
+        if all_values:
+            data_min = min(all_values)
+            data_max = max(all_values)
+            # Add 10% padding for visual breathing room
+            data_range = data_max - data_min
+            padding = data_range * 0.1 if data_range > 0 else 1.0
+            # Ensure zero is always visible (important for MACD interpretation)
+            self._min_value = min(data_min - padding, 0.0)
+            self._max_value = max(data_max + padding, 0.0)
+
         # Extract current values (last non-None value from each series)
         macd_current = self._get_last_value(macd_line)
         signal_current = self._get_last_value(signal_line)
