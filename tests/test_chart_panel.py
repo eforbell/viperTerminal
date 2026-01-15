@@ -1855,3 +1855,400 @@ async def test_rsi_panel_refresh_on_ticker_change() -> None:
         # Verify current value is also updated
         current_rsi_msft = next((v for v in reversed(rsi_values_msft) if v is not None), None)
         assert panel._rsi_panel._current_value == current_rsi_msft
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_macd_toggle() -> None:
+    """Test that MACD panel can be toggled on and off."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # MACD panel should start hidden
+        assert panel._macd_panel is not None
+        assert panel.is_macd_visible() is False
+
+        # Load chart data with sufficient points for MACD (need 34+)
+        dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices = [float(100 + i % 10) for i in range(50)]
+        volumes = [int(1000000) for _ in range(50)]
+        opens = [float(100) for _ in range(50)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Toggle MACD on
+        panel.toggle_macd()
+        await pilot.pause()
+        assert panel.is_macd_visible() is True
+
+        # Toggle MACD off
+        panel.toggle_macd()
+        await pilot.pause()
+        assert panel.is_macd_visible() is False
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_macd_insufficient_data() -> None:
+    """Test that MACD is not calculated when data is insufficient (<34 prices)."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data with too few points for MACD (< 34)
+        dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(30)]
+        prices = [float(100 + i) for i in range(30)]
+        volumes = [int(1000000) for _ in range(30)]
+        opens = [float(100) for _ in range(30)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1W",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        # Show chart
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # MACD should be None due to insufficient data
+        assert panel._macd_line is None
+        assert panel._signal_line is None
+        assert panel._histogram is None
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_macd_and_rsi_simultaneously() -> None:
+    """Test that both MACD and RSI panels can be visible at the same time."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create mock data with sufficient points for both indicators
+        dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices = [float(100 + i % 10) for i in range(50)]
+        volumes = [int(1000000) for _ in range(50)]
+        opens = [float(100) for _ in range(50)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Toggle RSI on
+        panel.toggle_rsi()
+        await pilot.pause()
+        assert panel.is_rsi_visible() is True
+        assert panel._rsi_panel is not None
+
+        # Toggle MACD on
+        panel.toggle_macd()
+        await pilot.pause()
+        assert panel.is_macd_visible() is True
+        assert panel._macd_panel is not None
+
+        # Both should be visible
+        assert panel.is_rsi_visible() is True
+        assert panel.is_macd_visible() is True
+        assert panel._rsi_panel.is_visible() is True
+        assert panel._macd_panel.is_visible() is True
+
+        # Both panels should have received data
+        assert panel._rsi_panel._indicator_values == panel._rsi_values
+        assert panel._macd_panel._macd_line == panel._macd_line
+        assert panel._macd_panel._signal_line == panel._signal_line
+        assert panel._macd_panel._histogram == panel._histogram
+
+
+@pytest.mark.asyncio
+async def test_macd_panel_refresh_on_ticker_change() -> None:
+    """Test that MACD panel refreshes correctly when ticker changes (no stale data)."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Create first ticker data (AAPL)
+        dates_aapl = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices_aapl = [float(150 + i % 10) for i in range(50)]
+        volumes_aapl = [int(1000000) for _ in range(50)]
+        opens_aapl = [float(150) for _ in range(50)]
+        highs_aapl = [p + 2.0 for p in prices_aapl]
+        lows_aapl = [p - 2.0 for p in prices_aapl]
+
+        data_aapl = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates_aapl,
+            prices=prices_aapl,
+            volumes=volumes_aapl,
+            opens=opens_aapl,
+            highs=highs_aapl,
+            lows=lows_aapl,
+            interval="1d",
+        )
+
+        stats_aapl = HistoricalStats(
+            period_high=max(prices_aapl),
+            period_low=min(prices_aapl),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices_aapl),
+        )
+
+        # Show chart with AAPL
+        panel.show_chart(data_aapl, stats_aapl)
+        await pilot.pause()
+
+        # Toggle MACD on
+        panel.toggle_macd()
+        await pilot.pause()
+
+        # Verify MACD was calculated
+        macd_values_aapl = panel._macd_line
+        signal_values_aapl = panel._signal_line
+        hist_values_aapl = panel._histogram
+        assert macd_values_aapl is not None
+        assert signal_values_aapl is not None
+        assert hist_values_aapl is not None
+
+        # Create second ticker data (MSFT) - with different prices
+        dates_msft = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices_msft = [float(300 + i * 2 % 20) for i in range(50)]  # Different pattern
+        volumes_msft = [int(2000000) for _ in range(50)]
+        opens_msft = [float(300) for _ in range(50)]
+        highs_msft = [p + 3.0 for p in prices_msft]
+        lows_msft = [p - 3.0 for p in prices_msft]
+
+        data_msft = HistoricalData(
+            ticker="MSFT",
+            period="1M",
+            dates=dates_msft,
+            prices=prices_msft,
+            volumes=volumes_msft,
+            opens=opens_msft,
+            highs=highs_msft,
+            lows=lows_msft,
+            interval="1d",
+        )
+
+        stats_msft = HistoricalStats(
+            period_high=max(prices_msft),
+            period_low=min(prices_msft),
+            change_percent=7.0,
+            avg_volume=2000000,
+            num_data_points=len(prices_msft),
+        )
+
+        # Switch to MSFT while MACD is visible
+        panel.show_chart(data_msft, stats_msft)
+        await pilot.pause()
+
+        # Verify MACD values changed (no stale data)
+        macd_values_msft = panel._macd_line
+        signal_values_msft = panel._signal_line
+        hist_values_msft = panel._histogram
+        assert macd_values_msft is not None
+        assert signal_values_msft is not None
+        assert hist_values_msft is not None
+        assert macd_values_msft != macd_values_aapl  # Different data should produce different MACD
+        assert signal_values_msft != signal_values_aapl
+        assert hist_values_msft != hist_values_aapl
+
+        # Verify the MACD panel display should be refreshed with new data
+        assert panel._macd_panel is not None
+        assert panel._macd_panel._macd_line == macd_values_msft
+        assert panel._macd_panel._signal_line == signal_values_msft
+        assert panel._macd_panel._histogram == hist_values_msft
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_macd_all_timeframes() -> None:
+    """Test that MACD works with all available timeframes."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Test each timeframe
+        timeframes = ["1W", "1M", "3M", "6M", "1Y", "5Y", "MAX"]
+
+        for timeframe in timeframes:
+            # Create sufficient data for MACD (50 points)
+            dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+            prices = [float(100 + i % 10) for i in range(50)]
+            volumes = [int(1000000) for _ in range(50)]
+            opens = [float(100) for _ in range(50)]
+            highs = [p + 2.0 for p in prices]
+            lows = [p - 2.0 for p in prices]
+
+            data = HistoricalData(
+                ticker="AAPL",
+                period=timeframe,
+                dates=dates,
+                prices=prices,
+                volumes=volumes,
+                opens=opens,
+                highs=highs,
+                lows=lows,
+                interval="1d",
+            )
+
+            stats = HistoricalStats(
+                period_high=max(prices),
+                period_low=min(prices),
+                change_percent=5.0,
+                avg_volume=1000000,
+                num_data_points=len(prices),
+            )
+
+            # Show chart
+            panel.show_chart(data, stats)
+            await pilot.pause()
+
+            # MACD should be calculated for all timeframes with sufficient data
+            assert panel._macd_line is not None, f"MACD line should be calculated for {timeframe}"
+            assert panel._signal_line is not None, f"Signal line should be calculated for {timeframe}"
+            assert panel._histogram is not None, f"Histogram should be calculated for {timeframe}"
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_macd_with_crypto() -> None:
+    """Test that MACD works with cryptocurrency symbols."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Test with BTC-USD (crypto)
+        dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(50)]
+        prices = [float(40000 + i * 100) for i in range(50)]  # BTC-like prices
+        volumes = [int(5000000000) for _ in range(50)]  # Large crypto volumes
+        opens = [float(40000) for _ in range(50)]
+        highs = [p + 500.0 for p in prices]
+        lows = [p - 500.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="BTC-USD",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=10.0,
+            avg_volume=5000000000,
+            num_data_points=len(prices),
+        )
+
+        # Show chart
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Toggle MACD on
+        panel.toggle_macd()
+        await pilot.pause()
+
+        # MACD should work with crypto just like stocks
+        assert panel._macd_line is not None
+        assert panel._signal_line is not None
+        assert panel._histogram is not None
+        assert panel.is_macd_visible() is True
+
+        # Test with ETH-USD (another crypto)
+        prices_eth = [float(2500 + i * 10) for i in range(50)]
+        opens_eth = [float(2500) for _ in range(50)]
+        highs_eth = [p + 50.0 for p in prices_eth]
+        lows_eth = [p - 50.0 for p in prices_eth]
+
+        data_eth = HistoricalData(
+            ticker="ETH-USD",
+            period="1M",
+            dates=dates,
+            prices=prices_eth,
+            volumes=volumes,
+            opens=opens_eth,
+            highs=highs_eth,
+            lows=lows_eth,
+            interval="1d",
+        )
+
+        stats_eth = HistoricalStats(
+            period_high=max(prices_eth),
+            period_low=min(prices_eth),
+            change_percent=8.0,
+            avg_volume=3000000000,
+            num_data_points=len(prices_eth),
+        )
+
+        # Switch to ETH while MACD is visible
+        panel.show_chart(data_eth, stats_eth)
+        await pilot.pause()
+
+        # MACD should update for ETH
+        assert panel._macd_line is not None
+        assert panel._signal_line is not None
+        assert panel._histogram is not None
+        assert panel.is_macd_visible() is True

@@ -70,6 +70,15 @@ class TickerInput(Input):
         Args:
             event: The key event.
         """
+        # Allow technical indicator keys to bubble up to app when input is empty
+        # These keys are used for the prefix keybinding system (t-r, t-a, t-m, etc.)
+        # Also allow other single-character keys to bubble when input is empty
+        # so they can be used for prefix cancellation or future keybindings
+        if not self.value and len(event.key) == 1:
+            event.prevent_default()
+            # Note: Don't call event.stop() - we want it to bubble to the app
+            return
+
         if not self.history_manager:
             return
 

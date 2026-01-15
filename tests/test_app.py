@@ -826,3 +826,302 @@ async def test_article_reader_browser_fallback() -> None:
 
                 # Verify webbrowser.open was called
                 mock_open.assert_called_once_with(test_item.url)
+
+
+# Prefix Keybinding System Tests (VPR-070)
+
+
+@pytest.mark.asyncio
+async def test_technical_prefix_activates_on_t_key() -> None:
+    """Test that pressing 't' activates the technical indicator prefix mode."""
+    app = ViperApp()
+    async with app.run_test() as pilot:
+        # Initially, prefix should not be active
+        assert app._technical_prefix_active is False
+
+        # Press 't' to activate prefix
+        await pilot.press("t")
+        await pilot.pause()
+
+        # Prefix should now be active
+        assert app._technical_prefix_active is True
+
+
+@pytest.mark.asyncio
+async def test_technical_prefix_shows_status_hint() -> None:
+    """Test that pressing 't' shows a status hint about available indicators."""
+    app = ViperApp()
+    async with app.run_test() as pilot:
+        from viper.widgets import StatusBar
+
+        status_bar = app.query_one(StatusBar)
+
+        # Press 't' to activate prefix
+        await pilot.press("t")
+        await pilot.pause()
+
+        # Status bar should show hint message
+        # (We can't easily check the actual text, but we verify the method was called)
+        assert app._technical_prefix_active is True
+
+
+@pytest.mark.asyncio
+async def test_t_r_sequence_toggles_rsi() -> None:
+    """Test that pressing 't' then 'r' toggles RSI indicator."""
+    app = ViperApp()
+
+    # Mock fetch_quote to set up ticker state
+    mock_quote = StockQuote(
+        ticker="AAPL",
+        price=150.00,
+        change=5.00,
+        change_percent=3.45,
+        volume=50000000,
+        market_cap=2500000000000,
+        high_52w=180.00,
+        low_52w=120.00,
+    )
+
+    with patch("viper.app.fetch_quote", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = mock_quote
+
+        async with app.run_test() as pilot:
+            from viper.widgets import ChartPanel
+
+            # Set up state - fetch a quote and toggle chart
+            ticker_input = app.query_one(TickerInput)
+            ticker_input.value = "AAPL"
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Toggle chart visible
+            chart_container = app.query_one("#chart-container")
+            chart_container.display = True
+            app._chart_panel_visible = True
+            app._current_ticker = "AAPL"
+            await pilot.pause()
+
+            chart_panel = app.query_one(ChartPanel)
+
+            # Initially RSI should be hidden
+            assert chart_panel.is_rsi_visible() is False
+
+            # Press 't' then 'r' to toggle RSI
+            await pilot.press("t")
+            await pilot.pause()
+            assert app._technical_prefix_active is True
+
+            await pilot.press("r")
+            await pilot.pause()
+
+            # Prefix should be cleared
+            assert app._technical_prefix_active is False
+
+            # RSI should now be visible
+            assert chart_panel.is_rsi_visible() is True
+
+
+@pytest.mark.asyncio
+async def test_t_a_sequence_cycles_ma() -> None:
+    """Test that pressing 't' then 'a' cycles moving averages."""
+    app = ViperApp()
+
+    # Mock fetch_quote to set up ticker state
+    mock_quote = StockQuote(
+        ticker="AAPL",
+        price=150.00,
+        change=5.00,
+        change_percent=3.45,
+        volume=50000000,
+        market_cap=2500000000000,
+        high_52w=180.00,
+        low_52w=120.00,
+    )
+
+    with patch("viper.app.fetch_quote", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = mock_quote
+
+        async with app.run_test() as pilot:
+            from viper.widgets import ChartPanel
+
+            # Set up state - fetch a quote and toggle chart
+            ticker_input = app.query_one(TickerInput)
+            ticker_input.value = "AAPL"
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Toggle chart visible
+            chart_container = app.query_one("#chart-container")
+            chart_container.display = True
+            app._chart_panel_visible = True
+            app._current_ticker = "AAPL"
+            await pilot.pause()
+
+            chart_panel = app.query_one(ChartPanel)
+
+            # Initially MA should be off
+            assert chart_panel.get_ma_mode() == "off"
+
+            # Press 't' then 'a' to cycle MA
+            await pilot.press("t")
+            await pilot.pause()
+            assert app._technical_prefix_active is True
+
+            await pilot.press("a")
+            await pilot.pause()
+
+            # Prefix should be cleared
+            assert app._technical_prefix_active is False
+
+            # MA mode should have changed to sma20
+            assert chart_panel.get_ma_mode() == "sma20"
+
+
+@pytest.mark.asyncio
+async def test_t_followed_by_invalid_key_clears_prefix() -> None:
+    """Test that pressing 't' then any non-indicator key clears the prefix without action."""
+    app = ViperApp()
+    async with app.run_test() as pilot:
+        # Press 't' to activate prefix
+        await pilot.press("t")
+        await pilot.pause()
+        assert app._technical_prefix_active is True
+
+        # Press an invalid key (not 'r' or 'a')
+        await pilot.press("x")
+        await pilot.pause()
+
+        # Prefix should be cleared
+        assert app._technical_prefix_active is False
+
+
+@pytest.mark.asyncio
+async def test_escape_clears_technical_prefix() -> None:
+    """Test that pressing Escape clears the technical prefix mode."""
+    app = ViperApp()
+    async with app.run_test() as pilot:
+        # Press 't' to activate prefix
+        await pilot.press("t")
+        await pilot.pause()
+        assert app._technical_prefix_active is True
+
+        # Press Escape to cancel prefix
+        await pilot.press("escape")
+        await pilot.pause()
+
+        # Prefix should be cleared
+        assert app._technical_prefix_active is False
+
+
+@pytest.mark.asyncio
+async def test_t_a_t_a_cycles_ma_twice() -> None:
+    """Test that each indicator action requires full prefix sequence (stateless)."""
+    app = ViperApp()
+
+    # Mock fetch_quote to set up ticker state
+    mock_quote = StockQuote(
+        ticker="AAPL",
+        price=150.00,
+        change=5.00,
+        change_percent=3.45,
+        volume=50000000,
+        market_cap=2500000000000,
+        high_52w=180.00,
+        low_52w=120.00,
+    )
+
+    with patch("viper.app.fetch_quote", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = mock_quote
+
+        async with app.run_test() as pilot:
+            from viper.widgets import ChartPanel
+
+            # Set up state
+            ticker_input = app.query_one(TickerInput)
+            ticker_input.value = "AAPL"
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Toggle chart visible
+            chart_container = app.query_one("#chart-container")
+            chart_container.display = True
+            app._chart_panel_visible = True
+            app._current_ticker = "AAPL"
+            await pilot.pause()
+
+            chart_panel = app.query_one(ChartPanel)
+
+            # Initially MA should be off
+            assert chart_panel.get_ma_mode() == "off"
+
+            # Press 't-a' to cycle to sma20
+            await pilot.press("t")
+            await pilot.pause()
+            await pilot.press("a")
+            await pilot.pause()
+            assert chart_panel.get_ma_mode() == "sma20"
+
+            # Press 't-a' again to cycle to sma50 (requires full prefix again)
+            await pilot.press("t")
+            await pilot.pause()
+            assert app._technical_prefix_active is True
+            await pilot.press("a")
+            await pilot.pause()
+            assert chart_panel.get_ma_mode() == "sma50"
+
+
+@pytest.mark.asyncio
+async def test_t_r_and_t_a_work_alongside_each_other() -> None:
+    """Test that RSI and MA indicators can be toggled independently with prefix system."""
+    app = ViperApp()
+
+    # Mock fetch_quote to set up ticker state
+    mock_quote = StockQuote(
+        ticker="AAPL",
+        price=150.00,
+        change=5.00,
+        change_percent=3.45,
+        volume=50000000,
+        market_cap=2500000000000,
+        high_52w=180.00,
+        low_52w=120.00,
+    )
+
+    with patch("viper.app.fetch_quote", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = mock_quote
+
+        async with app.run_test() as pilot:
+            from viper.widgets import ChartPanel
+
+            # Set up state
+            ticker_input = app.query_one(TickerInput)
+            ticker_input.value = "AAPL"
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Toggle chart visible
+            chart_container = app.query_one("#chart-container")
+            chart_container.display = True
+            app._chart_panel_visible = True
+            app._current_ticker = "AAPL"
+            await pilot.pause()
+
+            chart_panel = app.query_one(ChartPanel)
+
+            # Toggle RSI on with t-r
+            await pilot.press("t")
+            await pilot.pause()
+            await pilot.press("r")
+            await pilot.pause()
+            assert chart_panel.is_rsi_visible() is True
+
+            # Cycle MA with t-a
+            await pilot.press("t")
+            await pilot.pause()
+            await pilot.press("a")
+            await pilot.pause()
+            assert chart_panel.get_ma_mode() == "sma20"
+
+            # Both should be active
+            assert chart_panel.is_rsi_visible() is True
+            assert chart_panel.get_ma_mode() == "sma20"

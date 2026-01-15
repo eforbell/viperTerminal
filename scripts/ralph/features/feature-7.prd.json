@@ -76,7 +76,7 @@
         "All existing indicator functionality works with new prefix system"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": [],
       "notes": "Establishes the prefix key pattern BEFORE adding MACD. Refactors existing indicator keybindings (RSI, MA) to use 't' prefix. This story has NO MACD code - just the keybinding infrastructure. Thoroughly test with existing indicators."
@@ -100,7 +100,7 @@
         "Test: MACD can be negative (unlike RSI which is 0-100)"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": [],
       "notes": "Pure calculation function, no UI. Reuse calculate_ema() from VPR-034. MACD can be negative, unlike RSI. First 33 values are None because: 25 None from slow EMA + 8 None from signal EMA = 33 total."
@@ -125,7 +125,7 @@
         "Export MACDPanel from viper/widgets/__init__.py"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-071"],
       "notes": "Similar to RSIPanel but with 3 data series instead of 1. Histogram rendering is new - use vertical bars like volume but centered at zero. Yellow for signal line distinguishes it from cyan MACD line."
@@ -151,7 +151,7 @@
         "Test: Insufficient data (<34 prices) handled gracefully"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-072"],
       "notes": "Follow RSI integration pattern from VPR-039. Both RSI and MACD can be visible simultaneously - they stack vertically. Make sure to update MACD panel even when hidden to avoid stale data bug that RSI had."
@@ -173,7 +173,7 @@
         "Test: 't-m' works alongside 't-r' and 't-a' (no conflicts)"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-070", "VPR-073"],
       "notes": "Much simpler than original VPR-073 since prefix system is already implemented in VPR-070. Just add MACD to the existing routing and update documentation."
@@ -198,7 +198,7 @@
         "mypy --strict passes with no errors"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-074"],
       "notes": "Ensure MACD plays nicely with existing indicators. Test stacking order: Price+Volume, RSI, MACD, X-axis. Verify all components render correctly at minimum terminal size."

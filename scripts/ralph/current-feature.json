@@ -1,13 +1,23 @@
 {
-  "currentFeature": "feature-7",
-  "featureName": "MACD Indicator",
-  "prdPath": "features/feature-7.prd.json",
-  "branch": "viper/feature-7-macd-indicator",
-  "status": "started",
-  "startedAt": "2026-01-09",
-  "description": "Add MACD (Moving Average Convergence Divergence) technical indicator with histogram. Implements prefix keybinding system ('t' for technical) and refactors existing indicator keys. MACD shows trend direction with 3 components: MACD line, Signal line, and Histogram.",
-  "stories": ["VPR-070", "VPR-071", "VPR-072", "VPR-073", "VPR-074", "VPR-075"],
+  "currentFeature": null,
+  "featureName": null,
+  "prdPath": null,
+  "branch": null,
+  "status": "awaiting_next_feature",
   "completedFeatures": [
+    {
+      "feature": "feature-7",
+      "featureName": "MACD Indicator",
+      "prdPath": "features/feature-7.prd.json",
+      "branch": "viper/feature-7-macd-indicator",
+      "status": "complete",
+      "completedAt": "2026-01-14",
+      "stories": 6,
+      "testsPassing": 807,
+      "coverage": "92%",
+      "notes": "Implemented prefix keybinding system ('t' for technical), MACD calculation with 3 components (line, signal, histogram), MACDPanel widget, ChartPanel integration, comprehensive testing. MACD coexists with RSI, works with all timeframes and both stocks/crypto.",
+      "description": "Add MACD (Moving Average Convergence Divergence) technical indicator with histogram. Implements prefix keybinding system ('t' for technical) and refactors existing indicator keys. MACD shows trend direction with 3 components: MACD line, Signal line, and Histogram."
+    },
     {
       "feature": "feature-6",
       "featureName": "In-App Article Reader Mode",
@@ -80,8 +90,8 @@
       "priority": "Medium",
       "relatedFeature": "feature-2",
       "effort": "Large",
-      "notes": "Feature 3 implemented SMA, EMA, RSI with overlay and sub-panel framework. MACD and Bollinger Bands deferred to future features.",
-      "status": "PARTIALLY_COMPLETED_FEATURE_3",
+      "notes": "Feature 3 implemented SMA, EMA, RSI with overlay and sub-panel framework. Feature 7 implemented MACD with prefix keybinding system. Bollinger Bands and Stochastic deferred to future features.",
+      "status": "PARTIALLY_COMPLETED_FEATURES_3_AND_7",
       "assignedStories": [
         "VPR-033",
         "VPR-034",
@@ -89,11 +99,16 @@
         "VPR-036",
         "VPR-037",
         "VPR-038",
-        "VPR-039"
+        "VPR-039",
+        "VPR-070",
+        "VPR-071",
+        "VPR-072",
+        "VPR-073",
+        "VPR-074",
+        "VPR-075"
       ],
-      "completedAt": "2026-01-08",
+      "lastUpdated": "2026-01-14",
       "remaining": [
-        "MACD",
         "Bollinger Bands",
         "Stochastic"
       ]

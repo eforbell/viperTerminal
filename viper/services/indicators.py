@@ -1,8 +1,8 @@
 """Technical indicator calculations for chart analysis.
 
 This module provides pure functions for calculating technical indicators
-like Simple Moving Average (SMA), Exponential Moving Average (EMA), and
-Relative Strength Index (RSI).
+like Simple Moving Average (SMA), Exponential Moving Average (EMA),
+Relative Strength Index (RSI), and MACD (Moving Average Convergence Divergence).
 
 All functions return lists with None values where calculations can't be performed
 (e.g., first N-1 values for an N-period moving average).
@@ -194,3 +194,101 @@ def calculate_rsi(prices: list[float], period: int = 14) -> list[float | None]:
             result.append(rsi_value)
 
     return result
+
+
+def calculate_macd(
+    prices: list[float],
+    fast_period: int = 12,
+    slow_period: int = 26,
+    signal_period: int = 9,
+) -> tuple[list[float | None], list[float | None], list[float | None]]:
+    """Calculate MACD (Moving Average Convergence Divergence) indicator.
+
+    MACD is a trend-following momentum indicator that shows the relationship
+    between two moving averages of a security's price.
+
+    Components:
+        - MACD line: 12-period EMA minus 26-period EMA (fast line)
+        - Signal line: 9-period EMA of the MACD line (slow line, trigger)
+        - Histogram: MACD line minus Signal line (divergence visualization)
+
+    Formula:
+        MACD = EMA(fast_period) - EMA(slow_period)
+        Signal = EMA(MACD, signal_period)
+        Histogram = MACD - Signal
+
+    Args:
+        prices: List of price values to calculate MACD over
+        fast_period: Period for fast EMA (default: 12)
+        slow_period: Period for slow EMA (default: 26)
+        signal_period: Period for signal line EMA (default: 9)
+
+    Returns:
+        Tuple of (macd_line, signal_line, histogram), each a list of float | None.
+        First 33 values are None with default periods: (26-1) + (9-1) + 1 = 33.
+
+    Raises:
+        ValueError: If fast_period >= slow_period or any period <= 0
+
+    Examples:
+        >>> prices = [100, 102, 105, 103, 107, 110] * 10  # 60 prices
+        >>> macd, signal, histogram = calculate_macd(prices, 12, 26, 9)
+        >>> # First 33 values are None, then calculated values
+        >>> macd[32]  # None
+        >>> macd[33]  # Some float value
+    """
+    # Validate periods
+    if fast_period <= 0 or slow_period <= 0 or signal_period <= 0:
+        raise ValueError("All periods must be positive")
+    if fast_period >= slow_period:
+        raise ValueError("fast_period must be less than slow_period")
+
+    if not prices:
+        return [], [], []
+
+    # Calculate fast and slow EMAs
+    fast_ema = calculate_ema(prices, fast_period)
+    slow_ema = calculate_ema(prices, slow_period)
+
+    # Calculate MACD line: fast_ema - slow_ema
+    macd_line: list[float | None] = []
+    for i in range(len(prices)):
+        fast_val = fast_ema[i]
+        slow_val = slow_ema[i]
+        if fast_val is None or slow_val is None:
+            macd_line.append(None)
+        else:
+            macd_line.append(fast_val - slow_val)
+
+    # Calculate signal line: EMA of MACD line
+    # Need to extract non-None values for EMA calculation
+    # Create a temporary list for signal calculation
+    macd_values_for_signal: list[float] = []
+    macd_none_count = 0
+    for val in macd_line:
+        if val is None:
+            macd_none_count += 1
+        else:
+            macd_values_for_signal.append(val)
+
+    # Calculate signal EMA on the non-None MACD values
+    signal_line: list[float | None]
+    if macd_values_for_signal:
+        signal_ema = calculate_ema(macd_values_for_signal, signal_period)
+        # Reconstruct signal_line with None padding
+        none_padding: list[float | None] = [None] * macd_none_count
+        signal_line = none_padding + signal_ema
+    else:
+        signal_line = [None] * len(prices)
+
+    # Calculate histogram: MACD - Signal
+    histogram: list[float | None] = []
+    for i in range(len(prices)):
+        macd_val = macd_line[i]
+        signal_val = signal_line[i]
+        if macd_val is None or signal_val is None:
+            histogram.append(None)
+        else:
+            histogram.append(macd_val - signal_val)
+
+    return macd_line, signal_line, histogram

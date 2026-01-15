@@ -4,6 +4,7 @@ from viper.widgets.article_reader_panel import ArticleReaderPanel
 from viper.widgets.chart_panel import ChartPanel
 from viper.widgets.help_screen import HelpScreen
 from viper.widgets.info_panel import InfoPanel
+from viper.widgets.macd_panel import MACDPanel
 from viper.widgets.news_panel import NewsPanel
 from viper.widgets.quote_panel import QuotePanel
 from viper.widgets.sparkline import SparklineWidget
@@ -16,6 +17,7 @@ __all__ = [
     "ChartPanel",
     "HelpScreen",
     "InfoPanel",
+    "MACDPanel",
     "NewsPanel",
     "QuotePanel",
     "SparklineWidget",
