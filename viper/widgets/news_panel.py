@@ -133,6 +133,10 @@ class NewsPanel(Widget):
         yield Label("NEWS", classes="panel-header")
         yield VerticalScroll(id="news-content")
 
+    def on_mount(self) -> None:
+        """Initialize content when mounted."""
+        self._rebuild_content()
+
     async def load_news(self, ticker: str) -> None:
         """Load news for the given ticker.
 
@@ -144,7 +148,7 @@ class NewsPanel(Widget):
         self._state = "loading"
         self._selected_index = 0
         self._expanded_index = None  # Reset expansion on new ticker
-        self._render_content()
+        self._rebuild_content()
 
         # Fetch news
         result = await fetch_news(ticker, max_items=self._max_items)
@@ -157,11 +161,11 @@ class NewsPanel(Widget):
         if isinstance(result, NewsError):
             self._state = "error"
             self._news_items = []
-            self._render_content()
+            self._rebuild_content()
         else:
             self._state = "success"
             self._news_items = result
-            self._render_content()
+            self._rebuild_content()
 
     def show_empty(self) -> None:
         """Display empty state when no ticker is selected."""
@@ -170,9 +174,9 @@ class NewsPanel(Widget):
         self._news_items = []
         self._selected_index = 0
         self._expanded_index = None
-        self._render_content()
+        self._rebuild_content()
 
-    def _render_content(self) -> None:
+    def _rebuild_content(self) -> None:
         """Render the appropriate content based on current state."""
         container = self.query_one("#news-content", VerticalScroll)
         container.remove_children()
@@ -309,7 +313,7 @@ class NewsPanel(Widget):
 
         # Move selection down
         self._selected_index = min(self._selected_index + 1, len(self._news_items) - 1)
-        self._render_content()
+        self._rebuild_content()
 
     def action_navigate_up(self) -> None:
         """Navigate up to the previous news item (k key)."""
@@ -318,7 +322,7 @@ class NewsPanel(Widget):
 
         # Move selection up
         self._selected_index = max(self._selected_index - 1, 0)
-        self._render_content()
+        self._rebuild_content()
 
     def get_selected_item(self) -> Optional[NewsItem]:
         """Get the currently selected news item.
@@ -358,13 +362,13 @@ class NewsPanel(Widget):
             # Expand the selected item
             self._expanded_index = self._selected_index
 
-        self._render_content()
+        self._rebuild_content()
 
     def action_collapse(self) -> None:
         """Collapse any expanded news item (Escape key)."""
         if self._expanded_index is not None:
             self._expanded_index = None
-            self._render_content()
+            self._rebuild_content()
 
     def is_expanded(self) -> bool:
         """Check if any item is currently expanded.

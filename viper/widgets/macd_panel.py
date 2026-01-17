@@ -123,7 +123,7 @@ class MACDPanel(IndicatorPanel):
                 return value
         return None
 
-    def _render_content(self) -> None:
+    def _rebuild_content(self) -> None:
         """Render the MACD panel content with custom header format.
 
         Overrides the base class to show MACD, Signal, and Histogram values

@@ -64,19 +64,53 @@ class TickerInput(Input):
         # Clear the input
         self.value = ""
 
+    # Keys that should bubble to app when input is empty (bindings + prefix key)
+    _APP_BINDING_KEYS = frozenset({"q", "i", "c", "n", "1", "2", "3", "4", "5", "6", "7", "t"})
+
+    def check_consume_key(self, key: str, character: str | None) -> bool:
+        """Check if the widget should consume the given key.
+
+        When the input is empty, certain keys should bubble to the app:
+        - Binding keys (q, i, c, n, 1-7) for app-level commands
+        - 't' for the technical indicator prefix system (t-r, t-a, t-m)
+        - Any key when prefix mode is active (for completing t-r, t-a, t-m sequences)
+
+        Other keys (like 'w', 'd', etc.) should be typed into the input
+        so users can enter commands like "W AAPL" to add to watchlist.
+
+        Args:
+            key: A key identifier.
+            character: A character associated with the key, or None.
+
+        Returns:
+            True if the widget should capture the key, False otherwise.
+        """
+        # Check if app's technical prefix mode is active
+        prefix_active = getattr(self.app, "_technical_prefix_active", False)
+
+        # When input is empty and key is a binding/prefix key (or prefix active), don't consume it
+        if not self.value and (key in self._APP_BINDING_KEYS or prefix_active):
+            return False
+        # Otherwise, use the default Input behavior
+        return super().check_consume_key(key, character)
+
     def on_key(self, event: Key) -> None:
         """Handle key events for history navigation.
 
         Args:
             event: The key event.
         """
-        # Allow technical indicator keys to bubble up to app when input is empty
-        # These keys are used for the prefix keybinding system (t-r, t-a, t-m, etc.)
-        # Also allow other single-character keys to bubble when input is empty
-        # so they can be used for prefix cancellation or future keybindings
-        if not self.value and len(event.key) == 1:
+        # Check if app's technical prefix mode is active
+        prefix_active = getattr(self.app, "_technical_prefix_active", False)
+
+        # When input is empty and key is a binding/prefix key, or prefix is active,
+        # stop the base Input from consuming it and forward to app
+        if not self.value and (event.key in self._APP_BINDING_KEYS or prefix_active):
+            event.stop()
             event.prevent_default()
-            # Note: Don't call event.stop() - we want it to bubble to the app
+            # Forward to app's on_key handler for prefix system
+            if hasattr(self.app, "on_key"):
+                self.app.on_key(event)
             return
 
         if not self.history_manager:

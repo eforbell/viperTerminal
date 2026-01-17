@@ -82,7 +82,7 @@ class TestNewsPanelShowEmpty:
         panel._news_items = [create_news_item()]
         panel._selected_index = 5
         
-        # Directly set state like show_empty does, without calling _render_content
+        # Directly set state like show_empty does, without calling _rebuild_content
         # This tests the state management logic
         panel._state = "empty"
         panel._current_ticker = None
@@ -267,7 +267,7 @@ class TestNewsPanelStateTransitions:
         panel._news_items = [create_news_item()]
         panel._selected_index = 3
         
-        # Test the state reset logic without calling _render_content
+        # Test the state reset logic without calling _rebuild_content
         panel._state = "empty"
         panel._current_ticker = None
         panel._news_items = []
@@ -323,8 +323,8 @@ class TestNewsPanelLoadNews:
         with patch("viper.widgets.news_panel.fetch_news", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = []
             
-            # We need to mock _render_content since panel isn't mounted
-            with patch.object(panel, "_render_content"):
+            # We need to mock _rebuild_content since panel isn't mounted
+            with patch.object(panel, "_rebuild_content"):
                 await panel.load_news("AAPL")
         
         assert panel._current_ticker == "AAPL"
@@ -339,7 +339,7 @@ class TestNewsPanelLoadNews:
         with patch("viper.widgets.news_panel.fetch_news", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = items
             
-            with patch.object(panel, "_render_content"):
+            with patch.object(panel, "_rebuild_content"):
                 await panel.load_news("AAPL")
         
         assert panel._state == "success"
@@ -357,7 +357,7 @@ class TestNewsPanelLoadNews:
         with patch("viper.widgets.news_panel.fetch_news", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = error
             
-            with patch.object(panel, "_render_content"):
+            with patch.object(panel, "_rebuild_content"):
                 await panel.load_news("AAPL")
         
         assert panel._state == "error"
@@ -378,7 +378,7 @@ class TestNewsPanelLoadNews:
         with patch("viper.widgets.news_panel.fetch_news", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.side_effect = slow_fetch
             
-            with patch.object(panel, "_render_content"):
+            with patch.object(panel, "_rebuild_content"):
                 await panel.load_news("AAPL")
         
         # Results should be ignored since ticker changed
@@ -435,7 +435,7 @@ class TestNewsPanelExpansion:
         panel._selected_index = 1
         
         # Mock render to avoid widget query errors
-        with patch.object(panel, "_render_content"):
+        with patch.object(panel, "_rebuild_content"):
             panel.action_toggle_expand()
         
         assert panel._expanded_index == 1
@@ -448,7 +448,7 @@ class TestNewsPanelExpansion:
         panel._selected_index = 1
         panel._expanded_index = 1  # Already expanded
         
-        with patch.object(panel, "_render_content"):
+        with patch.object(panel, "_rebuild_content"):
             panel.action_toggle_expand()
         
         assert panel._expanded_index is None
@@ -460,7 +460,7 @@ class TestNewsPanelExpansion:
         panel._news_items = [create_news_item() for _ in range(3)]
         panel._expanded_index = 2
         
-        with patch.object(panel, "_render_content"):
+        with patch.object(panel, "_rebuild_content"):
             panel.action_collapse()
         
         assert panel._expanded_index is None
@@ -472,7 +472,7 @@ class TestNewsPanelExpansion:
         panel._expanded_index = None
         
         # Should not call render if nothing to collapse
-        with patch.object(panel, "_render_content") as mock_render:
+        with patch.object(panel, "_rebuild_content") as mock_render:
             panel.action_collapse()
             mock_render.assert_not_called()
 
@@ -481,7 +481,7 @@ class TestNewsPanelExpansion:
         panel = NewsPanel()
         panel._news_items = []
         
-        with patch.object(panel, "_render_content") as mock_render:
+        with patch.object(panel, "_rebuild_content") as mock_render:
             panel.action_toggle_expand()
             mock_render.assert_not_called()
 
@@ -494,7 +494,7 @@ class TestNewsPanelExpansion:
         with patch("viper.widgets.news_panel.fetch_news", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = [create_news_item()]
             
-            with patch.object(panel, "_render_content"):
+            with patch.object(panel, "_rebuild_content"):
                 await panel.load_news("AAPL")
         
         assert panel._expanded_index is None
@@ -504,7 +504,7 @@ class TestNewsPanelExpansion:
         panel = NewsPanel()
         panel._expanded_index = 2
         
-        with patch.object(panel, "_render_content"):
+        with patch.object(panel, "_rebuild_content"):
             panel.show_empty()
         
         assert panel._expanded_index is None

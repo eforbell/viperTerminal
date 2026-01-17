@@ -167,6 +167,10 @@ class ChartPanel(Widget):
         # X-axis container - rendered AFTER all indicator panels (at very bottom)
         yield Container(id="x-axis-container")
 
+    def on_mount(self) -> None:
+        """Initialize content when mounted."""
+        self._rebuild_content()
+
     def show_loading(self, ticker: str, period: str) -> None:
         """Display loading state with spinner.
 
@@ -177,7 +181,7 @@ class ChartPanel(Widget):
         self._state = "loading"
         self._current_ticker = ticker
         self._current_period = period
-        self._render_content()
+        self._rebuild_content()
 
     def show_chart(self, data: HistoricalData, stats: HistoricalStats) -> None:
         """Display a historical price chart.
@@ -197,7 +201,7 @@ class ChartPanel(Widget):
         self._calculate_rsi(data.prices)
         # Calculate MACD when chart loads (cache for toggles)
         self._calculate_macd(data.prices)
-        self._render_content()
+        self._rebuild_content()
 
     def show_error(self, error: HistoricalDataError) -> None:
         """Display an error state.
@@ -209,7 +213,7 @@ class ChartPanel(Widget):
         self._data = error
         self._stats = None
         self._current_ticker = error.ticker
-        self._render_content()
+        self._rebuild_content()
 
     def show_empty(self) -> None:
         """Display empty state when no ticker is selected."""
@@ -217,9 +221,9 @@ class ChartPanel(Widget):
         self._data = None
         self._stats = None
         self._current_ticker = None
-        self._render_content()
+        self._rebuild_content()
 
-    def _render_content(self) -> None:
+    def _rebuild_content(self) -> None:
         """Render the appropriate content based on current state."""
         container = self.query_one("#chart-content", Container)
         container.remove_children()
@@ -540,7 +544,7 @@ class ChartPanel(Widget):
         next_idx = (current_idx + 1) % len(cycle_order)
         self._ma_mode = cycle_order[next_idx]
         # Re-render to show/hide MAs
-        self._render_content()
+        self._rebuild_content()
 
     def get_ma_mode(self) -> str:
         """Get current MA display mode.
@@ -561,7 +565,7 @@ class ChartPanel(Widget):
                     self._rsi_values, current_rsi, context=self._chart_context
                 )
             # Re-render chart to adjust height for RSI panel
-            self._render_content()
+            self._rebuild_content()
 
     def is_rsi_visible(self) -> bool:
         """Check if RSI panel is currently visible.
@@ -587,7 +591,7 @@ class ChartPanel(Widget):
                     self._macd_line, self._signal_line, self._histogram, context=self._chart_context
                 )
             # Re-render chart to adjust height for MACD panel
-            self._render_content()
+            self._rebuild_content()
 
     def is_macd_visible(self) -> bool:
         """Check if MACD panel is currently visible.

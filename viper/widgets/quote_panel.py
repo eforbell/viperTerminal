@@ -94,10 +94,14 @@ class QuotePanel(Widget):
         """Create child widgets."""
         yield Container(id="quote-content")
 
+    def on_mount(self) -> None:
+        """Initialize content when mounted."""
+        self._rebuild_content()
+
     def show_loading(self) -> None:
         """Display loading state with spinner."""
         self._state = "loading"
-        self._render_content()
+        self._rebuild_content()
 
     def show_quote(self, quote: Quote) -> None:
         """Display a successful quote (stock or crypto).
@@ -107,7 +111,7 @@ class QuotePanel(Widget):
         """
         self._state = "success"
         self._quote = quote
-        self._render_content()
+        self._rebuild_content()
 
     def show_error(self, error: QuoteError) -> None:
         """Display an error state.
@@ -117,15 +121,15 @@ class QuotePanel(Widget):
         """
         self._state = "error"
         self._quote = error
-        self._render_content()
+        self._rebuild_content()
 
     def show_empty(self) -> None:
         """Display empty state when no ticker is selected."""
         self._state = "empty"
         self._quote = None
-        self._render_content()
+        self._rebuild_content()
 
-    def _render_content(self) -> None:
+    def _rebuild_content(self) -> None:
         """Render the appropriate content based on current state."""
         container = self.query_one("#quote-content", Container)
         container.remove_children()

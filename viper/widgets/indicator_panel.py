@@ -133,7 +133,7 @@ class IndicatorPanel(Widget):
             # Keep existing y_axis_width (default 12)
 
         # Always re-render content when data changes (even if hidden, so it's ready when toggled visible)
-        self._render_content()
+        self._rebuild_content()
 
     def hide(self) -> None:
         """Hide the indicator panel."""
@@ -144,7 +144,7 @@ class IndicatorPanel(Widget):
         """Show the indicator panel."""
         self._visible = True
         self.styles.display = "block"
-        self._render_content()
+        self._rebuild_content()
 
     def toggle_visibility(self) -> None:
         """Toggle indicator panel visibility."""
@@ -169,7 +169,7 @@ class IndicatorPanel(Widget):
         """
         return self._name
 
-    def _render_content(self) -> None:
+    def _rebuild_content(self) -> None:
         """Render the indicator panel content."""
         container = self.query_one("#indicator-content", Container)
         container.remove_children()

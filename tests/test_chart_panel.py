@@ -1638,10 +1638,10 @@ async def test_chart_panel_height_calculation_rsi_visible() -> None:
 
 
 @pytest.mark.asyncio
-async def test_chart_panel_rsi_toggle_calls_render_content() -> None:
-    """Test that toggling RSI triggers _render_content().
+async def test_chart_panel_rsi_toggle_calls_rebuild_content() -> None:
+    """Test that toggling RSI triggers _rebuild_content().
 
-    This test verifies that toggle_rsi() calls _render_content() to update
+    This test verifies that toggle_rsi() calls _rebuild_content() to update
     the chart panel display when RSI visibility changes.
     """
     app = ChartPanelTestApp()
@@ -1683,14 +1683,14 @@ async def test_chart_panel_rsi_toggle_calls_render_content() -> None:
         # Initial state: RSI hidden
         assert panel.is_rsi_visible() is False
 
-        # Toggle RSI on - this should call _render_content()
+        # Toggle RSI on - this should call _rebuild_content()
         panel.toggle_rsi()
         await pilot.pause()
 
         # Verify state changed
         assert panel.is_rsi_visible() is True
 
-        # Toggle RSI off - this should call _render_content() again
+        # Toggle RSI off - this should call _rebuild_content() again
         panel.toggle_rsi()
         await pilot.pause()
 
@@ -1698,7 +1698,7 @@ async def test_chart_panel_rsi_toggle_calls_render_content() -> None:
         assert panel.is_rsi_visible() is False
 
         # This test documents that toggle_rsi() triggers layout recalculation
-        # by calling _render_content(), which recalculates available_height
+        # by calling _rebuild_content(), which recalculates available_height
 
 
 @pytest.mark.asyncio
@@ -1765,7 +1765,7 @@ async def test_rsi_panel_refresh_on_ticker_change() -> None:
     This test verifies that VPR-041 fix works: RSI panel should re-render with new data
     when ticker changes, even if the panel is currently hidden.
 
-    FIX: show_indicator() now always calls _render_content() regardless of visibility,
+    FIX: show_indicator() now always calls _rebuild_content() regardless of visibility,
     so the panel display is always up-to-date when toggled visible.
     """
     app = ChartPanelTestApp()
@@ -1848,7 +1848,7 @@ async def test_rsi_panel_refresh_on_ticker_change() -> None:
         assert rsi_values_msft != rsi_values_aapl  # Different data should produce different RSI
 
         # Verify the FIX: RSI panel display should be refreshed with new data
-        # After VPR-041 fix, show_indicator() always calls _render_content(),
+        # After VPR-041 fix, show_indicator() always calls _rebuild_content(),
         # so the panel's internal _indicator_values should match the new ticker's RSI
         assert panel._rsi_panel is not None
         assert panel._rsi_panel._indicator_values == rsi_values_msft
