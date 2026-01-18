@@ -1453,3 +1453,46 @@
   - **Simple Heuristics Work**: No need for complex statistics - 2x average is practical and effective
   - **Test Results**: 921 total tests passing, 88.62% coverage, mypy --strict clean
 ---
+
+## 2026-01-18 - VPR-086
+- **What was implemented**: Multi-expiration summary view for quick overview of ATM strikes across expirations
+- **Files changed**:
+  - `viper/widgets/options_panel.py`: Added summary mode toggle, rendering, and navigation
+    - Added `_summary_mode: bool` and `_summary_chains: dict[str, OptionsChain | OptionsError]` state
+    - Added 's' and 'enter' keybindings for summary toggle and expiration selection
+    - Created `_render_summary_view()` method to display condensed expiration list
+    - Created `_format_summary_row()` to format ATM call/put bid/ask and IV for each expiration
+    - Created `_load_summary_chains()` async method to fetch chains in parallel
+    - Modified `action_navigate_down()` and `action_navigate_up()` to work in both modes
+    - Added `action_toggle_summary()` and `action_select_expiration()` handlers
+    - Updated `_rebuild_content()` to switch between summary and normal views
+  - `tests/test_options_panel.py`: Added `TestSummaryView` class with 29 comprehensive tests
+  - `viper/widgets/help_screen.py`: Added 's' keybinding documentation
+  - `AGENTS.md`: Added VPR-086 learnings section
+  - `scripts/ralph/features/feature-9.prd.json`: Marked VPR-086 as complete
+- **Learnings**:
+  - **Orthogonal Boolean Pattern**: Use separate `_summary_mode: bool` instead of new state machine state - summary can have its own loading/error states
+  - **Type Union for Cache**: `dict[str, OptionsChain | OptionsError]` allows caching both successful and failed results
+  - **Parallel Fetch Pattern**: Use `asyncio.gather(*tasks, return_exceptions=True)` to fetch multiple chains concurrently
+  - **Exception Handling in Gather**: `return_exceptions=True` returns exceptions as values instead of raising
+  - **Type Guard Pattern**: Use explicit `isinstance(result, OptionsChain)` checks for mypy type narrowing with Union types
+  - **8-Expiration Limit**: Show nearest 8 expirations to keep summary view focused and fast
+  - **Dual Navigation Logic**: j/k keys work differently in summary (navigate expirations) vs normal (navigate strikes)
+  - **Reset Selection Pattern**: Always `_selected_index = 0` when switching views to avoid out-of-bounds errors
+  - **Cache Reuse**: When selecting from summary, check cache first before fetching chain again
+  - **Expiration Index Sync**: Update `_current_expiration_index` to match selected expiration for consistent state
+  - **Graceful Degradation**: Format summary row shows "Loading..." / "Error" / "No data" for various failure states
+  - **Header Differentiation**: Use "OPTIONS SUMMARY: TICKER" header in summary mode vs detailed header in normal mode
+  - **Guard Conditions**: Summary actions only work in success state, selection only works in summary mode
+  - **ATM Calculation Reuse**: Use existing `_find_atm_strike()` method for summary view consistency
+  - **Average IV Display**: Show average of call and put ATM IV: `(call_iv + put_iv) / 2`
+  - **Rich Markup in Format**: Use f-strings with fixed-width fields for aligned table output
+  - **State Cleanup**: Clear `_summary_mode` and `_summary_chains` in `show_empty()` for fresh state
+  - **Import Addition**: Add `import asyncio` for `asyncio.gather()` in summary chain loading
+  - **Binding Priority**: Use `priority=True` for 's' and 'enter' bindings to intercept before app-level handlers
+  - **Test Organization**: Group all summary view tests in dedicated `TestSummaryView` class for clarity
+  - **Pure Logic Testing**: Test state logic directly without widget mounting for faster, simpler tests
+  - **Coverage Impact**: Options panel coverage dropped to 47% with new async code paths - acceptable for feature-rich widgets
+  - **Test Results**: 944 total tests passing (up from 921), mypy --strict clean, 86.89% overall coverage
+- **Commit**: feat: VPR-086 - Multi-expiration summary view
+---

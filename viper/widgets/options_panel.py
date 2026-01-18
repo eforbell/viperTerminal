@@ -1,5 +1,6 @@
 """Options chain panel widget for displaying options data."""
 
+import asyncio
 from typing import Literal, Optional
 
 from textual.app import ComposeResult
@@ -33,6 +34,8 @@ class OptionsChainPanel(Widget):
         Binding("p", "show_puts", "Puts", show=False, priority=True),
         Binding("f", "cycle_filter", "Filter", show=False, priority=True),
         Binding("a", "jump_to_atm", "ATM", show=False, priority=True),
+        Binding("s", "toggle_summary", "Summary", show=False, priority=True),
+        Binding("enter", "select_expiration", "Select", show=False, priority=True),
     ]
 
     DEFAULT_CSS = """
@@ -112,6 +115,8 @@ class OptionsChainPanel(Widget):
         self._filter_mode: Literal["all", "itm", "otm"] = "all"
         self._current_price: Optional[float] = None  # Current stock/crypto price
         self._atm_strike: Optional[float] = None  # At-the-money strike price
+        self._summary_mode: bool = False  # Summary view (multi-expiration) vs normal view
+        self._summary_chains: dict[str, OptionsChain | OptionsError] = {}  # Cache chains for summary view
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -202,6 +207,8 @@ class OptionsChainPanel(Widget):
         self._filter_mode = "all"
         self._current_price = None
         self._atm_strike = None
+        self._summary_mode = False
+        self._summary_chains = {}
         self._rebuild_content()
 
     def _find_atm_strike(self, contracts: list[OptionContract]) -> Optional[float]:
@@ -228,9 +235,12 @@ class OptionsChainPanel(Widget):
         # Update header
         header = self.query_one("#options-header", Label)
         if self._state == "success" and self._chain:
-            option_type = "CALLS" if self._show_calls else "PUTS"
-            filter_text = self._filter_mode.upper()
-            header_text = f"OPTIONS: [cyan]{self._chain.ticker}[/cyan] | [cyan]{self._chain.expiration}[/cyan] | [cyan]{option_type}[/cyan] | Filter: [cyan]{filter_text}[/cyan]"
+            if self._summary_mode:
+                header_text = f"OPTIONS SUMMARY: [cyan]{self._chain.ticker}[/cyan]"
+            else:
+                option_type = "CALLS" if self._show_calls else "PUTS"
+                filter_text = self._filter_mode.upper()
+                header_text = f"OPTIONS: [cyan]{self._chain.ticker}[/cyan] | [cyan]{self._chain.expiration}[/cyan] | [cyan]{option_type}[/cyan] | Filter: [cyan]{filter_text}[/cyan]"
             header.update(header_text)
         else:
             header.update("OPTIONS")
@@ -261,7 +271,10 @@ class OptionsChainPanel(Widget):
                 )
             )
         elif self._state == "success":
-            self._render_options_table(container)
+            if self._summary_mode:
+                self._render_summary_view(container)
+            else:
+                self._render_options_table(container)
 
     def _render_options_table(self, container: VerticalScroll) -> None:
         """Render the options table with current selection.
@@ -532,32 +545,180 @@ class OptionsChainPanel(Widget):
             # OTM contracts use default color
             return row
 
+    def _render_summary_view(self, container: VerticalScroll) -> None:
+        """Render the summary view showing ATM strikes for multiple expirations.
+
+        Args:
+            container: The container to mount widgets into.
+        """
+        if not self._expirations or not self._current_ticker:
+            container.mount(
+                Label("No expirations available", classes="error-state")
+            )
+            return
+
+        # Show up to 8 nearest expirations
+        expirations_to_show = self._expirations[:8]
+
+        # Clamp selected index to valid range
+        if self._selected_index >= len(expirations_to_show):
+            self._selected_index = len(expirations_to_show) - 1
+        if self._selected_index < 0:
+            self._selected_index = 0
+
+        # Render table header
+        header_text = "[cyan]Expiration    Call Bid/Ask    Put Bid/Ask     ATM IV[/cyan]"
+        container.mount(Label(header_text, classes="table-header", markup=True))
+
+        # Render summary rows
+        for i, expiration in enumerate(expirations_to_show):
+            is_selected = i == self._selected_index
+
+            # Get chain data (from cache or show loading/error)
+            chain = self._summary_chains.get(expiration)
+
+            if chain is None:
+                # Chain not loaded yet - show loading indicator
+                row_text = f"{expiration:13s} Loading..."
+            elif isinstance(chain, OptionsError):
+                # Chain failed to load
+                row_text = f"{expiration:13s} [red]Error[/red]"
+            else:
+                # Chain loaded - format ATM data
+                row_text = self._format_summary_row(expiration, chain)
+
+            # Create row container with appropriate classes
+            classes = "table-row"
+            if is_selected:
+                classes += " selected"
+
+            row_label = Label(row_text, classes=classes, markup=True)
+            container.mount(row_label)
+
+    def _format_summary_row(self, expiration: str, chain: OptionsChain) -> str:
+        """Format a summary row showing ATM data for one expiration.
+
+        Args:
+            expiration: The expiration date string.
+            chain: The options chain for this expiration.
+
+        Returns:
+            Formatted row string with Rich markup.
+        """
+        # Find ATM strike for both calls and puts
+        if not chain.calls or not chain.puts:
+            return f"{expiration:13s} No data available"
+
+        # Use current price to find ATM strike
+        atm_strike = self._find_atm_strike(chain.calls)
+
+        if atm_strike is None:
+            return f"{expiration:13s} No ATM data"
+
+        # Find ATM call contract
+        atm_call = None
+        for contract in chain.calls:
+            if contract.strike == atm_strike:
+                atm_call = contract
+                break
+
+        # Find ATM put contract
+        atm_put = None
+        for contract in chain.puts:
+            if contract.strike == atm_strike:
+                atm_put = contract
+                break
+
+        if not atm_call or not atm_put:
+            return f"{expiration:13s} No ATM data"
+
+        # Format call bid/ask
+        call_str = f"{atm_call.bid:>6.2f}/{atm_call.ask:<6.2f}"
+
+        # Format put bid/ask
+        put_str = f"{atm_put.bid:>6.2f}/{atm_put.ask:<6.2f}"
+
+        # Format ATM IV (use average of call and put IV)
+        avg_iv = (atm_call.implied_volatility + atm_put.implied_volatility) / 2
+        iv_pct = avg_iv * 100
+        iv_str = f"{iv_pct:>5.1f}%"
+
+        # Build the row string
+        return f"{expiration:13s} {call_str:16s} {put_str:16s} {iv_str:>7s}"
+
+    async def _load_summary_chains(self) -> None:
+        """Load option chains for summary view (up to 8 expirations)."""
+        if not self._current_ticker or not self._expirations:
+            return
+
+        # Get up to 8 nearest expirations
+        expirations_to_load = self._expirations[:8]
+
+        # Clear existing cache
+        self._summary_chains = {}
+
+        # Fetch all chains (in parallel for speed)
+        tasks = [
+            fetch_option_chain(self._current_ticker, exp) for exp in expirations_to_load
+        ]
+
+        # Wait for all chains to load
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Store results in cache
+        for exp, result in zip(expirations_to_load, results):
+            if isinstance(result, Exception):
+                # Store error (from exception during fetch)
+                self._summary_chains[exp] = OptionsError(
+                    ticker=self._current_ticker or "",
+                    error_message=str(result),
+                )
+            elif isinstance(result, OptionsError):
+                # Store error (from service)
+                self._summary_chains[exp] = result
+            elif isinstance(result, OptionsChain):
+                # Store successful chain
+                self._summary_chains[exp] = result
+            # Note: No else needed - result must be one of the above types
+
+        # Rebuild content to show loaded data
+        self._rebuild_content()
+
     def action_navigate_down(self) -> None:
-        """Navigate down to the next option contract (j key)."""
+        """Navigate down to the next option contract or expiration (j key)."""
         if self._state != "success" or not self._chain:
             return
 
-        all_contracts = self._chain.calls if self._show_calls else self._chain.puts
-        contracts = self._apply_filter(all_contracts)
-        if not contracts:
-            return
+        if self._summary_mode:
+            # In summary mode, navigate between expirations (up to 8 shown)
+            max_index = min(len(self._expirations), 8) - 1
+            self._selected_index = min(self._selected_index + 1, max_index)
+        else:
+            # In normal mode, navigate between contracts
+            all_contracts = self._chain.calls if self._show_calls else self._chain.puts
+            contracts = self._apply_filter(all_contracts)
+            if not contracts:
+                return
+            self._selected_index = min(self._selected_index + 1, len(contracts) - 1)
 
-        # Move selection down
-        self._selected_index = min(self._selected_index + 1, len(contracts) - 1)
         self._rebuild_content()
 
     def action_navigate_up(self) -> None:
-        """Navigate up to the previous option contract (k key)."""
+        """Navigate up to the previous option contract or expiration (k key)."""
         if self._state != "success" or not self._chain:
             return
 
-        all_contracts = self._chain.calls if self._show_calls else self._chain.puts
-        contracts = self._apply_filter(all_contracts)
-        if not contracts:
-            return
+        if self._summary_mode:
+            # In summary mode, navigate between expirations
+            self._selected_index = max(self._selected_index - 1, 0)
+        else:
+            # In normal mode, navigate between contracts
+            all_contracts = self._chain.calls if self._show_calls else self._chain.puts
+            contracts = self._apply_filter(all_contracts)
+            if not contracts:
+                return
+            self._selected_index = max(self._selected_index - 1, 0)
 
-        # Move selection up
-        self._selected_index = max(self._selected_index - 1, 0)
         self._rebuild_content()
 
     def action_prev_expiration(self) -> None:
@@ -655,3 +816,63 @@ class OptionsChainPanel(Widget):
             self._selected_index = atm_index
             self._rebuild_content()
         # Otherwise, ATM strike is filtered out - do nothing (graceful degradation)
+
+    def action_toggle_summary(self) -> None:
+        """Toggle between summary view and normal view (s key)."""
+        if self._state != "success" or not self._chain:
+            return
+
+        # Toggle summary mode
+        self._summary_mode = not self._summary_mode
+
+        # Reset selection when switching views
+        self._selected_index = 0
+
+        if self._summary_mode:
+            # Entering summary mode - load chains for all expirations
+            self.run_worker(self._load_summary_chains())
+        else:
+            # Exiting summary mode - rebuild normal view
+            self._rebuild_content()
+
+    def action_select_expiration(self) -> None:
+        """Select an expiration from summary view and switch to full chain (Enter key)."""
+        # Only works in summary mode
+        if not self._summary_mode or self._state != "success":
+            return
+
+        if not self._expirations:
+            return
+
+        # Get up to 8 expirations shown in summary
+        expirations_to_show = self._expirations[:8]
+
+        # Validate selected index
+        if self._selected_index < 0 or self._selected_index >= len(expirations_to_show):
+            return
+
+        # Get selected expiration
+        selected_expiration = expirations_to_show[self._selected_index]
+
+        # Exit summary mode
+        self._summary_mode = False
+
+        # Update expiration index to match selected expiration
+        try:
+            self._current_expiration_index = self._expirations.index(selected_expiration)
+        except ValueError:
+            # Should never happen, but handle gracefully
+            self._current_expiration_index = 0
+
+        # Check if we already have the chain loaded in cache
+        cached_chain = self._summary_chains.get(selected_expiration)
+
+        if cached_chain and not isinstance(cached_chain, OptionsError):
+            # Use cached chain
+            self._chain = cached_chain
+            self._selected_index = 0
+            self._rebuild_content()
+        else:
+            # Load the chain (this will also rebuild content)
+            if self._current_ticker:
+                self.run_worker(self._load_chain(self._current_ticker, selected_expiration))

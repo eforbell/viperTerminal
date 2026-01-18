@@ -235,6 +235,7 @@
     {
       "id": "VPR-086",
       "title": "Multi-expiration summary view",
+      "passes": true,
       "acceptanceCriteria": [
         "Add 's' keybinding: toggle summary view mode",
         "Summary view shows ATM strike for each expiration (condensed)",
@@ -252,7 +253,8 @@
       "priority": 5,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-085"],
-      "notes": "Quick overview of multiple expirations without navigating one by one. Shows ATM call/put bid-ask and IV at a glance."
+      "notes": "Quick overview of multiple expirations without navigating one by one. Shows ATM call/put bid-ask and IV at a glance.",
+      "completedAt": "2026-01-18"
     },
     {
       "id": "VPR-087",

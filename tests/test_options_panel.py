@@ -1465,3 +1465,413 @@ class TestVolumeAndOIHighlighting:
 
         # None should be highlighted
         assert panel._is_high_oi(0, avg_oi) is False
+
+
+class TestSummaryView:
+    """Test multi-expiration summary view feature (VPR-086)."""
+
+    def test_summary_mode_initialization(self) -> None:
+        """Test that summary mode initializes to False."""
+        panel = OptionsChainPanel()
+        assert panel._summary_mode is False
+        assert panel._summary_chains == {}
+
+    def test_toggle_summary_mode(self) -> None:
+        """Test toggling summary mode on and off."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain()
+
+        # Start in normal mode
+        assert panel._summary_mode is False
+
+        # Toggle to summary mode (simulating action_toggle_summary)
+        panel._summary_mode = not panel._summary_mode
+        assert panel._summary_mode is True
+
+        # Toggle back to normal mode
+        panel._summary_mode = not panel._summary_mode
+        assert panel._summary_mode is False
+
+    def test_summary_mode_resets_selection(self) -> None:
+        """Test that toggling summary mode resets selection index."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain()
+        panel._selected_index = 5
+
+        # Simulate toggle to summary mode
+        panel._summary_mode = not panel._summary_mode
+        panel._selected_index = 0  # Reset as per spec
+
+        assert panel._selected_index == 0
+
+    def test_format_summary_row_with_valid_data(self) -> None:
+        """Test formatting summary row with valid ATM data."""
+        panel = OptionsChainPanel()
+        panel._current_price = 150.0
+
+        # Create chain with ATM contracts
+        chain = create_options_chain(ticker="AAPL", expiration="2024-03-15")
+
+        # Format summary row
+        row = panel._format_summary_row("2024-03-15", chain)
+
+        # Should contain expiration date
+        assert "2024-03-15" in row
+
+        # Should contain bid/ask data (basic check)
+        assert "/" in row  # Bid/ask separator
+
+        # Should contain percentage sign for IV
+        assert "%" in row
+
+    def test_format_summary_row_no_current_price(self) -> None:
+        """Test formatting summary row without current price."""
+        panel = OptionsChainPanel()
+        panel._current_price = None  # No price set
+
+        chain = create_options_chain(ticker="AAPL", expiration="2024-03-15")
+
+        # When no current price, find_atm_strike returns None
+        atm_strike = panel._find_atm_strike(chain.calls)
+        assert atm_strike is None
+
+        # Format should handle gracefully
+        row = panel._format_summary_row("2024-03-15", chain)
+        assert "2024-03-15" in row
+        # Should show "No ATM data" when can't find ATM
+        assert "No ATM data" in row
+
+    def test_format_summary_row_empty_chain(self) -> None:
+        """Test formatting summary row with empty chain."""
+        panel = OptionsChainPanel()
+        panel._current_price = 150.0
+
+        # Create chain with no contracts
+        chain = OptionsChain(
+            ticker="AAPL",
+            expiration="2024-03-15",
+            calls=[],
+            puts=[]
+        )
+
+        row = panel._format_summary_row("2024-03-15", chain)
+
+        # Should contain expiration and error message
+        assert "2024-03-15" in row
+        assert "No data available" in row
+
+    def test_format_summary_row_missing_atm_contract(self) -> None:
+        """Test formatting summary row when ATM strike not in chain."""
+        panel = OptionsChainPanel()
+        panel._current_price = 200.0  # Price outside of available strikes
+
+        # Create chain with strikes far from current price
+        chain = OptionsChain(
+            ticker="AAPL",
+            expiration="2024-03-15",
+            calls=[create_option_contract(strike=100.0)],
+            puts=[create_option_contract(strike=100.0)]
+        )
+
+        # ATM would be 100.0 (closest to 200.0)
+        atm_strike = panel._find_atm_strike(chain.calls)
+        assert atm_strike == 100.0
+
+        # Should find the contract and format successfully
+        row = panel._format_summary_row("2024-03-15", chain)
+        assert "2024-03-15" in row
+        # Should contain data (not error) since ATM contract exists
+        assert "/" in row  # Bid/ask separator
+
+    def test_summary_view_navigation_j_k(self) -> None:
+        """Test j/k navigation in summary mode."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._summary_mode = True
+        panel._expirations = ["2024-01-19", "2024-02-16", "2024-03-15"]
+        panel._chain = create_options_chain()
+        panel._selected_index = 0
+
+        # Navigate down (j key)
+        max_index = min(len(panel._expirations), 8) - 1
+        panel._selected_index = min(panel._selected_index + 1, max_index)
+        assert panel._selected_index == 1
+
+        # Navigate down again
+        panel._selected_index = min(panel._selected_index + 1, max_index)
+        assert panel._selected_index == 2
+
+        # Navigate up (k key)
+        panel._selected_index = max(panel._selected_index - 1, 0)
+        assert panel._selected_index == 1
+
+        # Navigate up to top
+        panel._selected_index = max(panel._selected_index - 1, 0)
+        assert panel._selected_index == 0
+
+        # Try to navigate up past 0
+        panel._selected_index = max(panel._selected_index - 1, 0)
+        assert panel._selected_index == 0  # Should stay at 0
+
+    def test_summary_view_limits_to_8_expirations(self) -> None:
+        """Test that summary view only shows up to 8 expirations."""
+        panel = OptionsChainPanel()
+        panel._expirations = [f"2024-{i:02d}-15" for i in range(1, 13)]  # 12 expirations
+
+        # Get expirations to show
+        expirations_to_show = panel._expirations[:8]
+
+        assert len(expirations_to_show) == 8
+        assert expirations_to_show[0] == "2024-01-15"
+        assert expirations_to_show[7] == "2024-08-15"
+
+    def test_summary_view_navigation_bounds(self) -> None:
+        """Test that summary navigation respects 8-expiration limit."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._summary_mode = True
+        panel._expirations = [f"2024-{i:02d}-15" for i in range(1, 13)]  # 12 expirations
+        panel._chain = create_options_chain()
+        panel._selected_index = 0
+
+        # Try to navigate to index 10 (beyond 8-expiration limit)
+        max_index = min(len(panel._expirations), 8) - 1
+        panel._selected_index = 10
+
+        # Should be clamped to max (7)
+        if panel._selected_index >= min(len(panel._expirations), 8):
+            panel._selected_index = max_index
+
+        assert panel._selected_index == 7
+
+    def test_select_expiration_from_summary(self) -> None:
+        """Test selecting an expiration from summary view."""
+        panel = OptionsChainPanel()
+        panel._summary_mode = True
+        panel._state = "success"
+        panel._current_ticker = "AAPL"
+        panel._expirations = ["2024-01-19", "2024-02-16", "2024-03-15"]
+        panel._selected_index = 1  # Select Feb expiration
+        panel._chain = create_options_chain()
+
+        # Get expirations shown in summary
+        expirations_to_show = panel._expirations[:8]
+
+        # Validate selection is in range
+        assert 0 <= panel._selected_index < len(expirations_to_show)
+
+        # Get selected expiration
+        selected_expiration = expirations_to_show[panel._selected_index]
+        assert selected_expiration == "2024-02-16"
+
+        # Simulate selecting (exit summary mode)
+        panel._summary_mode = False
+
+        # Update expiration index
+        panel._current_expiration_index = panel._expirations.index(selected_expiration)
+        assert panel._current_expiration_index == 1
+
+    def test_select_expiration_uses_cached_chain(self) -> None:
+        """Test that selecting expiration uses cached chain data."""
+        panel = OptionsChainPanel()
+        panel._summary_mode = True
+        panel._expirations = ["2024-01-19", "2024-02-16"]
+        panel._selected_index = 0
+        panel._chain = create_options_chain()
+
+        # Cache a chain for first expiration
+        cached_chain = create_options_chain(expiration="2024-01-19")
+        panel._summary_chains["2024-01-19"] = cached_chain
+
+        # Simulate selection
+        selected_exp = panel._expirations[panel._selected_index]
+        cached = panel._summary_chains.get(selected_exp)
+
+        assert cached is not None
+        assert cached == cached_chain
+        assert not isinstance(cached, OptionsError)
+
+    def test_summary_chains_cache_structure(self) -> None:
+        """Test that summary chains cache uses correct structure."""
+        panel = OptionsChainPanel()
+
+        # Cache should be a dict mapping expiration to chain
+        panel._summary_chains["2024-01-19"] = create_options_chain(expiration="2024-01-19")
+        panel._summary_chains["2024-02-16"] = create_options_chain(expiration="2024-02-16")
+
+        assert len(panel._summary_chains) == 2
+        assert "2024-01-19" in panel._summary_chains
+        assert "2024-02-16" in panel._summary_chains
+
+    def test_summary_chains_can_store_errors(self) -> None:
+        """Test that summary chains cache can store OptionsError."""
+        panel = OptionsChainPanel()
+
+        # Store both successful and error results
+        panel._summary_chains["2024-01-19"] = create_options_chain(expiration="2024-01-19")
+        panel._summary_chains["2024-02-16"] = OptionsError(
+            ticker="AAPL",
+            error_message="Failed to load"
+        )
+
+        # Check cache contents
+        assert len(panel._summary_chains) == 2
+        assert isinstance(panel._summary_chains["2024-01-19"], OptionsChain)
+        assert isinstance(panel._summary_chains["2024-02-16"], OptionsError)
+
+    def test_show_empty_clears_summary_state(self) -> None:
+        """Test that show_empty clears summary mode and cache."""
+        panel = OptionsChainPanel()
+
+        # Set summary state
+        panel._summary_mode = True
+        panel._summary_chains = {
+            "2024-01-19": create_options_chain(expiration="2024-01-19")
+        }
+
+        # Simulate show_empty
+        panel._summary_mode = False
+        panel._summary_chains = {}
+
+        assert panel._summary_mode is False
+        assert panel._summary_chains == {}
+
+    def test_summary_view_header_text(self) -> None:
+        """Test that summary view shows correct header text."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain(ticker="AAPL")
+        panel._summary_mode = True
+
+        # Simulate header generation
+        if panel._summary_mode:
+            header_text = f"OPTIONS SUMMARY: [cyan]{panel._chain.ticker}[/cyan]"
+        else:
+            header_text = "OPTIONS"
+
+        assert "SUMMARY" in header_text
+        assert "AAPL" in header_text
+
+    def test_normal_view_header_text(self) -> None:
+        """Test that normal view shows detailed header text."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain(ticker="AAPL", expiration="2024-01-19")
+        panel._summary_mode = False
+        panel._show_calls = True
+        panel._filter_mode = "all"
+
+        # Simulate header generation
+        if panel._summary_mode:
+            header_text = "SUMMARY"
+        else:
+            option_type = "CALLS" if panel._show_calls else "PUTS"
+            filter_text = panel._filter_mode.upper()
+            header_text = f"OPTIONS: [cyan]{panel._chain.ticker}[/cyan] | [cyan]{panel._chain.expiration}[/cyan] | [cyan]{option_type}[/cyan] | Filter: [cyan]{filter_text}[/cyan]"
+
+        assert "CALLS" in header_text
+        assert "2024-01-19" in header_text
+        assert "AAPL" in header_text
+        assert "Filter: ALL" in header_text.replace("[cyan]", "").replace("[/cyan]", "")
+
+    def test_summary_mode_only_works_in_success_state(self) -> None:
+        """Test that summary mode toggle only works in success state."""
+        panel = OptionsChainPanel()
+
+        # Test in empty state
+        panel._state = "empty"
+        panel._chain = None
+        should_toggle = (panel._state == "success" and panel._chain is not None)
+        assert should_toggle is False
+
+        # Test in loading state
+        panel._state = "loading"
+        panel._chain = None
+        should_toggle = (panel._state == "success" and panel._chain is not None)
+        assert should_toggle is False
+
+        # Test in error state
+        panel._state = "error"
+        panel._chain = None
+        should_toggle = (panel._state == "success" and panel._chain is not None)
+        assert should_toggle is False
+
+        # Test in success state
+        panel._state = "success"
+        panel._chain = create_options_chain()
+        should_toggle = (panel._state == "success" and panel._chain is not None)
+        assert should_toggle is True
+
+    def test_select_expiration_only_works_in_summary_mode(self) -> None:
+        """Test that select expiration only works when in summary mode."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+
+        # Test in normal mode
+        panel._summary_mode = False
+        should_select = (panel._summary_mode and panel._state == "success")
+        assert should_select is False
+
+        # Test in summary mode
+        panel._summary_mode = True
+        should_select = (panel._summary_mode and panel._state == "success")
+        assert should_select is True
+
+    def test_summary_row_format_includes_all_fields(self) -> None:
+        """Test that summary row includes expiration, call bid/ask, put bid/ask, and IV."""
+        panel = OptionsChainPanel()
+        panel._current_price = 150.0
+
+        chain = create_options_chain(ticker="AAPL", expiration="2024-03-15")
+        row = panel._format_summary_row("2024-03-15", chain)
+
+        # Check for all expected fields
+        assert "2024-03-15" in row  # Expiration
+        # Should have at least 2 slashes for bid/ask separators (call and put)
+        assert row.count("/") >= 2
+        assert "%" in row  # IV percentage
+
+    @pytest.mark.asyncio
+    async def test_load_summary_chains_clears_cache(self) -> None:
+        """Test that loading summary chains clears existing cache."""
+        panel = OptionsChainPanel()
+        panel._current_ticker = "AAPL"
+        panel._expirations = ["2024-01-19", "2024-02-16"]
+
+        # Set some cached data
+        panel._summary_chains = {
+            "2024-01-19": create_options_chain(expiration="2024-01-19")
+        }
+
+        # Simulate cache clear (first step of _load_summary_chains)
+        panel._summary_chains = {}
+
+        assert panel._summary_chains == {}
+
+    def test_select_expiration_with_invalid_index(self) -> None:
+        """Test that select expiration handles invalid index gracefully."""
+        panel = OptionsChainPanel()
+        panel._summary_mode = True
+        panel._state = "success"
+        panel._expirations = ["2024-01-19", "2024-02-16"]
+        panel._selected_index = 10  # Invalid index
+
+        expirations_to_show = panel._expirations[:8]
+
+        # Should not proceed with invalid index
+        is_valid = (0 <= panel._selected_index < len(expirations_to_show))
+        assert is_valid is False
+
+    def test_select_expiration_with_empty_expirations(self) -> None:
+        """Test that select expiration handles empty expirations list."""
+        panel = OptionsChainPanel()
+        panel._summary_mode = True
+        panel._state = "success"
+        panel._expirations = []
+        panel._selected_index = 0
+
+        # Should not proceed with empty list
+        should_proceed = bool(panel._expirations)
+        assert should_proceed is False

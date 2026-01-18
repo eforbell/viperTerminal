@@ -227,6 +227,14 @@ class HelpScreen(ModalScreen[None]):
                     classes="help-item",
                 )
                 yield Static(
+                    "Press 's' to toggle summary view (ATM strikes for multiple expirations).",
+                    classes="help-item",
+                )
+                yield Static(
+                    "In summary view, press Enter to view full chain for selected expiration.",
+                    classes="help-item",
+                )
+                yield Static(
                     "ITM (In The Money) contracts are highlighted in green.",
                     classes="help-item",
                 )
