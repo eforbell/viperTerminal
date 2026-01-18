@@ -100,7 +100,11 @@
       "priority": 2,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-076"],
-      "notes": "yfinance option_chain returns namedtuple with .calls and .puts DataFrames. Each has columns: strike, bid, ask, lastPrice, volume, openInterest, impliedVolatility, inTheMoney."
+      "notes": "yfinance option_chain returns namedtuple with .calls and .puts DataFrames. Each has columns: strike, bid, ask, lastPrice, volume, openInterest, impliedVolatility, inTheMoney.",
+      "passes": true,
+      "completedAt": "2026-01-18",
+      "testsPassing": 832,
+      "coverage": "95%"
     },
     {
       "id": "VPR-078",

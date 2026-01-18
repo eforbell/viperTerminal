@@ -1234,3 +1234,26 @@
   - 94% coverage acceptable when generic exception handler is untestable
   - Follow established service patterns: async wrapper, executor, timeout, error handling
 ---
+
+## 2026-01-18 - VPR-077
+- **What was implemented**: Created OptionContract and OptionsChain dataclasses with fetch_option_chain async function
+- **Files changed**:
+  - `viper/services/options.py`: Added OptionContract, OptionsChain dataclasses, fetch_option_chain function, _fetch_chain_sync helper, _parse_contracts_dataframe parser with NaN handling
+  - `tests/test_options.py`: Added 12 comprehensive tests for option chain fetching (25 tests total, all passing)
+  - `AGENTS.md`: Added VPR-077 learnings section
+- **Learnings**:
+  - yfinance option_chain() returns namedtuple with .calls and .puts DataFrames
+  - DataFrame columns use camelCase: lastPrice, openInterest, impliedVolatility, inTheMoney
+  - Critical NaN handling: Cannot convert NaN to int directly - use math.isnan() after float conversion
+  - Created safe_float() and safe_int() nested helpers for robust NaN/None/ValueError handling
+  - DataFrame.get() returns NaN when column exists with NaN - must check both None and isnan()
+  - Use try-except around conversions to handle ValueError and TypeError gracefully
+  - Default values: 0.0 for floats, 0 for ints, False for booleans on NaN/None
+  - Empty DataFrames are valid (no contracts at certain strikes is normal)
+  - Invalid expiration detected by "not in list" or "expiration" in error message
+  - Used Any type for DataFrame parameter to avoid untyped import issues with pandas
+  - Import math module for math.isnan() function
+  - Test pattern: Create _create_mock_option_chain() helper with pd.DataFrame mocks
+  - Test pattern: Use import numpy as np to create np.nan values for NaN testing
+  - All 832 tests passing with 95% coverage on options.py
+---
