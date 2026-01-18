@@ -3942,3 +3942,88 @@ Added expiration date navigation to OptionsChainPanel using bracket keys.
 - **Fast Test Execution**: Pure logic tests run faster than full widget mount tests
 - **Trade-off**: Lower coverage percentage but faster, more focused tests
 
+
+---
+
+## Feature 9: Enhanced Options Explorer - VPR-084
+
+### IV Color Coding Implementation
+- **Relative Color Coding**: Color IV values relative to the current chain's IV range, not absolute values
+- **Third-Based Thresholds**: Divide IV range into thirds using simple math: `low_threshold = min + range/3`, `high_threshold = min + 2*range/3`
+- **Color Assignment**: Low (< low_threshold) = green, Medium (< high_threshold) = yellow, High (>= high_threshold) = red
+- **Edge Case - Same IV**: When `max_iv == min_iv`, return yellow (medium) to avoid division by zero
+- **Edge Case - NaN/Zero IV**: Filter out zero IVs (converted from NaN) when calculating min/max, default to yellow color for zero IVs
+- **IV Filtering**: Use `valid_ivs = [c.implied_volatility for c in contracts if c.implied_volatility > 0.0]` to exclude NaN values
+- **Default Fallback**: When no valid IVs exist, use `min_iv = 0.0, max_iv = 0.0` which triggers same-IV logic
+
+### Rich Markup Nesting
+- **Nested Markup Works**: Rich supports nested markup like `[green]...[yellow]value[/yellow]...[/green]`
+- **Row-Level vs Column-Level Colors**: When entire row is colored (ITM = green), individual column colors nest inside
+- **IV Color in Context**: IV color is applied to IV column even when row is wrapped in ITM green color
+- **Markup Order Matters**: Apply specific column colors first, then wrap entire row if needed
+
+### Floating Point Precision in Comparisons
+- **FP Precision Issue**: `0.10 + 2*(0.30/3) = 0.30000000000000004`, not exactly `0.30`
+- **Comparison Strategy**: Use `<` for consistency rather than `<=` to avoid boundary confusion
+- **Test Expectations**: When testing exact threshold values, account for FP precision or test values slightly above/below
+- **Practical Impact**: Values at exact thresholds may fall into either category due to FP math - document this behavior
+
+### Method Signature Evolution
+- **Optional Parameters**: Add optional parameters with defaults for backward compatibility (e.g., `current_price: Optional[float] = None`)
+- **New Parameters for New Features**: Added `iv_color: str = "white"` parameter to `_format_contract_row()`
+- **Default Values**: Use sensible defaults that work when new feature is disabled (e.g., "white" for IV color)
+
+### IV Range Calculation Strategy
+- **Calculate from All Contracts**: Always calculate IV range from full unfiltered contract list
+- **Consistent Colors Across Filters**: IV colors remain consistent when user toggles filters (ITM/OTM)
+- **Recalculate on Expiration Change**: IV range is recalculated when user switches to different expiration date
+- **No Caching Needed**: IV range calculation is fast (simple min/max), recalculate every render
+
+### Testing IV Color Logic
+- **Test Pure Function**: `_get_iv_color()` is a pure function, test it directly with various inputs
+- **Test Edge Cases**: Same IV, zero IV, very narrow range, very wide range
+- **Test Boundary Values**: Test values at and near threshold boundaries
+- **Test Integration**: Verify IV colors appear in formatted rows and respect OTM contract markup
+- **Use OTM Contracts for Format Tests**: When testing IV markup, use OTM contracts to avoid row-level color wrapping
+
+### Test Assertion Strategies
+- **Flexible String Checks**: Instead of exact string match, check for presence of color tags and value separately
+- **Example**: `assert "[green]" in row and "25.0%" in row and "[/green]" in row` is more robust than `assert "[green]25.0%[/green]" in row`
+- **Handles Nesting**: Flexible checks work even when markup is nested in other markup
+
+### Code Organization Patterns
+- **Helper Method Location**: Place `_get_iv_color()` near other helper methods like `_apply_filter()` and `_find_atm_strike()`
+- **Calculation in Render**: Calculate IV range in `_render_options_table()` where it's used, not stored as instance variable
+- **Local Variables**: Use local `min_iv, max_iv` variables rather than instance variables to avoid stale data
+
+### Coverage and Testing Philosophy
+- **Coverage Drop Acceptable**: Going from 89% to 88.64% coverage is acceptable when adding new features with complex async code
+- **Test What Matters**: Focus on testing business logic (IV color calculation) rather than widget integration
+- **Pure Logic Tests**: 12 new tests for IV coloring logic, all testing pure functions without widget mounting
+- **Fast Test Execution**: Pure logic tests run in milliseconds, provide quick feedback loop
+
+### Documentation in Code
+- **Method Docstrings**: Include interpretation in docstrings (e.g., "Low IV = cheap options, High IV = expensive options")
+- **Parameter Documentation**: Document color string format in parameters (e.g., `iv_color: "green", "yellow", or "red"`)
+- **Edge Case Comments**: Document edge cases inline (e.g., "Handle edge case: all IVs are the same")
+
+### Implementation Order
+1. Add pure calculation method (`_get_iv_color()`)
+2. Modify formatting method to accept and apply color
+3. Integrate into rendering logic (calculate range, pass color)
+4. Write comprehensive tests for pure logic
+5. Run mypy and pytest to verify
+6. Document learnings
+
+### Mypy Type Checking
+- **Strict Mode Success**: All changes pass `mypy --strict` with no errors
+- **Type Hints Matter**: Proper type hints on `min_iv`, `max_iv`, `iv_color` parameters catch potential bugs
+- **Return Type Clarity**: Explicitly return `str` from `_get_iv_color()` makes usage clear
+
+### Test Results
+- **Tests Added**: 12 new tests in `TestOptionsChainPanelIVColorCoding` class
+- **Total Tests**: 909 tests passing (up from 897)
+- **Coverage**: 88.64% overall (down from 89% due to uncovered async widget code paths)
+- **Mypy**: Clean `mypy --strict` pass
+- **Feature Status**: VPR-084 complete and ready to commit
+

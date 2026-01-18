@@ -300,6 +300,17 @@ class OptionsChainPanel(Widget):
         # Calculate ATM strike from all contracts (not filtered)
         self._atm_strike = self._find_atm_strike(all_contracts)
 
+        # Calculate IV range for color coding (from all contracts, not filtered)
+        # Filter out 0.0 IV values (which were NaN in original data)
+        valid_ivs = [c.implied_volatility for c in all_contracts if c.implied_volatility > 0.0]
+        if valid_ivs:
+            min_iv = min(valid_ivs)
+            max_iv = max(valid_ivs)
+        else:
+            # No valid IVs - use defaults that will result in yellow color
+            min_iv = 0.0
+            max_iv = 0.0
+
         # Clamp selected index to valid range
         if self._selected_index >= len(contracts):
             self._selected_index = len(contracts) - 1
@@ -315,8 +326,14 @@ class OptionsChainPanel(Widget):
             is_selected = i == self._selected_index
             is_atm = self._atm_strike is not None and contract.strike == self._atm_strike
 
+            # Get IV color (default to yellow if IV is 0.0/NaN)
+            if contract.implied_volatility > 0.0:
+                iv_color = self._get_iv_color(contract.implied_volatility, min_iv, max_iv)
+            else:
+                iv_color = "yellow"
+
             # Format row data
-            row_text = self._format_contract_row(contract, is_atm=is_atm)
+            row_text = self._format_contract_row(contract, is_atm=is_atm, iv_color=iv_color)
 
             # Create row container with appropriate classes
             classes = "table-row"
@@ -346,12 +363,51 @@ class OptionsChainPanel(Widget):
         else:
             return contracts
 
-    def _format_contract_row(self, contract: OptionContract, is_atm: bool = False) -> str:
+    def _get_iv_color(self, iv: float, min_iv: float, max_iv: float) -> str:
+        """Get color markup for IV based on its position in the range.
+
+        Color logic:
+        - Low IV (bottom third): green - options are relatively cheap
+        - Medium IV (middle third): yellow - normal pricing
+        - High IV (top third): red - options are relatively expensive
+
+        Args:
+            iv: The implied volatility value to color.
+            min_iv: Minimum IV in the current chain.
+            max_iv: Maximum IV in the current chain.
+
+        Returns:
+            Rich markup color string: "green", "yellow", or "red".
+        """
+        # Handle edge case: all IVs are the same
+        if max_iv == min_iv:
+            return "yellow"
+
+        # Calculate thresholds for thirds
+        range_size = max_iv - min_iv
+        low_threshold = min_iv + range_size / 3
+        high_threshold = min_iv + 2 * range_size / 3
+
+        # Assign color based on position in range
+        if iv < low_threshold:
+            return "green"
+        elif iv < high_threshold:
+            return "yellow"
+        else:
+            return "red"
+
+    def _format_contract_row(
+        self,
+        contract: OptionContract,
+        is_atm: bool = False,
+        iv_color: str = "white",
+    ) -> str:
         """Format an option contract as a table row.
 
         Args:
             contract: The option contract to format.
             is_atm: Whether this is the at-the-money strike.
+            iv_color: Color markup for IV column ("green", "yellow", or "red").
 
         Returns:
             Formatted row string with Rich markup.
@@ -368,9 +424,9 @@ class OptionsChainPanel(Widget):
         vol_str = f"{contract.volume:>8,d}"
         oi_str = f"{contract.open_interest:>8,d}"
 
-        # Format IV (right-aligned in 6 chars, percentage)
+        # Format IV (right-aligned in 6 chars, percentage) with color
         iv_pct = contract.implied_volatility * 100
-        iv_str = f"{iv_pct:>6.1f}%"
+        iv_str = f"[{iv_color}]{iv_pct:>6.1f}%[/{iv_color}]"
 
         # Format ITM indicator (centered in 4 chars)
         itm_str = " Y  " if contract.in_the_money else " N  "
