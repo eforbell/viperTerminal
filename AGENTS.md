@@ -3592,3 +3592,46 @@ Users can now:
 ### Next Steps
 
 Feature 7 complete! Ready for next feature (Feature 8 TBD).
+
+### VPR-076: Create Options Service - Fetch Expirations
+
+**Implementation Date**: 2026-01-18
+
+**Story**: Create async service to fetch option expiration dates using yfinance
+
+**Key Learnings**:
+- **yfinance Options API**: Use `ticker.options` property to get tuple of expiration date strings
+- **Empty Options Check**: Distinguish between invalid ticker and valid ticker with no options by checking `fast_info.last_price`
+- **AttributeError Handling**: Catch AttributeError when accessing `fast_info.last_price` to detect invalid ticker
+- **Tuple to List Conversion**: yfinance returns tuple, convert to list for consistent return type
+- **Mock Property Raises**: To mock AttributeError on property access, create custom class with `@property` that raises
+- **Cannot Mock __getattr__**: MagicMock doesn't support setting `__getattr__`, use custom class instead
+- **Property Access Never Raises with MagicMock**: MagicMock returns another MagicMock on attribute access, never raises
+- **Custom Mock Class Pattern**: Create `MockFastInfoInvalid` class with property that raises for test mocking
+- **Options Format**: Expiration dates are in YYYY-MM-DD format (e.g., "2024-01-19")
+- **Follow Service Pattern**: Match existing service patterns (async wrapper, executor, timeout, error handling)
+- **94% Coverage Acceptable**: Lines 47-48 (generic exception in async wrapper) are extremely hard to test, 94% is sufficient
+
+**Testing Patterns**:
+- Test valid ticker with options (returns list of dates)
+- Test valid ticker without options (returns OptionsError)
+- Test invalid ticker (returns OptionsError with "Invalid ticker symbol")
+- Test None/empty options handling
+- Test network errors, 404 errors, timeouts
+- Test ticker normalization (uppercase, strip whitespace)
+- Test many expirations (SPY has 12+ months of options)
+
+**Files Created**:
+- `viper/services/options.py` - Options data service
+- `tests/test_options.py` - Comprehensive test suite (13 tests, all passing)
+
+**Type Safety**:
+- `OptionsExpirationsResult = list[str] | OptionsError` - Union type for results
+- `mypy --strict` passes with no errors
+- Explicit return type annotations on all functions
+
+**Result**: 
+- Foundation service complete
+- Ready for VPR-077 (fetch option chain data)
+- All tests pass (820 total)
+- Coverage: 92% overall, 94% for options.py

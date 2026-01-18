@@ -1,9 +1,9 @@
 {
-  "currentFeature": null,
-  "featureName": null,
-  "prdPath": null,
-  "branch": null,
-  "status": "awaiting_next_feature",
+  "currentFeature": "feature-8",
+  "featureName": "Options Chain (Basic)",
+  "prdPath": "features/feature-8.prd.json",
+  "branch": "viper/feature-8-options-chain",
+  "status": "in-progress",
   "completedFeatures": [
     {
       "feature": "feature-7",
