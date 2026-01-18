@@ -1382,3 +1382,52 @@
   - Rich markup allows multiple `[cyan]value[/cyan]` segments in single header string
   - All 885 tests passing, mypy --strict clean, 89.45% coverage
 ---
+
+## 2026-01-18 - VPR-083
+- **What was implemented**: Near-the-money (ATM) focus for options panel
+- **Files changed**:
+  - `viper/widgets/options_panel.py`: Added _find_atm_strike() method, stored current price, added ATM highlighting, implemented 'a' keybinding
+  - `viper/app.py`: Added _get_current_price() helper, updated all load_options() calls to pass current price
+  - `viper/widgets/help_screen.py`: Documented 'a' keybinding and ATM highlighting
+  - `tests/test_options_panel.py`: Added 15 comprehensive tests for ATM functionality
+  - `scripts/ralph/features/feature-9.prd.json`: Marked VPR-083 as complete
+- **Learnings**:
+  - **Current price extraction**: QuotePanel stores quote in _quote field. StockQuote has .price, CryptoQuote has .price_usd
+  - **Type narrowing pattern**: For mypy, use local variable assignment after None check: `current_price = self._current_price` before using in lambda
+  - **ATM calculation**: Use `min(contracts, key=lambda c: abs(c.strike - current_price))` to find closest strike
+  - **Optional parameters**: Modified load_options() to accept optional `current_price` parameter for backward compatibility
+  - **Highlighting with CSS classes**: Added .atm CSS class in addition to markup for multi-layer styling (cyan + bold)
+  - **Graceful degradation**: ATM features only activate if current_price is available, otherwise silently disabled
+  - **Filter interaction**: ATM jump ('a' key) searches in filtered list only - does nothing if ATM filtered out (per PRD recommendation)
+  - **Render-time calculation**: ATM strike calculated in _render_options_table() using full unfiltered contract list
+  - **Testing pure logic**: ATM finding and navigation logic can be tested directly without widget mounting
+  - **Coverage acceptable**: 89% total coverage (down from 90%) is acceptable when adding new features with complex async widget code
+- **Test results**: 897 tests passing, 89% coverage
+- **Commit**: feat: VPR-083 - Near-the-money focus for options panel
+---
+
+## 2026-01-18 - VPR-084
+- **What was implemented**: IV color coding for options panel to identify expensive vs cheap options
+- **Files changed**:
+  - `viper/widgets/options_panel.py`: Added _get_iv_color() method with third-based thresholds, modified _format_contract_row() to accept iv_color parameter, calculate IV range in _render_options_table()
+  - `tests/test_options_panel.py`: Added TestOptionsChainPanelIVColorCoding class with 12 comprehensive tests
+  - `AGENTS.md`: Added VPR-084 learnings section with detailed implementation patterns
+  - `scripts/ralph/features/feature-9.prd.json`: Marked VPR-084 as complete with passes: true
+- **Learnings**:
+  - **Third-based color thresholds**: Calculate low_threshold = min + range/3, high_threshold = min + 2*range/3 for clean divisions
+  - **Floating point precision**: Threshold calculations can introduce FP errors (0.30 becomes 0.30000000000000004), use consistent < comparisons
+  - **NaN handling in IV data**: Filter out zero IVs (converted from NaN) when calculating min/max: `valid_ivs = [c.iv for c in contracts if c.iv > 0.0]`
+  - **Default color for missing data**: When IV is zero/NaN or all IVs same, default to yellow (medium) color
+  - **Rich markup nesting**: IV color markup can nest inside row-level color markup (ITM = green row with yellow IV value works)
+  - **Calculate from full dataset**: Always calculate IV range from ALL contracts (not filtered), so colors stay consistent across filter changes
+  - **Optional parameters for backward compatibility**: Added `iv_color: str = "white"` parameter to _format_contract_row() with sensible default
+  - **Test flexibility**: Use flexible assertions (`assert "[green]" in row and "25.0%" in row`) instead of exact string matches to handle markup nesting
+  - **Pure function testing**: _get_iv_color() is pure function, test it directly without widget mounting for fast execution
+  - **Edge case testing**: Test same IV, zero IV, narrow range, wide range, boundary values with FP precision
+  - **Coverage trade-off**: 88.64% overall coverage (down from 89%) is acceptable when adding features with complex async widget code
+  - **Color semantics**: Low IV = green (cheap options, good for buying), Medium = yellow (normal), High IV = red (expensive, good for selling)
+  - **Recalculation timing**: IV range recalculated on every render (fast operation, no caching needed)
+  - **Type safety**: mypy --strict passes cleanly with proper type hints on min_iv, max_iv, iv_color parameters
+- **Test results**: 909 tests passing (up from 897), mypy --strict clean, 88.64% coverage
+- **Commit**: feat: VPR-084 - IV color coding for options panel
+---

@@ -190,6 +190,7 @@
     {
       "id": "VPR-084",
       "title": "IV color coding",
+      "passes": true,
       "acceptanceCriteria": [
         "Color-code IV column based on value relative to range in current chain",
         "Calculate IV range: min_iv and max_iv from all contracts in current expiration",
@@ -206,7 +207,8 @@
       "priority": 3,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-083"],
-      "notes": "Relative coloring within current chain. Not absolute IV rank (that requires historical data). Simple but effective visual cue."
+      "notes": "Relative coloring within current chain. Not absolute IV rank (that requires historical data). Simple but effective visual cue.",
+      "completedAt": "2026-01-18"
     },
     {
       "id": "VPR-085",
