@@ -182,7 +182,11 @@
       "priority": 5,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-079"],
-      "notes": "Using [ ] instead of Tab to avoid conflict with app-level Tab for panel switching. Brackets are intuitive for 'previous/next' navigation."
+      "notes": "Using [ ] instead of Tab to avoid conflict with app-level Tab for panel switching. Brackets are intuitive for 'previous/next' navigation.",
+      "passes": true,
+      "completedAt": "2026-01-18",
+      "testsPassing": 861,
+      "coverage": "90%"
     },
     {
       "id": "VPR-081",

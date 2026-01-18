@@ -3764,3 +3764,63 @@ Strike    Bid      Ask      Last     Vol      OI       IV     ITM
 - Ready for VPR-079 (app integration with 'o' keybinding)
 - Widget exported from `viper/widgets/__init__.py`
 
+
+## VPR-080: Expiration Selector with [ and ] Keys (2026-01-18)
+
+Added expiration date navigation to OptionsChainPanel using bracket keys.
+
+**Implementation:**
+- Added `[` and `]` keybindings to BINDINGS with priority=True
+- Implemented `action_prev_expiration()` and `action_next_expiration()` methods
+- Both methods use modulo wrap-around: `(index ± 1) % len(expirations)`
+- Guard conditions check for ticker and expirations before navigation
+- Uses `run_worker(self._load_chain(...))` to trigger async chain fetch
+- Loading state automatically shown by existing `_load_chain()` method
+
+**Key Learnings:**
+
+1. **Modulo Wrap-Around Pattern**
+   - Forward: `(index + 1) % len(list)` - wraps from last to first
+   - Backward: `(index - 1) % len(list)` - wraps from first to last
+   - Python modulo handles negatives correctly: `(0 - 1) % 3 = 2`
+   - Edge case: Single item list stays at index 0 for both directions
+
+2. **Async Actions from Sync Methods**
+   - Use `self.run_worker(async_coroutine)` to trigger async operations
+   - No need to make action methods async themselves
+   - Worker handles the async execution and completion
+   - Loading states are handled by the async method being called
+
+3. **Bracket Key Semantics**
+   - `[` = backward/previous (chronologically earlier expiration)
+   - `]` = forward/next (chronologically later expiration)
+   - Intuitive for timeline navigation (left = past, right = future)
+   - Avoids Tab key conflict with app-level panel switching
+
+4. **Testing Navigation Logic**
+   - Test modulo math directly: `(0 - 1) % 3 == 2`
+   - Verify wrap-around in both directions
+   - Test single-item edge case: both operations stay at index 0
+   - Use `bool(condition)` assertions for guard condition tests
+   - No need to mock navigation - pure logic testing
+
+5. **Reusing Existing State**
+   - Panel already had `_expirations` and `_current_expiration_index` from VPR-078
+   - Header display already shows expiration from existing `_rebuild_content()`
+   - Loading state already implemented in `_load_chain()` method
+   - Only needed to add the navigation actions - infrastructure was ready
+
+**Files Modified:**
+- `viper/widgets/options_panel.py`: Added 2 keybindings, 2 action methods (28 lines)
+- `viper/widgets/help_screen.py`: Added 1 line to OPTIONS section documentation
+- `tests/test_options_panel.py`: Added TestOptionsChainPanelExpirationNavigation class with 7 tests (97 lines)
+- `scripts/ralph/features/feature-8.prd.json`: Marked VPR-080 as complete
+
+**Tests:**
+- 7 new tests for expiration navigation
+- Total: 861 tests passing
+- Coverage: 90.21% overall
+- All navigation edge cases covered (wrap-around, single item, guards)
+
+**Ready for VPR-081** (Calls/Puts toggle with c/p keys)
+
