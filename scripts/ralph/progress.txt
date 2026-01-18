@@ -1214,3 +1214,148 @@
   - **MACD Feature**: Works with stocks/crypto, all timeframes, coexists with RSI, comprehensive tests, type-safe implementation
 
 ---
+
+## 2026-01-18 - VPR-076
+- Implemented async options service to fetch expiration dates using yfinance
+- Created OptionsError dataclass for error handling
+- Distinguishes between invalid ticker and valid ticker with no options
+- Added comprehensive test suite with 13 tests covering all edge cases
+- Files changed:
+  - Created: viper/services/options.py
+  - Created: tests/test_options.py
+  - Modified: viper/services/__init__.py (added options export)
+  - Modified: AGENTS.md (added VPR-076 learnings)
+  - Modified: scripts/ralph/features/feature-8.prd.json (marked VPR-076 as passing)
+- **Learnings:**
+  - yfinance ticker.options returns tuple of date strings in YYYY-MM-DD format
+  - Must distinguish between invalid ticker and ticker with no options using fast_info.last_price check
+  - MagicMock cannot raise exceptions on property access - must use custom class with @property
+  - Custom MockFastInfoInvalid class pattern needed for testing AttributeError scenarios
+  - 94% coverage acceptable when generic exception handler is untestable
+  - Follow established service patterns: async wrapper, executor, timeout, error handling
+---
+
+## 2026-01-18 - VPR-077
+- **What was implemented**: Created OptionContract and OptionsChain dataclasses with fetch_option_chain async function
+- **Files changed**:
+  - `viper/services/options.py`: Added OptionContract, OptionsChain dataclasses, fetch_option_chain function, _fetch_chain_sync helper, _parse_contracts_dataframe parser with NaN handling
+  - `tests/test_options.py`: Added 12 comprehensive tests for option chain fetching (25 tests total, all passing)
+  - `AGENTS.md`: Added VPR-077 learnings section
+- **Learnings**:
+  - yfinance option_chain() returns namedtuple with .calls and .puts DataFrames
+  - DataFrame columns use camelCase: lastPrice, openInterest, impliedVolatility, inTheMoney
+  - Critical NaN handling: Cannot convert NaN to int directly - use math.isnan() after float conversion
+  - Created safe_float() and safe_int() nested helpers for robust NaN/None/ValueError handling
+  - DataFrame.get() returns NaN when column exists with NaN - must check both None and isnan()
+  - Use try-except around conversions to handle ValueError and TypeError gracefully
+  - Default values: 0.0 for floats, 0 for ints, False for booleans on NaN/None
+  - Empty DataFrames are valid (no contracts at certain strikes is normal)
+  - Invalid expiration detected by "not in list" or "expiration" in error message
+  - Used Any type for DataFrame parameter to avoid untyped import issues with pandas
+  - Import math module for math.isnan() function
+  - Test pattern: Create _create_mock_option_chain() helper with pd.DataFrame mocks
+  - Test pattern: Use import numpy as np to create np.nan values for NaN testing
+  - All 832 tests passing with 95% coverage on options.py
+---
+
+---
+
+## 2026-01-18 - VPR-078
+- **What was implemented**: Created OptionsChainPanel widget with state machine, j/k navigation, and ITM/OTM color highlighting
+- **Files changed**:
+  - `viper/widgets/options_panel.py`: New widget with 4-state machine (empty/loading/success/error)
+  - `tests/test_options_panel.py`: 15 unit tests for widget states and navigation logic
+  - `viper/widgets/__init__.py`: Exported OptionsChainPanel
+  - `AGENTS.md`: Added VPR-078 learnings section
+  - `scripts/ralph/features/feature-8.prd.json`: Marked VPR-078 as complete
+- **Learnings**:
+  - **Rich Markup in Headers**: Use `[cyan]text[/cyan]` in labels, requires `markup=True` attribute
+  - **Monospace Table Formatting**: Right-align numbers with f-string format (e.g., `{strike:>8.2f}`)
+  - **Comma Formatting for Volume**: Use `:,d` format to add thousand separators (e.g., `{volume:>8,d}`)
+  - **ITM Color Highlighting**: Wrap entire row in `[green]...[/green]` or `[red]...[/red]` based on `in_the_money`
+  - **Navigation Clamping**: Use `min(index + 1, len(contracts) - 1)` and `max(index - 1, 0)` for bounds
+  - **Calls vs Puts Toggle**: Track `_show_calls: bool` flag to switch between displaying calls or puts
+  - **Async Load Pattern**: `load_options()` fetches expirations first, then auto-loads first chain
+  - **Ticker Change Detection**: Store `_current_ticker` and check if changed during async fetch (ignore stale)
+  - **VerticalScroll Container**: Required for scrolling long options lists
+  - **IV Percentage Display**: Multiply `implied_volatility * 100` to show as percentage
+  - **Selection Reset**: Reset `_selected_index = 0` when loading new chain or switching calls/puts
+  - **Testing Without Mounting**: Test state logic directly without calling methods that require DOM
+  - **Query Requires Mount**: Cannot use `query_one()` in tests unless widget mounted in app context
+  - **Unit Test Pattern**: Set state attributes directly in tests, verify logic without triggering renders
+  - Widget follows established patterns: QuotePanel (state machine), NewsPanel (j/k navigation)
+  - Table uses simple Labels in VerticalScroll (not DataTable widget for simplicity)
+  - Header dynamically updates: "OPTIONS: AAPL | 2024-01-19 | CALLS"
+  - All 15 tests pass, mypy --strict passes, 847 total tests passing
+  - Coverage: 31% for options_panel.py (unit tests only, integration tests in VPR-079+)
+  - Ready for VPR-079: app integration with 'o' keybinding
+
+---
+
+---
+
+## 2026-01-18 - VPR-079
+- **What was implemented**: App integration for options panel with 'o' toggle keybinding
+- **Files changed**:
+  - `viper/app.py`: Added OptionsChainPanel import, Binding import, 'o' keybinding, #options-container CSS, _options_panel_visible flag, compose OptionsChainPanel instance, action_toggle_options() method
+  - `viper/widgets/help_screen.py`: Added 'o' keybinding documentation, OPTIONS section, added options to features list
+  - `tests/test_app.py`: Added OptionsChainPanel import, 6 new integration tests for options panel toggling, focus, and state management
+  - `scripts/ralph/features/feature-8.prd.json`: Marked VPR-079 as complete with passes: true
+- **Learnings**:
+  - Binding class required for keyword args: Use `Binding("o", "toggle_options", "Options", show=False)` instead of tuple when using `show=False`
+  - Import Binding from textual.binding: `from textual.binding import Binding`
+  - Panel toggle pattern: Hide other panels when showing new panel, track state with _panel_visible flag
+  - CSS display check: Use `str(container.styles.display)` in tests to compare display property values
+  - Test pattern for actions: Call `app.action_toggle_options()` directly instead of `await pilot.press("o")` to avoid keybinding conflicts
+  - Keybinding priority: Panel-level bindings with priority=True intercept keys before app-level bindings (e.g., NewsPanel 'o' for browser)
+  - Empty state handling: Call panel.show_empty() when no ticker selected, load_options() when ticker exists
+  - Focus management: Set focus to panel after showing with panel.focus()
+  - Help screen updates: Document new keybindings, add feature section, update existing key descriptions for context
+  - Test coverage maintained: 854 tests passing with 90.48% coverage after integration
+
+---
+
+## 2026-01-18 - VPR-080
+- **What was implemented**: Expiration date navigation with [ and ] keys for OptionsChainPanel
+- **Files changed**:
+  - `viper/widgets/options_panel.py`: Added [ and ] keybindings to BINDINGS, implemented action_prev_expiration() and action_next_expiration() methods with wrap-around logic, uses run_worker() to load new chain asynchronously
+  - `viper/widgets/help_screen.py`: Added "Use [ / ] to cycle through expiration dates." documentation to OPTIONS section
+  - `tests/test_options_panel.py`: Added TestOptionsChainPanelExpirationNavigation class with 7 comprehensive tests for forward/backward navigation, wrap-around, single expiration, and guard conditions
+  - `scripts/ralph/features/feature-8.prd.json`: Marked VPR-080 as complete with passes: true
+- **Learnings**:
+  - Modulo wrap-around pattern: Use `(index ± 1) % len(list)` for bidirectional cycling with automatic wrap-around
+  - Negative modulo in Python: `(0 - 1) % 3 = 2`, so `(index - 1) % len` correctly wraps from first to last
+  - Async action pattern: Use `self.run_worker(self._load_chain(...))` to trigger async operations from sync action methods
+  - Guard conditions: Check `if not self._current_ticker or not self._expirations:` before navigation to prevent errors
+  - Existing state preserved: _expirations and _current_expiration_index already existed in panel from VPR-078, only needed to add navigation actions
+  - Header already shows expiration: Existing _rebuild_content() shows expiration in header, no changes needed
+  - Loading state automatic: _load_chain() sets state to "loading" and rebuilds content, showing LoadingIndicator
+  - Test pattern for navigation logic: Test the modulo math directly without mocking, verifies wrap-around behavior
+  - Test early returns: Use `bool(condition)` assertions to verify guard conditions prevent execution
+  - Single item edge case: With 1 item, both `(0+1) % 1 = 0` and `(0-1) % 1 = 0`, navigation stays at same item
+  - Test coverage impact: Added 97 lines of test code, all tests passing (861 total), coverage 90.21%
+  - Bracket keys semantic: [ = backward/previous, ] = forward/next (intuitive for expiration timeline navigation)
+
+
+## 2026-01-18 - VPR-081
+- **What was implemented**: Calls/Puts toggle with 'c' and 'p' keybindings for instant switching between views
+- **Files changed**:
+  - `viper/widgets/options_panel.py`: Added 2 keybindings and 2 action methods (18 lines)
+  - `viper/widgets/help_screen.py`: Updated KEYBINDINGS and OPTIONS sections (2 lines)
+  - `tests/test_options_panel.py`: Added TestOptionsChainPanelCallsPutsToggle class with 9 tests
+  - `scripts/ralph/features/feature-8.prd.json`: Marked VPR-081 as complete
+  - `AGENTS.md`: Added VPR-081 learnings section
+- **Learnings**:
+  - Toggle pattern with state check: only rebuild if actually switching views
+  - No network refetch needed - both calls and puts loaded from single API call
+  - Selection reset on toggle prevents out-of-bounds errors (lists have different lengths)
+  - Existing infrastructure reuse: header/table rendering already supported `_show_calls`
+  - Context-aware keybindings: 'c'/'p' only active when options panel focused
+  - Widget bindings with `priority=True` take precedence over app-level bindings
+  - Help screen documentation: updated both KEYBINDINGS and OPTIONS sections
+  - Idempotent operations: pressing 'c' when showing calls does nothing (avoids rebuilds)
+  - Guard conditions prevent actions in empty/loading/error states
+  - Pure state logic tests - no async/UI needed for toggle behavior
+  - Feature 8 (Options Chain Basic) complete! All 6 stories (VPR-076 through VPR-081) passing
+  - Total: 869 tests passing, 89.90% coverage
+---

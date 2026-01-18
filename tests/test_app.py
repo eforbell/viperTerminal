@@ -9,7 +9,7 @@ from textual.widgets import Footer, Header
 from viper.app import ViperApp
 from viper.services.crypto import CryptoInfo, CryptoQuote
 from viper.services.stock import StockError, StockInfo, StockQuote
-from viper.widgets import HelpScreen, InfoPanel, QuotePanel, TickerInput, WatchlistPanel
+from viper.widgets import HelpScreen, InfoPanel, OptionsChainPanel, QuotePanel, TickerInput, WatchlistPanel
 
 
 @pytest.mark.asyncio
@@ -1125,3 +1125,267 @@ async def test_t_r_and_t_a_work_alongside_each_other() -> None:
             # Both should be active
             assert chart_panel.is_rsi_visible() is True
             assert chart_panel.get_ma_mode() == "sma20"
+
+# VPR-079: Options panel integration tests
+
+
+@pytest.mark.asyncio
+async def test_options_panel_present() -> None:
+    """Test that the OptionsChainPanel widget is present in the app."""
+    app = ViperApp()
+    async with app.run_test():
+        # Should have an OptionsChainPanel widget
+        options_panel = app.query_one(OptionsChainPanel)
+        assert options_panel is not None
+
+
+@pytest.mark.asyncio
+async def test_options_panel_container_hidden_by_default() -> None:
+    """Test that the options panel container is hidden by default."""
+    app = ViperApp()
+    async with app.run_test():
+        options_container = app.query_one("#options-container")
+        # Container should be hidden by default (display: none in CSS)
+        assert str(options_container.styles.display) == "none"
+
+
+@pytest.mark.asyncio
+async def test_o_key_toggles_options_panel() -> None:
+    """Test that action_toggle_options toggles the options panel visibility."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        options_container = app.query_one("#options-container")
+        quote_container = app.query_one("#quote-container")
+
+        # Initially options panel should be hidden, quote panel visible
+        assert str(options_container.styles.display) == "none"
+        assert str(quote_container.styles.display) == "block"
+        assert app._options_panel_visible is False
+
+        # Call the action directly
+        app.action_toggle_options()
+        await pilot.pause()
+
+        # Options panel should now be visible, quote panel hidden
+        assert str(options_container.styles.display) == "block"
+        assert str(quote_container.styles.display) == "none"
+        assert app._options_panel_visible is True
+
+        # Toggle back
+        app.action_toggle_options()
+        await pilot.pause()
+
+        # Options panel should be hidden again, quote panel visible
+        assert str(options_container.styles.display) == "none"
+        assert str(quote_container.styles.display) == "block"
+        assert app._options_panel_visible is False
+
+
+@pytest.mark.asyncio
+async def test_options_panel_shows_empty_when_no_ticker() -> None:
+    """Test that options panel shows empty state when no ticker selected."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        options_panel = app.query_one(OptionsChainPanel)
+
+        # Call action to show options panel (no ticker selected yet)
+        app.action_toggle_options()
+        await pilot.pause()
+
+        # Panel should be in empty state
+        assert options_panel._state == "empty"
+        assert options_panel._current_ticker is None
+
+
+@pytest.mark.asyncio
+async def test_options_panel_loads_when_ticker_exists() -> None:
+    """Test that options panel loads options when a ticker is already selected."""
+    app = ViperApp()
+
+    # Mock quote fetch
+    mock_quote = StockQuote(
+        ticker="AAPL",
+        price=150.00,
+        change=5.00,
+        change_percent=3.45,
+        volume=50000000,
+        market_cap=2500000000000,
+        high_52w=180.00,
+        low_52w=120.00,
+        name="Apple Inc.",
+    )
+
+    # Mock options fetch
+    from viper.services.options import OptionsError
+
+    with patch("viper.app.fetch_quote", new_callable=AsyncMock) as mock_fetch_quote, \
+         patch("viper.widgets.options_panel.fetch_option_expirations", new_callable=AsyncMock) as mock_expirations:
+
+        mock_fetch_quote.return_value = mock_quote
+        mock_expirations.return_value = OptionsError(ticker="AAPL", error_message="No options")
+
+        async with app.run_test() as pilot:
+            ticker_input = app.query_one(TickerInput)
+            options_panel = app.query_one(OptionsChainPanel)
+
+            # Submit a ticker first
+            ticker_input.focus()
+            ticker_input.value = "AAPL"
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Current ticker should be set
+            assert app._current_ticker == "AAPL"
+
+            # Call action to show options panel
+            app.action_toggle_options()
+            await pilot.pause()
+
+            # Panel should have tried to load options for AAPL
+            mock_expirations.assert_called_with("AAPL")
+            # Panel should be in error state (no options available)
+            assert options_panel._state == "error"
+            assert options_panel._current_ticker == "AAPL"
+
+
+@pytest.mark.asyncio
+async def test_options_panel_hides_other_panels() -> None:
+    """Test that showing options panel hides other panels (chart, info, news)."""
+    app = ViperApp()
+
+    # Mock fetch functions
+    with patch("viper.app.fetch_quote", new_callable=AsyncMock) as mock_fetch_quote, \
+         patch("viper.widgets.options_panel.fetch_option_expirations", new_callable=AsyncMock) as mock_expirations, \
+         patch("viper.widgets.chart_panel.fetch_historical_data", new_callable=AsyncMock):
+
+        from viper.services.options import OptionsError
+        mock_quote = StockQuote(
+            ticker="AAPL",
+            price=150.00,
+            change=5.00,
+            change_percent=3.45,
+            volume=50000000,
+            market_cap=2500000000000,
+            high_52w=180.00,
+            low_52w=120.00,
+            name="Apple Inc.",
+        )
+        mock_fetch_quote.return_value = mock_quote
+        mock_expirations.return_value = OptionsError(ticker="AAPL", error_message="No options")
+
+        async with app.run_test() as pilot:
+            ticker_input = app.query_one(TickerInput)
+            chart_container = app.query_one("#chart-container")
+            options_container = app.query_one("#options-container")
+
+            # Submit a ticker
+            ticker_input.focus()
+            ticker_input.value = "AAPL"
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Call action to show chart panel
+            app.action_toggle_chart()
+            await pilot.pause()
+            assert str(chart_container.styles.display) == "block"
+            assert app._chart_panel_visible is True
+
+            # Call action to show options panel
+            app.action_toggle_options()
+            await pilot.pause()
+
+            # Chart panel should be hidden, options panel visible
+            assert str(chart_container.styles.display) == "none"
+            assert app._chart_panel_visible is False
+            assert str(options_container.styles.display) == "block"
+            assert app._options_panel_visible is True
+
+
+@pytest.mark.asyncio
+async def test_options_panel_receives_focus() -> None:
+    """Test that options panel receives focus when toggled on."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        options_panel = app.query_one(OptionsChainPanel)
+
+        # Call action to show options panel
+        app.action_toggle_options()
+        await pilot.pause()
+
+        # Options panel should have focus
+        assert app.focused == options_panel
+
+
+@pytest.mark.asyncio
+async def test_options_panel_refreshes_on_ticker_change() -> None:
+    """Test that options panel refreshes when a new ticker is selected from watchlist."""
+    app = ViperApp()
+
+    # Mock quote fetch
+    mock_quote_aapl = StockQuote(
+        ticker="AAPL",
+        price=150.00,
+        change=5.00,
+        change_percent=3.45,
+        volume=50000000,
+        market_cap=2500000000000,
+        high_52w=180.00,
+        low_52w=120.00,
+        name="Apple Inc.",
+    )
+    mock_quote_msft = StockQuote(
+        ticker="MSFT",
+        price=380.00,
+        change=2.00,
+        change_percent=0.53,
+        volume=25000000,
+        market_cap=2800000000000,
+        high_52w=420.00,
+        low_52w=320.00,
+        name="Microsoft Corp.",
+    )
+
+    from viper.services.options import OptionsError
+
+    with patch("viper.app.fetch_quote", new_callable=AsyncMock) as mock_fetch_quote, \
+         patch("viper.widgets.options_panel.fetch_option_expirations", new_callable=AsyncMock) as mock_expirations:
+
+        # First call returns AAPL, second returns MSFT
+        mock_fetch_quote.side_effect = [mock_quote_aapl, mock_quote_msft]
+        mock_expirations.return_value = OptionsError(ticker="AAPL", error_message="No options")
+
+        async with app.run_test() as pilot:
+            ticker_input = app.query_one(TickerInput)
+            options_panel = app.query_one(OptionsChainPanel)
+
+            # Submit first ticker (AAPL)
+            ticker_input.focus()
+            ticker_input.value = "AAPL"
+            await pilot.press("enter")
+            await pilot.pause()
+
+            assert app._current_ticker == "AAPL"
+
+            # Show options panel
+            app.action_toggle_options()
+            await pilot.pause()
+
+            # Verify options loaded for AAPL
+            assert mock_expirations.call_count == 1
+            mock_expirations.assert_called_with("AAPL")
+
+            # Now change ticker via input (simulates watchlist selection)
+            ticker_input.focus()
+            ticker_input.value = "MSFT"
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Current ticker should now be MSFT
+            assert app._current_ticker == "MSFT"
+
+            # Options panel should have been refreshed with MSFT
+            assert mock_expirations.call_count == 2
+            mock_expirations.assert_called_with("MSFT")

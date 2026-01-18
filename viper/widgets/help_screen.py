@@ -111,10 +111,11 @@ class HelpScreen(ModalScreen[None]):
                 yield Static("Tab                  Cycle between panels", classes="help-item")
                 yield Static("j / k                Navigate list items", classes="help-item")
                 yield Static("Enter                Read article / Select item", classes="help-item")
-                yield Static("o                    Open in browser (news panel)", classes="help-item")
                 yield Static("i                    Toggle info panel", classes="help-item")
-                yield Static("c                    Toggle chart panel", classes="help-item")
+                yield Static("c                    Toggle chart panel (or view calls in options)", classes="help-item")
                 yield Static("n                    Toggle news panel", classes="help-item")
+                yield Static("o                    Toggle options panel (or open in browser in news/article)", classes="help-item")
+                yield Static("p                    View puts in options panel", classes="help-item")
                 yield Static("t                    Technical indicator prefix (press t, then indicator key)", classes="help-item")
                 yield Static("  t-r                Toggle RSI indicator", classes="help-item")
                 yield Static("  t-m                Toggle MACD indicator", classes="help-item")
@@ -198,6 +199,33 @@ class HelpScreen(ModalScreen[None]):
                     classes="help-item",
                 )
 
+                # Options Section
+                yield Static("\n\nOPTIONS", classes="help-section-title")
+                yield Static(
+                    "Press 'o' to toggle the options panel for the current ticker.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Use j/k to navigate through option contracts (strike prices).",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Use [ / ] to cycle through expiration dates.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Press 'c' to view calls, 'p' to view puts.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "ITM (In The Money) contracts are highlighted in green.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "View strike, bid, ask, last price, volume, OI, IV, and ITM status.",
+                    classes="help-item",
+                )
+
                 # Article Reader Section
                 yield Static("\n\nARTICLE READER", classes="help-section-title")
                 yield Static(
@@ -261,6 +289,10 @@ class HelpScreen(ModalScreen[None]):
                 )
                 yield Static(
                     "• In-app article reader for distraction-free reading",
+                    classes="help-item",
+                )
+                yield Static(
+                    "• Options chain data with navigable table of calls and puts",
                     classes="help-item",
                 )
                 yield Static(

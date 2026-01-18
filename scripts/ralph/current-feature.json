@@ -1,10 +1,23 @@
 {
-  "currentFeature": null,
-  "featureName": null,
-  "prdPath": null,
-  "branch": null,
-  "status": "awaiting_next_feature",
+  "currentFeature": "feature-9",
+  "featureName": "Enhanced Options Explorer",
+  "prdPath": "features/feature-9.prd.json",
+  "branch": "viper/feature-9-enhanced-options",
+  "status": "in-progress",
   "completedFeatures": [
+    {
+      "feature": "feature-8",
+      "featureName": "Options Chain (Basic)",
+      "prdPath": "features/feature-8.prd.json",
+      "branch": "viper/feature-8-options-chain",
+      "status": "complete",
+      "completedAt": "2026-01-18",
+      "stories": 6,
+      "testsPassing": 870,
+      "coverage": "89.90%",
+      "notes": "Implemented options service (fetch expirations/chains), OptionsChainPanel widget with state machine, 'o' toggle keybinding, expiration navigation with [/], calls/puts toggle with c/p keys, j/k navigation, ITM/OTM color highlighting. Bug fix: options panel now refreshes on ticker change.",
+      "description": "Display options chain data for stocks. Basic chain view with calls/puts, strike prices, expiration navigation, and ITM/OTM highlighting."
+    },
     {
       "feature": "feature-7",
       "featureName": "MACD Indicator",
@@ -147,7 +160,8 @@
       "priority": "Medium",
       "relatedFeature": "feature-1",
       "effort": "Large",
-      "notes": "Would require new data source (yfinance supports this) and dedicated panel UI"
+      "notes": "Feature 8 implemented basic options chain. Feature 9 extends with filtering, IV analysis, and volume highlighting.",
+      "status": "IN_PROGRESS_FEATURE_9"
     },
     {
       "id": "FE-008",

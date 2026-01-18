@@ -1,6 +1,7 @@
 """Main Textual application for Viper Terminal."""
 
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Container, Horizontal
 from textual.widgets import Footer, Header
 
@@ -18,7 +19,7 @@ from viper.utils import (
     mark_first_run_complete,
     setup_logging,
 )
-from viper.widgets import ArticleReaderPanel, ChartPanel, HelpScreen, InfoPanel, NewsPanel, QuotePanel, StatusBar, TickerInput, WatchlistPanel
+from viper.widgets import ArticleReaderPanel, ChartPanel, HelpScreen, InfoPanel, NewsPanel, OptionsChainPanel, QuotePanel, StatusBar, TickerInput, WatchlistPanel
 
 
 class ViperApp(App[None]):
@@ -141,6 +142,17 @@ class ViperApp(App[None]):
     #article-reader-container:focus-within {
         border: double $accent;
     }
+
+    #options-container {
+        width: 70%;
+        border: solid $accent;
+        padding: 0;
+        display: none;
+    }
+
+    #options-container:focus-within {
+        border: double $accent;
+    }
     """
 
     # Green on black color theme
@@ -158,6 +170,7 @@ class ViperApp(App[None]):
         ("i", "toggle_info", "Toggle Info"),
         ("c", "toggle_chart", "Toggle Chart"),
         ("n", "toggle_news", "Toggle News"),
+        Binding("o", "toggle_options", "Options", show=False),
         ("1", "timeframe_1", "1W"),
         ("2", "timeframe_2", "1M"),
         ("3", "timeframe_3", "3M"),
@@ -193,6 +206,7 @@ class ViperApp(App[None]):
         self._chart_panel_visible = False
         self._news_panel_visible = False
         self._article_reader_visible = False
+        self._options_panel_visible = False
         self._current_ticker: str | None = None
         self._technical_prefix_active = False
 
@@ -241,6 +255,8 @@ class ViperApp(App[None]):
                     yield NewsPanel()
                 with Container(id="article-reader-container"):
                     yield ArticleReaderPanel()
+                with Container(id="options-container"):
+                    yield OptionsChainPanel()
         yield TickerInput(history_manager=self.history_manager)
         yield StatusBar()
         yield Footer()
@@ -386,6 +402,48 @@ class ViperApp(App[None]):
             # If we have a current ticker, fetch and display news
             if self._current_ticker:
                 self.run_worker(news_panel.load_news(self._current_ticker))
+
+    def action_toggle_options(self) -> None:
+        """Toggle the options panel visibility."""
+        options_container = self.query_one("#options-container")
+        quote_container = self.query_one("#quote-container")
+        info_container = self.query_one("#info-container")
+        chart_container = self.query_one("#chart-container")
+        news_container = self.query_one("#news-container")
+
+        # Toggle visibility
+        if self._options_panel_visible:
+            # Hide options panel, show quote panel
+            options_container.styles.display = "none"
+            quote_container.styles.display = "block"
+            self._options_panel_visible = False
+        else:
+            # Hide other panels if visible
+            if self._info_panel_visible:
+                info_container.styles.display = "none"
+                self._info_panel_visible = False
+            if self._chart_panel_visible:
+                chart_container.styles.display = "none"
+                self._chart_panel_visible = False
+            if self._news_panel_visible:
+                news_container.styles.display = "none"
+                self._news_panel_visible = False
+
+            # Show options panel, hide quote panel
+            quote_container.styles.display = "none"
+            options_container.styles.display = "block"
+            self._options_panel_visible = True
+
+            # Set focus to options panel
+            options_panel = self.query_one(OptionsChainPanel)
+            options_panel.focus()
+
+            # If we have a current ticker, fetch and display options
+            if self._current_ticker:
+                self.run_worker(options_panel.load_options(self._current_ticker))
+            else:
+                # Show empty state when no ticker selected
+                options_panel.show_empty()
 
     def _change_chart_timeframe(self, key: str) -> None:
         """Change the chart timeframe if chart panel is visible.
@@ -594,13 +652,16 @@ class ViperApp(App[None]):
         # Trigger a quote lookup for the selected ticker
         await self._fetch_and_display_quote(event.ticker)
 
-        # Also refresh the currently visible panel (chart or news)
+        # Also refresh the currently visible panel (chart, news, or options)
         if self._chart_panel_visible and self._current_ticker:
             chart_panel = self.query_one(ChartPanel)
             self.run_worker(chart_panel.load_chart(self._current_ticker, chart_panel._current_period))
         elif self._news_panel_visible and self._current_ticker:
             news_panel = self.query_one(NewsPanel)
             self.run_worker(news_panel.load_news(self._current_ticker))
+        elif self._options_panel_visible and self._current_ticker:
+            options_panel = self.query_one(OptionsChainPanel)
+            self.run_worker(options_panel.load_options(self._current_ticker))
 
     async def on_ticker_input_ticker_lookup(self, event: TickerInput.TickerLookup) -> None:
         """Handle ticker lookup events.
@@ -634,13 +695,16 @@ class ViperApp(App[None]):
         # Regular quote lookup
         await self._fetch_and_display_quote(ticker)
 
-        # Also refresh the currently visible panel (chart or news)
+        # Also refresh the currently visible panel (chart, news, or options)
         if self._chart_panel_visible and self._current_ticker:
             chart_panel = self.query_one(ChartPanel)
             self.run_worker(chart_panel.load_chart(self._current_ticker, chart_panel._current_period))
         elif self._news_panel_visible and self._current_ticker:
             news_panel = self.query_one(NewsPanel)
             self.run_worker(news_panel.load_news(self._current_ticker))
+        elif self._options_panel_visible and self._current_ticker:
+            options_panel = self.query_one(OptionsChainPanel)
+            self.run_worker(options_panel.load_options(self._current_ticker))
 
     async def _fetch_and_display_quote(self, ticker: str) -> None:
         """Fetch and display a quote for the given ticker.

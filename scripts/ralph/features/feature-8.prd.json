@@ -77,7 +77,11 @@
       "priority": 1,
       "estimatedEffort": "Small",
       "dependencies": [],
-      "notes": "Foundation for options feature. yfinance returns tuple of date strings from ticker.options property. Convert to list and handle None/empty cases."
+      "notes": "Foundation for options feature. yfinance returns tuple of date strings from ticker.options property. Convert to list and handle None/empty cases.",
+      "passes": true,
+      "completedAt": "2026-01-18",
+      "testsPassing": 820,
+      "coverage": "94%"
     },
     {
       "id": "VPR-077",
@@ -96,7 +100,11 @@
       "priority": 2,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-076"],
-      "notes": "yfinance option_chain returns namedtuple with .calls and .puts DataFrames. Each has columns: strike, bid, ask, lastPrice, volume, openInterest, impliedVolatility, inTheMoney."
+      "notes": "yfinance option_chain returns namedtuple with .calls and .puts DataFrames. Each has columns: strike, bid, ask, lastPrice, volume, openInterest, impliedVolatility, inTheMoney.",
+      "passes": true,
+      "completedAt": "2026-01-18",
+      "testsPassing": 832,
+      "coverage": "95%"
     },
     {
       "id": "VPR-078",
@@ -121,7 +129,11 @@
       "priority": 3,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-077"],
-      "notes": "Follow NewsPanel pattern for j/k navigation and selection. State management follows QuotePanel. Table is simple Labels in Container, not DataTable widget (keeps it simple)."
+      "notes": "Follow NewsPanel pattern for j/k navigation and selection. State management follows QuotePanel. Table is simple Labels in Container, not DataTable widget (keeps it simple).",
+      "passes": true,
+      "completedAt": "2026-01-18",
+      "testsPassing": 847,
+      "coverage": "31% options_panel.py, 89% overall"
     },
     {
       "id": "VPR-079",
@@ -144,7 +156,11 @@
       "priority": 4,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-078"],
-      "notes": "'o' for Options (mnemonic). Options panel can coexist with chart/news or replace multi-purpose area - implementation decision. Start simple: toggle replaces current view."
+      "notes": "'o' for Options (mnemonic). Options panel can coexist with chart/news or replace multi-purpose area - implementation decision. Start simple: toggle replaces current view.",
+      "passes": true,
+      "completedAt": "2026-01-18",
+      "testsPassing": 854,
+      "coverage": "90%"
     },
     {
       "id": "VPR-080",
@@ -166,7 +182,11 @@
       "priority": 5,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-079"],
-      "notes": "Using [ ] instead of Tab to avoid conflict with app-level Tab for panel switching. Brackets are intuitive for 'previous/next' navigation."
+      "notes": "Using [ ] instead of Tab to avoid conflict with app-level Tab for panel switching. Brackets are intuitive for 'previous/next' navigation.",
+      "passes": true,
+      "completedAt": "2026-01-18",
+      "testsPassing": 861,
+      "coverage": "90%"
     },
     {
       "id": "VPR-081",
@@ -187,7 +207,11 @@
       "priority": 6,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-080"],
-      "notes": "Simple toggle between two pre-loaded lists. No network request needed since option_chain() returns both calls and puts at once."
+      "notes": "Simple toggle between two pre-loaded lists. No network request needed since option_chain() returns both calls and puts at once.",
+      "passes": true,
+      "completedAt": "2026-01-18",
+      "testsPassing": 869,
+      "coverage": "90%"
     }
   ],
   "technicalNotes": {
