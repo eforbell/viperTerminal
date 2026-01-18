@@ -1,0 +1,257 @@
+{
+  "branchName": "viper/feature-9-enhanced-options",
+  "projectName": "Viper Terminal - Feature 9",
+  "description": "Enhanced Options Explorer: Extend the basic options chain with filtering, IV analysis, near-the-money focus, and volume/OI highlighting. Builds on Feature 8 foundation to provide practical options analysis tools.",
+  "principles": [
+    "Rock-solid quality over speed - every feature must be bulletproof before moving on",
+    "Comprehensive test coverage - unit tests, integration tests, edge cases",
+    "All tests must pass before a story is marked complete",
+    "Build on Feature 8 foundation - extend existing OptionsChainPanel",
+    "Apply learnings from Feature 8 user feedback before implementing",
+    "Keep calculations local - no external API dependencies for IV analysis"
+  ],
+  "CRITICAL_RENDERING_NOTES": {
+    "warning": "READ THIS BEFORE ANY WIDGET/RENDERING WORK",
+    "textual_colors": "Textual uses Rich markup, NOT ANSI escape codes!",
+    "iv_colors": "Low IV: [green], Medium IV: [yellow], High IV: [red]",
+    "volume_highlighting": "High volume contracts: [bold] or [reverse]",
+    "near_money_focus": "ATM strikes: [cyan] or highlighted background"
+  },
+  "techStack": {
+    "language": "Python 3.11+",
+    "tui": "Textual (built on Rich)",
+    "options_data": "yfinance (reuse Feature 8 service)",
+    "iv_calculations": "Pure Python (no scipy dependency)",
+    "testing": "pytest + pytest-asyncio + pytest-cov",
+    "mocking": "pytest-mock",
+    "typecheck": "mypy --strict",
+    "linting": "ruff"
+  },
+  "background": {
+    "feature8Foundation": [
+      "OptionsChainPanel widget with state machine",
+      "Options service with fetch_option_expirations() and fetch_option_chain()",
+      "j/k navigation, [ ] expiration cycling, c/p calls/puts toggle",
+      "'o' keybinding to toggle panel"
+    ],
+    "enhancementsOverview": {
+      "filtering": "Filter by ITM/OTM/All to focus on relevant strikes",
+      "nearMoney": "Auto-focus on strikes near current stock price",
+      "ivAnalysis": "Color-code IV to identify expensive/cheap options",
+      "volumeHighlighting": "Highlight high-volume contracts showing institutional interest"
+    },
+    "ivAnalysisConcepts": {
+      "iv_rank": "Where current IV sits relative to past year (0-100%)",
+      "iv_percentile": "Percentage of days IV was lower than current",
+      "interpretation": "High IV = expensive options (good for selling), Low IV = cheap options (good for buying)"
+    }
+  },
+  "userStories": [
+    {
+      "id": "VPR-082",
+      "title": "Add filter mode - ITM/OTM/All",
+      "acceptanceCriteria": [
+        "Add 'f' keybinding to cycle filter mode: All -> ITM -> OTM -> All",
+        "Filter mode shown in header: 'OPTIONS: AAPL | 2024-03-15 | CALLS | Filter: All'",
+        "ITM filter: only show contracts where in_the_money == True",
+        "OTM filter: only show contracts where in_the_money == False",
+        "All filter: show all contracts (default)",
+        "Filter applies to currently displayed list (calls or puts)",
+        "Reset selected row to 0 when filter changes",
+        "Handle edge case: filter results in empty list (show 'No contracts match filter')",
+        "Store _filter_mode: str = 'all' in panel",
+        "100% test coverage on filter logic",
+        "Test: filter cycles correctly All -> ITM -> OTM -> All",
+        "Test: empty filter results handled gracefully",
+        "Update help_screen.py with 'f' keybinding"
+      ],
+      "priority": 1,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-081"],
+      "notes": "Simple filter on existing data. No refetch needed. Filter icon or text in header shows current mode."
+    },
+    {
+      "id": "VPR-083",
+      "title": "Near-the-money focus",
+      "acceptanceCriteria": [
+        "Calculate ATM strike: closest strike to current stock price",
+        "Add method: _find_atm_strike(contracts, current_price) -> float",
+        "On panel load: auto-scroll to show ATM strike in center of view",
+        "ATM strike row highlighted differently (e.g., [cyan] text or border)",
+        "Show +/- N strikes from ATM when filtering (e.g., ATM +/- 5 strikes)",
+        "Add 'a' keybinding: jump to ATM strike",
+        "Store current stock price when loading options (from existing quote)",
+        "If current price unavailable, skip ATM highlighting (graceful degradation)",
+        "100% test coverage on ATM calculation and highlighting",
+        "Test: ATM strike correctly identified for various price scenarios",
+        "Update help_screen.py with 'a' keybinding"
+      ],
+      "priority": 2,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-082"],
+      "notes": "ATM focus helps users quickly find relevant strikes. Need to pass current stock price to options panel - can get from existing quote service."
+    },
+    {
+      "id": "VPR-084",
+      "title": "IV color coding",
+      "acceptanceCriteria": [
+        "Color-code IV column based on value relative to range in current chain",
+        "Calculate IV range: min_iv and max_iv from all contracts in current expiration",
+        "Low IV (bottom third): [green] - options are relatively cheap",
+        "Medium IV (middle third): [yellow] - normal pricing",
+        "High IV (top third): [red] - options are relatively expensive",
+        "Add method: _get_iv_color(iv, min_iv, max_iv) -> str",
+        "Recalculate ranges when expiration changes",
+        "Handle edge case: all IVs same (no coloring needed)",
+        "100% test coverage on IV color logic",
+        "Test: correct colors assigned for various IV distributions",
+        "Visual test: verify colors render correctly in terminal"
+      ],
+      "priority": 3,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-083"],
+      "notes": "Relative coloring within current chain. Not absolute IV rank (that requires historical data). Simple but effective visual cue."
+    },
+    {
+      "id": "VPR-085",
+      "title": "Volume and OI highlighting",
+      "acceptanceCriteria": [
+        "Identify high-volume contracts: volume > 2x average volume in chain",
+        "Identify high-OI contracts: open_interest > 2x average OI in chain",
+        "Highlight high-volume contracts with [bold] text style",
+        "Highlight high-OI contracts with different indicator (e.g., * prefix)",
+        "Calculate averages when chain loads: avg_volume and avg_oi",
+        "Add method: _is_high_volume(volume, avg_volume) -> bool",
+        "Add method: _is_high_oi(oi, avg_oi) -> bool",
+        "Handle edge case: all volumes zero (no highlighting)",
+        "100% test coverage on highlighting logic",
+        "Test: correct contracts highlighted for various volume distributions"
+      ],
+      "priority": 4,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-084"],
+      "notes": "High volume/OI indicates institutional interest or popular strikes. Simple 2x threshold is a reasonable heuristic."
+    },
+    {
+      "id": "VPR-086",
+      "title": "Multi-expiration summary view",
+      "acceptanceCriteria": [
+        "Add 's' keybinding: toggle summary view mode",
+        "Summary view shows ATM strike for each expiration (condensed)",
+        "Format: 'Mar 15 | C: 12.50/12.70 | P: 8.20/8.40 | IV: 28%'",
+        "j/k navigation moves between expirations in summary view",
+        "Enter on expiration: switch to that expiration's full chain view",
+        "Show up to 8 nearest expirations in summary",
+        "Store _summary_mode: bool = False in panel",
+        "Summary mode and full mode are mutually exclusive states",
+        "100% test coverage on summary view logic",
+        "Test: summary view shows correct ATM data for each expiration",
+        "Test: Enter on summary row switches to full view",
+        "Update help_screen.py with 's' keybinding"
+      ],
+      "priority": 5,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-085"],
+      "notes": "Quick overview of multiple expirations without navigating one by one. Shows ATM call/put bid-ask and IV at a glance."
+    },
+    {
+      "id": "VPR-087",
+      "title": "IV rank calculation (simplified)",
+      "acceptanceCriteria": [
+        "Calculate simplified IV rank using current chain data only",
+        "IV rank = (current_atm_iv - min_iv) / (max_iv - min_iv) * 100",
+        "Display IV rank in panel header: 'IV Rank: 45%'",
+        "Color IV rank: < 30% green (low), 30-70% yellow (normal), > 70% red (high)",
+        "Note: This is NOT true historical IV rank (which requires 52-week IV data)",
+        "Add tooltip or help text explaining this is relative IV rank",
+        "Store _iv_rank: float | None in panel",
+        "Update IV rank when expiration changes",
+        "Handle edge case: no ATM strike or no IV data (show 'N/A')",
+        "100% test coverage on IV rank calculation",
+        "Test: correct rank for various IV distributions"
+      ],
+      "priority": 6,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-086"],
+      "notes": "True IV rank requires historical IV data (not available in yfinance). This simplified version compares current ATM IV to IV range in current chain - still useful for relative assessment."
+    }
+  ],
+  "technicalNotes": {
+    "filterImplementation": {
+      "storage": "_filter_mode: Literal['all', 'itm', 'otm'] = 'all'",
+      "apply_filter": "Filter _current_contracts list in _rebuild_content()",
+      "cycling": "'f' key: all -> itm -> otm -> all (rotate)",
+      "persistence": "Filter resets to 'all' when ticker changes"
+    },
+    "atmCalculation": {
+      "method": "Find strike with minimum abs(strike - current_price)",
+      "current_price": "Get from QuotePanel or fetch via stock service",
+      "scroll_to_atm": "Calculate ATM row index, scroll VerticalScroll to center it",
+      "caching": "Store _atm_strike and _current_price to avoid recalculation"
+    },
+    "ivColorLogic": {
+      "calculate_bounds": "min_iv = min([c.iv for c in contracts]), max_iv = max([c.iv for c in contracts])",
+      "third_calculation": "low_threshold = min_iv + (max_iv - min_iv) / 3, high_threshold = min_iv + 2 * (max_iv - min_iv) / 3",
+      "color_assignment": "iv < low_threshold: green, iv < high_threshold: yellow, else: red",
+      "edge_case": "If max_iv == min_iv, all medium (yellow)"
+    },
+    "volumeOiHighlighting": {
+      "average_calculation": "sum(volumes) / len(volumes) for non-zero volumes",
+      "threshold": "2x average is standard 'high' threshold",
+      "styling": "Use Rich markup: [bold]{value}[/bold] for high volume",
+      "indicator": "Add * or marker for high OI"
+    },
+    "summaryViewDesign": {
+      "layout": "One row per expiration, showing ATM call/put at a glance",
+      "data_needed": "For each expiration: date, ATM call bid/ask, ATM put bid/ask, ATM IV",
+      "fetching": "Fetch all chains on summary load (may be slow - show loading)",
+      "caching": "Cache chain data to avoid refetching when switching views"
+    },
+    "ivRankCalculation": {
+      "formula": "(atm_iv - min_iv) / (max_iv - min_iv) * 100",
+      "atm_iv": "IV of the ATM strike (or average of ATM call + put IV)",
+      "limitations": "Not true 52-week IV rank - just relative to current chain",
+      "documentation": "Make clear in help text this is simplified IV rank"
+    },
+    "testingStrategy": [
+      "Unit tests: all calculation methods (ATM, IV color, volume threshold, IV rank)",
+      "Widget tests: filter cycling, summary view toggle, highlighting",
+      "Integration tests: full workflow with filtering, navigation, view modes",
+      "Edge cases: empty chains, all same IV, all zero volume, no ATM"
+    ],
+    "filesToModify": [
+      "viper/widgets/options_panel.py - extend with new features",
+      "viper/widgets/help_screen.py - document new keybindings (f, a, s)",
+      "viper/app.py - may need to pass current price to options panel"
+    ],
+    "newFiles": [
+      "tests/test_options_enhancements.py - tests for Feature 9 features"
+    ]
+  },
+  "outOfScope": [
+    "Greeks calculation (delta, theta, gamma, vega) - requires Black-Scholes + scipy",
+    "True historical IV rank (52-week) - requires historical IV data not in yfinance",
+    "Payoff diagrams - requires matplotlib or custom charting",
+    "Strategy builder - complex multi-leg analysis",
+    "Options alerts/notifications - future feature",
+    "Options trading/order entry - out of scope entirely"
+  ],
+  "successMetrics": [
+    "Filter mode cycles ITM/OTM/All correctly",
+    "ATM strike identified and highlighted",
+    "'a' key jumps to ATM strike",
+    "IV color coding renders correctly (green/yellow/red)",
+    "High volume/OI contracts highlighted",
+    "Summary view shows all expirations at a glance",
+    "Enter on summary row navigates to full view",
+    "IV rank displays in header with color",
+    "All new features work with existing j/k/[ ]/c/p navigation",
+    "All tests pass with >= 90% coverage",
+    "mypy --strict passes with no errors"
+  ],
+  "storyDependencyGraph": {
+    "description": "Linear dependency chain building on Feature 8",
+    "flow": "VPR-082 (filter) -> VPR-083 (ATM) -> VPR-084 (IV color) -> VPR-085 (vol/OI) -> VPR-086 (summary) -> VPR-087 (IV rank)",
+    "parallelization": "VPR-084 and VPR-085 could potentially run in parallel (both depend on VPR-083)"
+  }
+}

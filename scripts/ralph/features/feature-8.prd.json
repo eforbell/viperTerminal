@@ -1,0 +1,270 @@
+{
+  "branchName": "viper/feature-8-options-chain",
+  "projectName": "Viper Terminal - Feature 8",
+  "description": "Options Chain: Add basic options chain data exploration with navigable table, expiration switching, and calls/puts toggle. Uses yfinance options API for free options data without subscription services.",
+  "principles": [
+    "Rock-solid quality over speed - every feature must be bulletproof before moving on",
+    "Comprehensive test coverage - unit tests, integration tests, edge cases",
+    "All tests must pass before a story is marked complete",
+    "Follow established patterns - reuse NewsPanel navigation and QuotePanel state patterns",
+    "Apply learnings from AGENTS.md and previous widget implementations",
+    "Options data comes from yfinance - no external dependencies needed"
+  ],
+  "CRITICAL_RENDERING_NOTES": {
+    "warning": "READ THIS BEFORE ANY WIDGET/RENDERING WORK",
+    "textual_colors": "Textual uses Rich markup, NOT ANSI escape codes!",
+    "correct_syntax": "[green]text[/green], [cyan]char[/cyan], [red]value[/red]",
+    "wrong_syntax": "\\033[32m (ANSI codes will BREAK rendering in Textual widgets)",
+    "label_markup": "When Label contains Rich markup, you MUST set markup=True",
+    "options_colors": "ITM: [green], OTM: [red], headers: [cyan], selected: background highlight",
+    "tab_key_warning": "DO NOT use Tab for expiration navigation - Tab is used at app level for panel switching"
+  },
+  "techStack": {
+    "language": "Python 3.11+",
+    "tui": "Textual (built on Rich)",
+    "options_data": "yfinance (ticker.options, ticker.option_chain())",
+    "testing": "pytest + pytest-asyncio + pytest-cov",
+    "mocking": "pytest-mock",
+    "typecheck": "mypy --strict",
+    "linting": "ruff"
+  },
+  "background": {
+    "optionsOverview": "Options are financial derivatives that give the holder the right (but not obligation) to buy or sell an underlying asset at a specified price within a specific time period.",
+    "optionsTerminology": {
+      "call": "Right to BUY at strike price (bullish bet)",
+      "put": "Right to SELL at strike price (bearish bet)",
+      "strike": "The price at which option can be exercised",
+      "expiration": "Date when option contract expires",
+      "premium": "Price paid for the option contract (bid/ask)",
+      "itm": "In The Money - option has intrinsic value",
+      "otm": "Out of The Money - option has no intrinsic value",
+      "iv": "Implied Volatility - market's expectation of price movement"
+    },
+    "yfinanceCapabilities": {
+      "available": [
+        "ticker.options - list of available expiration dates",
+        "ticker.option_chain(date) - DataFrame with calls/puts",
+        "strike, bid, ask, lastPrice, volume, openInterest",
+        "impliedVolatility, inTheMoney boolean"
+      ],
+      "notAvailable": [
+        "Greeks (delta, theta, gamma, vega) - would require Black-Scholes calculation",
+        "Historical options data - only current chain available"
+      ]
+    },
+    "existingPatterns": [
+      "NewsPanel - j/k navigation, selected item highlighting, state machine (empty/loading/success/error)",
+      "QuotePanel - show_quote/show_error/show_loading pattern, _rebuild_content()",
+      "ChartPanel - togglable panel integration, keybindings in app.py"
+    ]
+  },
+  "userStories": [
+    {
+      "id": "VPR-076",
+      "title": "Create options service - fetch expirations",
+      "acceptanceCriteria": [
+        "New file: viper/services/options.py",
+        "Create async function: fetch_option_expirations(ticker: str) -> list[str] | OptionsError",
+        "Uses yfinance ticker.options to get available expiration dates",
+        "Returns list of date strings in YYYY-MM-DD format",
+        "Returns OptionsError dataclass on failure (invalid ticker, no options, network error)",
+        "OptionsError has ticker and error_message fields",
+        "Handle edge case: ticker exists but has no options (some ETFs, penny stocks)",
+        "100% test coverage with mocked yfinance responses",
+        "Tests: valid ticker with options, valid ticker without options, invalid ticker",
+        "Export from viper/services/__init__.py"
+      ],
+      "priority": 1,
+      "estimatedEffort": "Small",
+      "dependencies": [],
+      "notes": "Foundation for options feature. yfinance returns tuple of date strings from ticker.options property. Convert to list and handle None/empty cases."
+    },
+    {
+      "id": "VPR-077",
+      "title": "Create options service - fetch chain data",
+      "acceptanceCriteria": [
+        "Create dataclass: OptionContract with fields: strike, bid, ask, last_price, volume, open_interest, implied_volatility, in_the_money",
+        "Create dataclass: OptionsChain with fields: ticker, expiration, calls (list[OptionContract]), puts (list[OptionContract])",
+        "Create async function: fetch_option_chain(ticker: str, expiration: str) -> OptionsChain | OptionsError",
+        "Uses yfinance ticker.option_chain(expiration) to get calls/puts DataFrames",
+        "Converts DataFrame rows to OptionContract dataclass instances",
+        "Handle None/NaN values in DataFrame (default to 0 for numeric fields)",
+        "Returns OptionsError if expiration not found or other error",
+        "100% test coverage with mocked yfinance responses",
+        "Tests: valid chain data, empty chain, invalid expiration, NaN handling"
+      ],
+      "priority": 2,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-076"],
+      "notes": "yfinance option_chain returns namedtuple with .calls and .puts DataFrames. Each has columns: strike, bid, ask, lastPrice, volume, openInterest, impliedVolatility, inTheMoney."
+    },
+    {
+      "id": "VPR-078",
+      "title": "Create OptionsChainPanel widget",
+      "acceptanceCriteria": [
+        "New file: viper/widgets/options_panel.py",
+        "Class OptionsChainPanel extends Widget with can_focus = True",
+        "State machine: empty, loading, success, error (follow QuotePanel pattern)",
+        "Compose: header label, expiration selector, options table in VerticalScroll",
+        "Table columns: Strike, Bid, Ask, Last, Vol, OI, IV, ITM",
+        "Selected row highlighted (follow NewsPanel .selected class pattern)",
+        "ITM contracts highlighted in green, OTM in default color",
+        "Header shows: 'OPTIONS: {ticker} | {expiration} | CALLS' or 'PUTS'",
+        "Display loading state while fetching options data",
+        "Display error state if no options available for ticker",
+        "BINDINGS: j/k for row navigation (priority=True)",
+        "Method: load_options(ticker: str) - fetches expirations and first chain",
+        "Method: show_empty() - display 'No ticker selected' state",
+        "100% test coverage on widget states and navigation",
+        "Export from viper/widgets/__init__.py"
+      ],
+      "priority": 3,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-077"],
+      "notes": "Follow NewsPanel pattern for j/k navigation and selection. State management follows QuotePanel. Table is simple Labels in Container, not DataTable widget (keeps it simple)."
+    },
+    {
+      "id": "VPR-079",
+      "title": "App integration - 'o' keybinding",
+      "acceptanceCriteria": [
+        "Add 'o' keybinding to app.py BINDINGS: Binding('o', 'toggle_options', 'Options', show=False)",
+        "Create OptionsChainPanel instance in app compose()",
+        "Panel starts hidden (call hide() after mounting)",
+        "action_toggle_options() toggles panel visibility",
+        "When showing options panel: load options for current ticker if ticker exists",
+        "When hiding options panel: just hide, don't clear data",
+        "Options panel replaces multi-purpose panel area when visible (or shows alongside)",
+        "Track visibility: _options_panel_visible: bool = False",
+        "Only show options when a ticker is selected (not on initial empty state)",
+        "Add 'o' key to help_screen.py keybindings section",
+        "Test: 'o' toggles options panel on/off",
+        "Test: Options load when panel shown with valid ticker",
+        "Test: Panel shows empty state when no ticker selected"
+      ],
+      "priority": 4,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-078"],
+      "notes": "'o' for Options (mnemonic). Options panel can coexist with chart/news or replace multi-purpose area - implementation decision. Start simple: toggle replaces current view."
+    },
+    {
+      "id": "VPR-080",
+      "title": "Expiration selector with [ and ] keys",
+      "acceptanceCriteria": [
+        "Add '[' keybinding: previous expiration date",
+        "Add ']' keybinding: next expiration date",
+        "Cycle through available expirations for current ticker",
+        "Wrap around: after last expiration, wrap to first (and vice versa)",
+        "Update header to show current expiration date",
+        "Fetch and display new chain when expiration changes",
+        "Show loading state while fetching new chain",
+        "Bindings only active when options panel is focused/visible",
+        "Store _expirations list and _current_expiration_index in panel",
+        "Test: cycling through expirations updates display",
+        "Test: wrap-around works correctly",
+        "Update help_screen.py with [ ] keybindings"
+      ],
+      "priority": 5,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-079"],
+      "notes": "Using [ ] instead of Tab to avoid conflict with app-level Tab for panel switching. Brackets are intuitive for 'previous/next' navigation."
+    },
+    {
+      "id": "VPR-081",
+      "title": "Calls/Puts toggle with c/p keys",
+      "acceptanceCriteria": [
+        "Add 'c' keybinding: show calls (when in options panel)",
+        "Add 'p' keybinding: show puts (when in options panel)",
+        "Current view (calls/puts) shown in header: 'CALLS' or 'PUTS'",
+        "Toggle is instant - no refetch needed, data already loaded",
+        "Reset selected row to 0 when switching between calls/puts",
+        "Store _show_calls: bool = True in panel (True = calls, False = puts)",
+        "c/p keys only active when options panel has focus",
+        "Test: 'c' switches to calls view",
+        "Test: 'p' switches to puts view",
+        "Test: selection resets on switch",
+        "Update help_screen.py with c/p keybindings"
+      ],
+      "priority": 6,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-080"],
+      "notes": "Simple toggle between two pre-loaded lists. No network request needed since option_chain() returns both calls and puts at once."
+    }
+  ],
+  "technicalNotes": {
+    "yfinanceOptionsAPI": {
+      "get_expirations": "ticker = yf.Ticker(symbol); dates = ticker.options  # tuple of 'YYYY-MM-DD' strings",
+      "get_chain": "chain = ticker.option_chain(expiration)  # returns namedtuple",
+      "calls_df": "chain.calls  # pandas DataFrame",
+      "puts_df": "chain.puts  # pandas DataFrame",
+      "df_columns": ["contractSymbol", "lastTradeDate", "strike", "lastPrice", "bid", "ask", "change", "percentChange", "volume", "openInterest", "impliedVolatility", "inTheMoney"]
+    },
+    "dataclassDesign": {
+      "OptionContract": "Immutable dataclass with all numeric fields (use 0.0 for None/NaN)",
+      "OptionsChain": "Contains ticker, expiration, and separate lists for calls and puts",
+      "OptionsError": "Similar to StockError - ticker and error_message fields"
+    },
+    "panelStateManagement": {
+      "states": ["empty", "loading", "success", "error"],
+      "empty": "No ticker selected - show 'Select a ticker to view options'",
+      "loading": "Fetching options data - show LoadingIndicator",
+      "success": "Display options table with current chain data",
+      "error": "No options available - show error message"
+    },
+    "navigationDesign": {
+      "j_k": "Move selection up/down in options table (within current calls/puts)",
+      "brackets": "[ previous expiration, ] next expiration (cycles through dates)",
+      "c_p": "c = show calls, p = show puts (instant toggle, no refetch)",
+      "o": "Toggle options panel visibility at app level"
+    },
+    "tableLayout": {
+      "columns": "Strike | Bid | Ask | Last | Vol | OI | IV | ITM",
+      "column_widths": "8 | 8 | 8 | 8 | 8 | 8 | 6 | 4 (approximate)",
+      "alignment": "Strike right-aligned, prices right-aligned, Vol/OI right-aligned, IV right-aligned, ITM centered",
+      "itm_display": "Y or N (or colored indicator)"
+    },
+    "testingStrategy": [
+      "Unit tests: service functions with mocked yfinance",
+      "Widget tests: state transitions, navigation, display formatting",
+      "Integration tests: panel toggle, ticker change updates options",
+      "Edge cases: ticker with no options, expired options, NaN values in data"
+    ],
+    "filesToModify": [
+      "viper/app.py - add 'o' keybinding and options panel integration",
+      "viper/widgets/help_screen.py - document options keybindings",
+      "viper/widgets/__init__.py - export OptionsChainPanel",
+      "viper/services/__init__.py - export options service"
+    ],
+    "newFiles": [
+      "viper/services/options.py - options data service",
+      "viper/widgets/options_panel.py - OptionsChainPanel widget",
+      "tests/test_options_service.py - service unit tests",
+      "tests/test_options_panel.py - widget tests"
+    ]
+  },
+  "outOfScope": [
+    "Greeks calculation (delta, theta, gamma, vega) - requires Black-Scholes, deferred to Feature 9+",
+    "Options filtering (ITM only, OTM only, volume threshold) - deferred to Feature 9",
+    "IV rank/percentile calculations - deferred to Feature 9",
+    "Near-the-money focus/highlighting - deferred to Feature 9",
+    "Multi-expiration view - deferred to Feature 9",
+    "Strategy builder or payoff diagrams - future feature",
+    "Options trading/order entry - out of scope entirely"
+  ],
+  "successMetrics": [
+    "Options panel displays for valid ticker with options",
+    "All expirations shown and navigable with [ ] keys",
+    "Calls/Puts toggle with c/p keys works correctly",
+    "j/k navigation through options table works smoothly",
+    "Loading states display during data fetch",
+    "Error states display for tickers without options",
+    "Panel toggles on/off with 'o' key",
+    "Help screen updated with new keybindings",
+    "All tests pass with >= 90% coverage",
+    "mypy --strict passes with no errors"
+  ],
+  "storyDependencyGraph": {
+    "description": "Linear dependency chain building from service to widget to app",
+    "flow": "VPR-076 (expirations) -> VPR-077 (chain) -> VPR-078 (widget) -> VPR-079 (app) -> VPR-080 (expirations nav) -> VPR-081 (calls/puts)",
+    "parallelization": "All stories are sequential - each builds on the previous"
+  }
+}
