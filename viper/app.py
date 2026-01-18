@@ -440,7 +440,8 @@ class ViperApp(App[None]):
 
             # If we have a current ticker, fetch and display options
             if self._current_ticker:
-                self.run_worker(options_panel.load_options(self._current_ticker))
+                current_price = self._get_current_price()
+                self.run_worker(options_panel.load_options(self._current_ticker, current_price))
             else:
                 # Show empty state when no ticker selected
                 options_panel.show_empty()
@@ -661,7 +662,8 @@ class ViperApp(App[None]):
             self.run_worker(news_panel.load_news(self._current_ticker))
         elif self._options_panel_visible and self._current_ticker:
             options_panel = self.query_one(OptionsChainPanel)
-            self.run_worker(options_panel.load_options(self._current_ticker))
+            current_price = self._get_current_price()
+            self.run_worker(options_panel.load_options(self._current_ticker, current_price))
 
     async def on_ticker_input_ticker_lookup(self, event: TickerInput.TickerLookup) -> None:
         """Handle ticker lookup events.
@@ -704,7 +706,26 @@ class ViperApp(App[None]):
             self.run_worker(news_panel.load_news(self._current_ticker))
         elif self._options_panel_visible and self._current_ticker:
             options_panel = self.query_one(OptionsChainPanel)
-            self.run_worker(options_panel.load_options(self._current_ticker))
+            current_price = self._get_current_price()
+            self.run_worker(options_panel.load_options(self._current_ticker, current_price))
+
+    def _get_current_price(self) -> float | None:
+        """Get the current price from the quote panel.
+
+        Returns:
+            The current price if available, None otherwise.
+        """
+        quote_panel = self.query_one(QuotePanel)
+        if quote_panel._state != "success" or not quote_panel._quote:
+            return None
+
+        # Extract price based on quote type (StockQuote or CryptoQuote)
+        if isinstance(quote_panel._quote, StockQuote):
+            return quote_panel._quote.price
+        elif isinstance(quote_panel._quote, CryptoQuote):
+            return quote_panel._quote.price_usd
+        else:
+            return None
 
     async def _fetch_and_display_quote(self, ticker: str) -> None:
         """Fetch and display a quote for the given ticker.

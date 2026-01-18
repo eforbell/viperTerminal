@@ -142,6 +142,7 @@
     {
       "id": "VPR-082",
       "title": "Add filter mode - ITM/OTM/All",
+      "passes": true,
       "acceptanceCriteria": [
         "Add 'f' keybinding to cycle filter mode: All -> ITM -> OTM -> All",
         "Filter mode shown in header: 'OPTIONS: AAPL | 2024-03-15 | CALLS | Filter: All'",
@@ -160,11 +161,13 @@
       "priority": 1,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-081"],
-      "notes": "Simple filter on existing data. No refetch needed. Filter icon or text in header shows current mode."
+      "notes": "Simple filter on existing data. No refetch needed. Filter icon or text in header shows current mode.",
+      "completedAt": "2026-01-18"
     },
     {
       "id": "VPR-083",
       "title": "Near-the-money focus",
+      "passes": true,
       "acceptanceCriteria": [
         "Calculate ATM strike: closest strike to current stock price",
         "Add method: _find_atm_strike(contracts, current_price) -> float",
@@ -181,11 +184,13 @@
       "priority": 2,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-082"],
-      "notes": "ATM focus helps users quickly find relevant strikes. Need to pass current stock price to options panel - can get from existing quote service."
+      "notes": "ATM focus helps users quickly find relevant strikes. Need to pass current stock price to options panel - can get from existing quote service.",
+      "completedAt": "2026-01-18"
     },
     {
       "id": "VPR-084",
       "title": "IV color coding",
+      "passes": true,
       "acceptanceCriteria": [
         "Color-code IV column based on value relative to range in current chain",
         "Calculate IV range: min_iv and max_iv from all contracts in current expiration",
@@ -202,11 +207,13 @@
       "priority": 3,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-083"],
-      "notes": "Relative coloring within current chain. Not absolute IV rank (that requires historical data). Simple but effective visual cue."
+      "notes": "Relative coloring within current chain. Not absolute IV rank (that requires historical data). Simple but effective visual cue.",
+      "completedAt": "2026-01-18"
     },
     {
       "id": "VPR-085",
       "title": "Volume and OI highlighting",
+      "passes": true,
       "acceptanceCriteria": [
         "Identify high-volume contracts: volume > 2x average volume in chain",
         "Identify high-OI contracts: open_interest > 2x average OI in chain",
@@ -222,11 +229,13 @@
       "priority": 4,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-084"],
-      "notes": "High volume/OI indicates institutional interest or popular strikes. Simple 2x threshold is a reasonable heuristic."
+      "notes": "High volume/OI indicates institutional interest or popular strikes. Simple 2x threshold is a reasonable heuristic.",
+      "completedAt": "2026-01-18"
     },
     {
       "id": "VPR-086",
       "title": "Multi-expiration summary view",
+      "passes": true,
       "acceptanceCriteria": [
         "Add 's' keybinding: toggle summary view mode",
         "Summary view shows ATM strike for each expiration (condensed)",
@@ -244,11 +253,13 @@
       "priority": 5,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-085"],
-      "notes": "Quick overview of multiple expirations without navigating one by one. Shows ATM call/put bid-ask and IV at a glance."
+      "notes": "Quick overview of multiple expirations without navigating one by one. Shows ATM call/put bid-ask and IV at a glance.",
+      "completedAt": "2026-01-18"
     },
     {
       "id": "VPR-087",
       "title": "IV rank calculation (simplified)",
+      "passes": true,
       "acceptanceCriteria": [
         "Calculate simplified IV rank using current chain data only",
         "IV rank = (current_atm_iv - min_iv) / (max_iv - min_iv) * 100",
@@ -265,7 +276,8 @@
       "priority": 6,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-086"],
-      "notes": "True IV rank requires historical IV data (not available in yfinance). This simplified version compares current ATM IV to IV range in current chain - still useful for relative assessment."
+      "notes": "True IV rank requires historical IV data (not available in yfinance). This simplified version compares current ATM IV to IV range in current chain - still useful for relative assessment.",
+      "completedAt": "2026-01-18"
     }
   ],
   "technicalNotes": {

@@ -1,6 +1,7 @@
 """Options chain panel widget for displaying options data."""
 
-from typing import Optional
+import asyncio
+from typing import Literal, Optional
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -31,6 +32,10 @@ class OptionsChainPanel(Widget):
         Binding("]", "next_expiration", "Next Expiry", show=False, priority=True),
         Binding("c", "show_calls", "Calls", show=False, priority=True),
         Binding("p", "show_puts", "Puts", show=False, priority=True),
+        Binding("f", "cycle_filter", "Filter", show=False, priority=True),
+        Binding("a", "jump_to_atm", "ATM", show=False, priority=True),
+        Binding("s", "toggle_summary", "Summary", show=False, priority=True),
+        Binding("enter", "select_expiration", "Select", show=False, priority=True),
     ]
 
     DEFAULT_CSS = """
@@ -70,6 +75,11 @@ class OptionsChainPanel(Widget):
         color: $text;
     }
 
+    OptionsChainPanel .atm {
+        color: #00ffff;
+        text-style: bold;
+    }
+
     OptionsChainPanel .empty-state {
         color: #666666;
         text-align: center;
@@ -102,6 +112,12 @@ class OptionsChainPanel(Widget):
         self._chain: Optional[OptionsChain] = None
         self._show_calls: bool = True  # True = calls, False = puts
         self._selected_index: int = 0
+        self._filter_mode: Literal["all", "itm", "otm"] = "all"
+        self._current_price: Optional[float] = None  # Current stock/crypto price
+        self._atm_strike: Optional[float] = None  # At-the-money strike price
+        self._summary_mode: bool = False  # Summary view (multi-expiration) vs normal view
+        self._summary_chains: dict[str, OptionsChain | OptionsError] = {}  # Cache chains for summary view
+        self._iv_rank: Optional[float] = None  # Simplified IV rank (0-100%)
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -112,20 +128,24 @@ class OptionsChainPanel(Widget):
         """Initialize content when mounted."""
         self._rebuild_content()
 
-    async def load_options(self, ticker: str) -> None:
+    async def load_options(self, ticker: str, current_price: Optional[float] = None) -> None:
         """Load options for the given ticker.
 
         Args:
             ticker: The ticker symbol to fetch options for.
+            current_price: Optional current stock/crypto price for ATM calculation.
         """
-        # Update current ticker before fetch
+        # Update current ticker and price before fetch
         self._current_ticker = ticker
+        self._current_price = current_price
         self._state = "loading"
         self._selected_index = 0
         self._expirations = []
         self._current_expiration_index = 0
         self._chain = None
         self._show_calls = True
+        self._filter_mode = "all"  # Reset filter when loading new ticker
+        self._atm_strike = None  # Reset ATM strike
         self._rebuild_content()
 
         # Fetch available expirations
@@ -185,15 +205,121 @@ class OptionsChainPanel(Widget):
         self._chain = None
         self._selected_index = 0
         self._show_calls = True
+        self._filter_mode = "all"
+        self._current_price = None
+        self._atm_strike = None
+        self._summary_mode = False
+        self._summary_chains = {}
+        self._iv_rank = None
         self._rebuild_content()
+
+    def _find_atm_strike(self, contracts: list[OptionContract]) -> Optional[float]:
+        """Find the at-the-money (ATM) strike price.
+
+        The ATM strike is the strike closest to the current stock/crypto price.
+
+        Args:
+            contracts: List of option contracts to search.
+
+        Returns:
+            The ATM strike price, or None if no current price or no contracts.
+        """
+        if not self._current_price or not contracts:
+            return None
+
+        # Find strike with minimum distance to current price
+        current_price = self._current_price  # Type narrowing for mypy
+        atm_strike = min(contracts, key=lambda c: abs(c.strike - current_price))
+        return atm_strike.strike
+
+    def _calculate_iv_rank(self, contracts: list[OptionContract], atm_strike: Optional[float]) -> Optional[float]:
+        """Calculate simplified IV rank using current chain data only.
+
+        IV rank = (current_atm_iv - min_iv) / (max_iv - min_iv) * 100
+
+        Note: This is NOT true historical IV rank (which requires 52-week IV data).
+        This simplified version compares current ATM IV to IV range in current chain.
+
+        Args:
+            contracts: List of option contracts (calls or puts).
+            atm_strike: The at-the-money strike price.
+
+        Returns:
+            IV rank as a percentage (0-100), or None if calculation not possible.
+        """
+        if not contracts or atm_strike is None:
+            return None
+
+        # Find ATM contract
+        atm_contract = None
+        for contract in contracts:
+            if contract.strike == atm_strike:
+                atm_contract = contract
+                break
+
+        if atm_contract is None:
+            return None
+
+        # Get ATM IV (return None if IV is 0.0, which means it was NaN)
+        atm_iv = atm_contract.implied_volatility
+        if atm_iv <= 0.0:
+            return None
+
+        # Filter out 0.0 IV values (which were NaN in original data)
+        valid_ivs = [c.implied_volatility for c in contracts if c.implied_volatility > 0.0]
+
+        if not valid_ivs:
+            return None
+
+        # Calculate min and max IV
+        min_iv = min(valid_ivs)
+        max_iv = max(valid_ivs)
+
+        # Handle edge case: all IVs are the same
+        if max_iv == min_iv:
+            return 50.0  # Return 50% (middle) when range is zero
+
+        # Calculate IV rank
+        iv_rank = ((atm_iv - min_iv) / (max_iv - min_iv)) * 100
+        return iv_rank
+
+    def _get_iv_rank_color(self, iv_rank: float) -> str:
+        """Get color markup for IV rank display.
+
+        Color logic:
+        - Low IV rank (< 30%): green - options are relatively cheap
+        - Normal IV rank (30-70%): yellow - normal pricing
+        - High IV rank (> 70%): red - options are relatively expensive
+
+        Args:
+            iv_rank: The IV rank percentage (0-100).
+
+        Returns:
+            Rich markup color string: "green", "yellow", or "red".
+        """
+        if iv_rank < 30:
+            return "green"
+        elif iv_rank <= 70:
+            return "yellow"
+        else:
+            return "red"
 
     def _rebuild_content(self) -> None:
         """Render the appropriate content based on current state."""
         # Update header
         header = self.query_one("#options-header", Label)
         if self._state == "success" and self._chain:
-            option_type = "CALLS" if self._show_calls else "PUTS"
-            header_text = f"OPTIONS: [cyan]{self._chain.ticker}[/cyan] | [cyan]{self._chain.expiration}[/cyan] | [cyan]{option_type}[/cyan]"
+            if self._summary_mode:
+                header_text = f"OPTIONS SUMMARY: [cyan]{self._chain.ticker}[/cyan]"
+            else:
+                option_type = "CALLS" if self._show_calls else "PUTS"
+                filter_text = self._filter_mode.upper()
+                header_text = f"OPTIONS: [cyan]{self._chain.ticker}[/cyan] | [cyan]{self._chain.expiration}[/cyan] | [cyan]{option_type}[/cyan] | Filter: [cyan]{filter_text}[/cyan]"
+
+                # Add IV rank to header if available
+                if self._iv_rank is not None:
+                    iv_rank_color = self._get_iv_rank_color(self._iv_rank)
+                    header_text += f" | IV Rank: [{iv_rank_color}]{self._iv_rank:.0f}%[/{iv_rank_color}]"
             header.update(header_text)
         else:
             header.update("OPTIONS")
@@ -224,7 +350,10 @@ class OptionsChainPanel(Widget):
                 )
             )
         elif self._state == "success":
-            self._render_options_table(container)
+            if self._summary_mode:
+                self._render_summary_view(container)
+            else:
+                self._render_options_table(container)
 
     def _render_options_table(self, container: VerticalScroll) -> None:
         """Render the options table with current selection.
@@ -236,9 +365,9 @@ class OptionsChainPanel(Widget):
             return
 
         # Get current contracts list (calls or puts)
-        contracts = self._chain.calls if self._show_calls else self._chain.puts
+        all_contracts = self._chain.calls if self._show_calls else self._chain.puts
 
-        if not contracts:
+        if not all_contracts:
             container.mount(
                 Label(
                     f"No {'calls' if self._show_calls else 'puts'} available",
@@ -246,6 +375,40 @@ class OptionsChainPanel(Widget):
                 )
             )
             return
+
+        # Apply filter
+        contracts = self._apply_filter(all_contracts)
+
+        # Handle empty filter results
+        if not contracts:
+            container.mount(
+                Label(
+                    "No contracts match filter",
+                    classes="error-state",
+                )
+            )
+            return
+
+        # Calculate ATM strike from all contracts (not filtered)
+        self._atm_strike = self._find_atm_strike(all_contracts)
+
+        # Calculate IV rank (from all contracts, not filtered)
+        self._iv_rank = self._calculate_iv_rank(all_contracts, self._atm_strike)
+
+        # Calculate IV range for color coding (from all contracts, not filtered)
+        # Filter out 0.0 IV values (which were NaN in original data)
+        valid_ivs = [c.implied_volatility for c in all_contracts if c.implied_volatility > 0.0]
+        if valid_ivs:
+            min_iv = min(valid_ivs)
+            max_iv = max(valid_ivs)
+        else:
+            # No valid IVs - use defaults that will result in yellow color
+            min_iv = 0.0
+            max_iv = 0.0
+
+        # Calculate average volume and OI for highlighting (from all contracts, not filtered)
+        avg_volume = self._calculate_average_volume(all_contracts)
+        avg_oi = self._calculate_average_oi(all_contracts)
 
         # Clamp selected index to valid range
         if self._selected_index >= len(contracts):
@@ -260,9 +423,251 @@ class OptionsChainPanel(Widget):
         # Render table rows
         for i, contract in enumerate(contracts):
             is_selected = i == self._selected_index
+            is_atm = self._atm_strike is not None and contract.strike == self._atm_strike
+
+            # Get IV color (default to yellow if IV is 0.0/NaN)
+            if contract.implied_volatility > 0.0:
+                iv_color = self._get_iv_color(contract.implied_volatility, min_iv, max_iv)
+            else:
+                iv_color = "yellow"
+
+            # Check for high volume/OI
+            is_high_vol = self._is_high_volume(contract.volume, avg_volume)
+            is_high_oi = self._is_high_oi(contract.open_interest, avg_oi)
 
             # Format row data
-            row_text = self._format_contract_row(contract)
+            row_text = self._format_contract_row(
+                contract, is_atm=is_atm, iv_color=iv_color, is_high_vol=is_high_vol, is_high_oi=is_high_oi
+            )
+
+            # Create row container with appropriate classes
+            classes = "table-row"
+            if is_selected:
+                classes += " selected"
+            if is_atm:
+                classes += " atm"
+
+            row_label = Label(row_text, classes=classes, markup=True)
+            container.mount(row_label)
+
+    def _apply_filter(self, contracts: list[OptionContract]) -> list[OptionContract]:
+        """Apply the current filter mode to the list of contracts.
+
+        Args:
+            contracts: The full list of contracts to filter.
+
+        Returns:
+            Filtered list of contracts based on current filter mode.
+        """
+        if self._filter_mode == "all":
+            return contracts
+        elif self._filter_mode == "itm":
+            return [c for c in contracts if c.in_the_money]
+        elif self._filter_mode == "otm":
+            return [c for c in contracts if not c.in_the_money]
+        else:
+            return contracts
+
+    def _get_iv_color(self, iv: float, min_iv: float, max_iv: float) -> str:
+        """Get color markup for IV based on its position in the range.
+
+        Color logic:
+        - Low IV (bottom third): green - options are relatively cheap
+        - Medium IV (middle third): yellow - normal pricing
+        - High IV (top third): red - options are relatively expensive
+
+        Args:
+            iv: The implied volatility value to color.
+            min_iv: Minimum IV in the current chain.
+            max_iv: Maximum IV in the current chain.
+
+        Returns:
+            Rich markup color string: "green", "yellow", or "red".
+        """
+        # Handle edge case: all IVs are the same
+        if max_iv == min_iv:
+            return "yellow"
+
+        # Calculate thresholds for thirds
+        range_size = max_iv - min_iv
+        low_threshold = min_iv + range_size / 3
+        high_threshold = min_iv + 2 * range_size / 3
+
+        # Assign color based on position in range
+        if iv < low_threshold:
+            return "green"
+        elif iv < high_threshold:
+            return "yellow"
+        else:
+            return "red"
+
+    def _calculate_average_volume(self, contracts: list[OptionContract]) -> float:
+        """Calculate average volume across all contracts.
+
+        Args:
+            contracts: List of option contracts.
+
+        Returns:
+            Average volume, or 0.0 if no contracts or all volumes are zero.
+        """
+        if not contracts:
+            return 0.0
+
+        total_volume = sum(c.volume for c in contracts)
+        return total_volume / len(contracts)
+
+    def _calculate_average_oi(self, contracts: list[OptionContract]) -> float:
+        """Calculate average open interest across all contracts.
+
+        Args:
+            contracts: List of option contracts.
+
+        Returns:
+            Average open interest, or 0.0 if no contracts or all OI are zero.
+        """
+        if not contracts:
+            return 0.0
+
+        total_oi = sum(c.open_interest for c in contracts)
+        return total_oi / len(contracts)
+
+    def _is_high_volume(self, volume: int, avg_volume: float) -> bool:
+        """Check if volume is considered high (> 2x average).
+
+        Args:
+            volume: Volume of the contract.
+            avg_volume: Average volume across all contracts in the chain.
+
+        Returns:
+            True if volume is high (> 2x average), False otherwise.
+        """
+        # If average is zero, nothing is considered "high"
+        if avg_volume <= 0:
+            return False
+
+        return volume > 2 * avg_volume
+
+    def _is_high_oi(self, oi: int, avg_oi: float) -> bool:
+        """Check if open interest is considered high (> 2x average).
+
+        Args:
+            oi: Open interest of the contract.
+            avg_oi: Average open interest across all contracts in the chain.
+
+        Returns:
+            True if OI is high (> 2x average), False otherwise.
+        """
+        # If average is zero, nothing is considered "high"
+        if avg_oi <= 0:
+            return False
+
+        return oi > 2 * avg_oi
+
+    def _format_contract_row(
+        self,
+        contract: OptionContract,
+        is_atm: bool = False,
+        iv_color: str = "white",
+        is_high_vol: bool = False,
+        is_high_oi: bool = False,
+    ) -> str:
+        """Format an option contract as a table row.
+
+        Args:
+            contract: The option contract to format.
+            is_atm: Whether this is the at-the-money strike.
+            iv_color: Color markup for IV column ("green", "yellow", or "red").
+            is_high_vol: Whether this contract has high volume (> 2x average).
+            is_high_oi: Whether this contract has high OI (> 2x average).
+
+        Returns:
+            Formatted row string with Rich markup.
+        """
+        # Format strike (right-aligned in 8 chars)
+        strike_str = f"{contract.strike:>8.2f}"
+
+        # Format prices (right-aligned in 8 chars)
+        bid_str = f"{contract.bid:>8.2f}"
+        ask_str = f"{contract.ask:>8.2f}"
+        last_str = f"{contract.last_price:>8.2f}"
+
+        # Format volume (right-aligned in 8 chars) with bold if high volume
+        vol_formatted = f"{contract.volume:>8,d}"
+        if is_high_vol:
+            vol_str = f"[bold]{vol_formatted}[/bold]"
+        else:
+            vol_str = vol_formatted
+
+        # Format OI (right-aligned in 8 chars) with * prefix if high OI
+        # Note: We need to adjust alignment to account for the * character
+        if is_high_oi:
+            oi_formatted = f"{contract.open_interest:>7,d}"
+            oi_str = f"*{oi_formatted}"
+        else:
+            oi_str = f"{contract.open_interest:>8,d}"
+
+        # Format IV (right-aligned in 6 chars, percentage) with color
+        iv_pct = contract.implied_volatility * 100
+        iv_str = f"[{iv_color}]{iv_pct:>6.1f}%[/{iv_color}]"
+
+        # Format ITM indicator (centered in 4 chars)
+        itm_str = " Y  " if contract.in_the_money else " N  "
+
+        # Build the row string
+        row = f"{strike_str} {bid_str} {ask_str} {last_str} {vol_str} {oi_str} {iv_str} {itm_str}"
+
+        # Apply color based on ATM or ITM status
+        if is_atm:
+            # ATM strikes get cyan color (handled by CSS class)
+            return row
+        elif contract.in_the_money:
+            # ITM contracts get green color
+            return f"[green]{row}[/green]"
+        else:
+            # OTM contracts use default color
+            return row
+
+    def _render_summary_view(self, container: VerticalScroll) -> None:
+        """Render the summary view showing ATM strikes for multiple expirations.
+
+        Args:
+            container: The container to mount widgets into.
+        """
+        if not self._expirations or not self._current_ticker:
+            container.mount(
+                Label("No expirations available", classes="error-state")
+            )
+            return
+
+        # Show up to 8 nearest expirations
+        expirations_to_show = self._expirations[:8]
+
+        # Clamp selected index to valid range
+        if self._selected_index >= len(expirations_to_show):
+            self._selected_index = len(expirations_to_show) - 1
+        if self._selected_index < 0:
+            self._selected_index = 0
+
+        # Render table header
+        header_text = "[cyan]Expiration    Call Bid/Ask    Put Bid/Ask     ATM IV[/cyan]"
+        container.mount(Label(header_text, classes="table-header", markup=True))
+
+        # Render summary rows
+        for i, expiration in enumerate(expirations_to_show):
+            is_selected = i == self._selected_index
+
+            # Get chain data (from cache or show loading/error)
+            chain = self._summary_chains.get(expiration)
+
+            if chain is None:
+                # Chain not loaded yet - show loading indicator
+                row_text = f"{expiration:13s} Loading..."
+            elif isinstance(chain, OptionsError):
+                # Chain failed to load
+                row_text = f"{expiration:13s} [red]Error[/red]"
+            else:
+                # Chain loaded - format ATM data
+                row_text = self._format_summary_row(expiration, chain)
 
             # Create row container with appropriate classes
             classes = "table-row"
@@ -272,67 +677,130 @@ class OptionsChainPanel(Widget):
             row_label = Label(row_text, classes=classes, markup=True)
             container.mount(row_label)
 
-    def _format_contract_row(self, contract: OptionContract) -> str:
-        """Format an option contract as a table row.
+    def _format_summary_row(self, expiration: str, chain: OptionsChain) -> str:
+        """Format a summary row showing ATM data for one expiration.
 
         Args:
-            contract: The option contract to format.
+            expiration: The expiration date string.
+            chain: The options chain for this expiration.
 
         Returns:
             Formatted row string with Rich markup.
         """
-        # Determine ITM color
-        color = "green" if contract.in_the_money else "red"
+        # Find ATM strike for both calls and puts
+        if not chain.calls or not chain.puts:
+            return f"{expiration:13s} No data available"
 
-        # Format strike (right-aligned in 8 chars)
-        strike_str = f"{contract.strike:>8.2f}"
+        # Use current price to find ATM strike
+        atm_strike = self._find_atm_strike(chain.calls)
 
-        # Format prices (right-aligned in 8 chars)
-        bid_str = f"{contract.bid:>8.2f}"
-        ask_str = f"{contract.ask:>8.2f}"
-        last_str = f"{contract.last_price:>8.2f}"
+        if atm_strike is None:
+            return f"{expiration:13s} No ATM data"
 
-        # Format volume and OI (right-aligned in 8 chars)
-        vol_str = f"{contract.volume:>8,d}"
-        oi_str = f"{contract.open_interest:>8,d}"
+        # Find ATM call contract
+        atm_call = None
+        for contract in chain.calls:
+            if contract.strike == atm_strike:
+                atm_call = contract
+                break
 
-        # Format IV (right-aligned in 6 chars, percentage)
-        iv_pct = contract.implied_volatility * 100
-        iv_str = f"{iv_pct:>6.1f}%"
+        # Find ATM put contract
+        atm_put = None
+        for contract in chain.puts:
+            if contract.strike == atm_strike:
+                atm_put = contract
+                break
 
-        # Format ITM indicator (centered in 4 chars)
-        itm_str = " Y  " if contract.in_the_money else " N  "
+        if not atm_call or not atm_put:
+            return f"{expiration:13s} No ATM data"
 
-        # Apply color to ITM contracts
-        if contract.in_the_money:
-            return f"[{color}]{strike_str} {bid_str} {ask_str} {last_str} {vol_str} {oi_str} {iv_str} {itm_str}[/{color}]"
-        else:
-            return f"{strike_str} {bid_str} {ask_str} {last_str} {vol_str} {oi_str} {iv_str} {itm_str}"
+        # Format call bid/ask
+        call_str = f"{atm_call.bid:>6.2f}/{atm_call.ask:<6.2f}"
+
+        # Format put bid/ask
+        put_str = f"{atm_put.bid:>6.2f}/{atm_put.ask:<6.2f}"
+
+        # Format ATM IV (use average of call and put IV)
+        avg_iv = (atm_call.implied_volatility + atm_put.implied_volatility) / 2
+        iv_pct = avg_iv * 100
+        iv_str = f"{iv_pct:>5.1f}%"
+
+        # Build the row string
+        return f"{expiration:13s} {call_str:16s} {put_str:16s} {iv_str:>7s}"
+
+    async def _load_summary_chains(self) -> None:
+        """Load option chains for summary view (up to 8 expirations)."""
+        if not self._current_ticker or not self._expirations:
+            return
+
+        # Get up to 8 nearest expirations
+        expirations_to_load = self._expirations[:8]
+
+        # Clear existing cache
+        self._summary_chains = {}
+
+        # Fetch all chains (in parallel for speed)
+        tasks = [
+            fetch_option_chain(self._current_ticker, exp) for exp in expirations_to_load
+        ]
+
+        # Wait for all chains to load
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Store results in cache
+        for exp, result in zip(expirations_to_load, results):
+            if isinstance(result, Exception):
+                # Store error (from exception during fetch)
+                self._summary_chains[exp] = OptionsError(
+                    ticker=self._current_ticker or "",
+                    error_message=str(result),
+                )
+            elif isinstance(result, OptionsError):
+                # Store error (from service)
+                self._summary_chains[exp] = result
+            elif isinstance(result, OptionsChain):
+                # Store successful chain
+                self._summary_chains[exp] = result
+            # Note: No else needed - result must be one of the above types
+
+        # Rebuild content to show loaded data
+        self._rebuild_content()
 
     def action_navigate_down(self) -> None:
-        """Navigate down to the next option contract (j key)."""
+        """Navigate down to the next option contract or expiration (j key)."""
         if self._state != "success" or not self._chain:
             return
 
-        contracts = self._chain.calls if self._show_calls else self._chain.puts
-        if not contracts:
-            return
+        if self._summary_mode:
+            # In summary mode, navigate between expirations (up to 8 shown)
+            max_index = min(len(self._expirations), 8) - 1
+            self._selected_index = min(self._selected_index + 1, max_index)
+        else:
+            # In normal mode, navigate between contracts
+            all_contracts = self._chain.calls if self._show_calls else self._chain.puts
+            contracts = self._apply_filter(all_contracts)
+            if not contracts:
+                return
+            self._selected_index = min(self._selected_index + 1, len(contracts) - 1)
 
-        # Move selection down
-        self._selected_index = min(self._selected_index + 1, len(contracts) - 1)
         self._rebuild_content()
 
     def action_navigate_up(self) -> None:
-        """Navigate up to the previous option contract (k key)."""
+        """Navigate up to the previous option contract or expiration (k key)."""
         if self._state != "success" or not self._chain:
             return
 
-        contracts = self._chain.calls if self._show_calls else self._chain.puts
-        if not contracts:
-            return
+        if self._summary_mode:
+            # In summary mode, navigate between expirations
+            self._selected_index = max(self._selected_index - 1, 0)
+        else:
+            # In normal mode, navigate between contracts
+            all_contracts = self._chain.calls if self._show_calls else self._chain.puts
+            contracts = self._apply_filter(all_contracts)
+            if not contracts:
+                return
+            self._selected_index = max(self._selected_index - 1, 0)
 
-        # Move selection up
-        self._selected_index = max(self._selected_index - 1, 0)
         self._rebuild_content()
 
     def action_prev_expiration(self) -> None:
@@ -384,3 +852,109 @@ class OptionsChainPanel(Widget):
             self._show_calls = False
             self._selected_index = 0  # Reset selection when switching
             self._rebuild_content()
+
+    def action_cycle_filter(self) -> None:
+        """Cycle through filter modes: all -> itm -> otm -> all (f key)."""
+        if self._state != "success" or not self._chain:
+            return
+
+        # Cycle filter mode
+        if self._filter_mode == "all":
+            self._filter_mode = "itm"
+        elif self._filter_mode == "itm":
+            self._filter_mode = "otm"
+        else:
+            self._filter_mode = "all"
+
+        # Reset selection when filter changes
+        self._selected_index = 0
+        self._rebuild_content()
+
+    def action_jump_to_atm(self) -> None:
+        """Jump to the at-the-money (ATM) strike (a key)."""
+        if self._state != "success" or not self._chain:
+            return
+
+        # Check if we have a current price to calculate ATM
+        if not self._current_price or not self._atm_strike:
+            return
+
+        # Get current contracts list and apply filter
+        all_contracts = self._chain.calls if self._show_calls else self._chain.puts
+        contracts = self._apply_filter(all_contracts)
+
+        if not contracts:
+            return
+
+        # Find the ATM strike in the filtered list
+        atm_index = None
+        for i, contract in enumerate(contracts):
+            if contract.strike == self._atm_strike:
+                atm_index = i
+                break
+
+        # If ATM strike found in filtered list, jump to it
+        if atm_index is not None:
+            self._selected_index = atm_index
+            self._rebuild_content()
+        # Otherwise, ATM strike is filtered out - do nothing (graceful degradation)
+
+    def action_toggle_summary(self) -> None:
+        """Toggle between summary view and normal view (s key)."""
+        if self._state != "success" or not self._chain:
+            return
+
+        # Toggle summary mode
+        self._summary_mode = not self._summary_mode
+
+        # Reset selection when switching views
+        self._selected_index = 0
+
+        if self._summary_mode:
+            # Entering summary mode - load chains for all expirations
+            self.run_worker(self._load_summary_chains())
+        else:
+            # Exiting summary mode - rebuild normal view
+            self._rebuild_content()
+
+    def action_select_expiration(self) -> None:
+        """Select an expiration from summary view and switch to full chain (Enter key)."""
+        # Only works in summary mode
+        if not self._summary_mode or self._state != "success":
+            return
+
+        if not self._expirations:
+            return
+
+        # Get up to 8 expirations shown in summary
+        expirations_to_show = self._expirations[:8]
+
+        # Validate selected index
+        if self._selected_index < 0 or self._selected_index >= len(expirations_to_show):
+            return
+
+        # Get selected expiration
+        selected_expiration = expirations_to_show[self._selected_index]
+
+        # Exit summary mode
+        self._summary_mode = False
+
+        # Update expiration index to match selected expiration
+        try:
+            self._current_expiration_index = self._expirations.index(selected_expiration)
+        except ValueError:
+            # Should never happen, but handle gracefully
+            self._current_expiration_index = 0
+
+        # Check if we already have the chain loaded in cache
+        cached_chain = self._summary_chains.get(selected_expiration)
+
+        if cached_chain and not isinstance(cached_chain, OptionsError):
+            # Use cached chain
+            self._chain = cached_chain
+            self._selected_index = 0
+            self._rebuild_content()
+        else:
+            # Load the chain (this will also rebuild content)
+            if self._current_ticker:
+                self.run_worker(self._load_chain(self._current_ticker, selected_expiration))

@@ -116,6 +116,7 @@ class HelpScreen(ModalScreen[None]):
                 yield Static("n                    Toggle news panel", classes="help-item")
                 yield Static("o                    Toggle options panel (or open in browser in news/article)", classes="help-item")
                 yield Static("p                    View puts in options panel", classes="help-item")
+                yield Static("f                    Cycle filter in options (All/ITM/OTM)", classes="help-item")
                 yield Static("t                    Technical indicator prefix (press t, then indicator key)", classes="help-item")
                 yield Static("  t-r                Toggle RSI indicator", classes="help-item")
                 yield Static("  t-m                Toggle MACD indicator", classes="help-item")
@@ -218,7 +219,27 @@ class HelpScreen(ModalScreen[None]):
                     classes="help-item",
                 )
                 yield Static(
+                    "Press 'f' to cycle filter mode: All -> ITM -> OTM -> All.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Press 'a' to jump to the at-the-money (ATM) strike.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Press 's' to toggle summary view (ATM strikes for multiple expirations).",
+                    classes="help-item",
+                )
+                yield Static(
+                    "In summary view, press Enter to view full chain for selected expiration.",
+                    classes="help-item",
+                )
+                yield Static(
                     "ITM (In The Money) contracts are highlighted in green.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "ATM (At The Money) strikes are highlighted in cyan.",
                     classes="help-item",
                 )
                 yield Static(
