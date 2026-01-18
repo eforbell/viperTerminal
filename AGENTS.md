@@ -3689,3 +3689,78 @@ Feature 7 complete! Ready for next feature (Feature 8 TBD).
 - Coverage: 95% for options.py
 - Ready for VPR-078 (OptionsChainPanel widget)
 - Robust NaN/None handling prevents runtime errors
+
+---
+
+### VPR-078: Create OptionsChainPanel Widget
+
+**Implementation Date**: 2026-01-18
+
+**Story**: Create navigable options chain panel widget with state machine, j/k navigation, and ITM/OTM highlighting
+
+**Key Learnings**:
+- **State Machine Pattern**: Follow QuotePanel pattern with 4 states: empty, loading, success, error
+- **Rich Markup in Headers**: Use `[cyan]text[/cyan]` markup in header label, requires `markup=True` attribute
+- **Monospace Table Formatting**: Right-align numbers with f-string format specifiers (e.g., `{strike:>8.2f}`)
+- **Comma Formatting**: Use `:,d` format for volume/OI to add thousand separators (e.g., `{volume:>8,d}`)
+- **ITM Color Highlighting**: Wrap entire row in `[green]...[/green]` or `[red]...[/red]` based on in_the_money flag
+- **Rich Markup Requires Setting**: Must set `markup=True` on Label widgets containing Rich markup
+- **Navigation Logic**: Track `_selected_index` and clamp with `min(index + 1, len(contracts) - 1)`
+- **Calls vs Puts Toggle**: Use `_show_calls: bool` flag to switch between displaying calls or puts
+- **Expiration Cycling**: Track `_expirations` list and `_current_expiration_index` for navigation
+- **Async Load Pattern**: `load_options()` fetches expirations first, then loads first chain automatically
+- **Ticker Change Detection**: Store `_current_ticker` and check if changed during async fetch (ignore stale data)
+- **VerticalScroll Container**: Use VerticalScroll for options table to enable scrolling long lists
+- **Table Header Markup**: Use `[cyan]` color for column headers, set `markup=True` on header Label
+- **IV Percentage Display**: Multiply implied_volatility by 100 to show as percentage (e.g., 0.25 → "25.0%")
+- **Selection Reset**: Reset `_selected_index = 0` when loading new chain or switching calls/puts
+- **Testing Without Mounting**: Test state logic and navigation logic without calling methods that require DOM
+- **Unit Test Pattern**: Avoid calling `show_empty()` or `_rebuild_content()` in tests - test state changes directly
+- **Navigation Tests**: Test min/max logic directly without calling action methods that trigger rebuilds
+- **Query Requires Mount**: Cannot use `query_one()` in tests unless widget is mounted in app context
+- **Test State Changes Only**: Set state attributes directly in tests, verify logic without triggering renders
+
+**Widget Structure**:
+```
+OptionsChainPanel
+├── Label (header with ticker, expiration, CALLS/PUTS)
+└── VerticalScroll (scrollable container)
+    ├── Label (table header row)
+    └── Label* (option contract rows)
+```
+
+**Table Format** (8 columns):
+```
+Strike    Bid      Ask      Last     Vol      OI       IV     ITM
+150.00   2.50     2.55     2.52     1,000    5,000   25.0%   Y
+155.00   1.10     1.15     1.12       500    2,000   28.0%   N
+```
+
+**Testing Patterns**:
+- Test panel initialization (default state is "empty")
+- Test `_format_contract_row()` for ITM/OTM contracts
+- Test navigation logic (min/max bounds, calls vs puts)
+- Test state management (empty, loading, success, error)
+- Test ticker change detection logic
+- Avoid mounting widgets in unit tests (causes NoMatches errors)
+- Test state transitions by setting attributes directly
+
+**Files Created**:
+- `viper/widgets/options_panel.py` - OptionsChainPanel widget (139 lines)
+- `tests/test_options_panel.py` - Comprehensive test suite (15 tests)
+
+**Type Safety**:
+- All attributes have explicit type annotations
+- `_chain: Optional[OptionsChain] = None`
+- `_expirations: list[str] = []`
+- `mypy --strict` passes with no errors
+
+**Result**:
+- OptionsChainPanel widget complete with state machine
+- j/k navigation implemented with priority bindings
+- ITM/OTM color highlighting (green/red)
+- All 15 tests pass (847 total)
+- Coverage: 31% for options_panel.py (unit tests only, integration tests in next stories)
+- Ready for VPR-079 (app integration with 'o' keybinding)
+- Widget exported from `viper/widgets/__init__.py`
+
