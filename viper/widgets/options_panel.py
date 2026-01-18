@@ -1,6 +1,6 @@
 """Options chain panel widget for displaying options data."""
 
-from typing import Optional
+from typing import Literal, Optional
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -31,6 +31,7 @@ class OptionsChainPanel(Widget):
         Binding("]", "next_expiration", "Next Expiry", show=False, priority=True),
         Binding("c", "show_calls", "Calls", show=False, priority=True),
         Binding("p", "show_puts", "Puts", show=False, priority=True),
+        Binding("f", "cycle_filter", "Filter", show=False, priority=True),
     ]
 
     DEFAULT_CSS = """
@@ -102,6 +103,7 @@ class OptionsChainPanel(Widget):
         self._chain: Optional[OptionsChain] = None
         self._show_calls: bool = True  # True = calls, False = puts
         self._selected_index: int = 0
+        self._filter_mode: Literal["all", "itm", "otm"] = "all"
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -126,6 +128,7 @@ class OptionsChainPanel(Widget):
         self._current_expiration_index = 0
         self._chain = None
         self._show_calls = True
+        self._filter_mode = "all"  # Reset filter when loading new ticker
         self._rebuild_content()
 
         # Fetch available expirations
@@ -185,6 +188,7 @@ class OptionsChainPanel(Widget):
         self._chain = None
         self._selected_index = 0
         self._show_calls = True
+        self._filter_mode = "all"
         self._rebuild_content()
 
     def _rebuild_content(self) -> None:
@@ -193,7 +197,8 @@ class OptionsChainPanel(Widget):
         header = self.query_one("#options-header", Label)
         if self._state == "success" and self._chain:
             option_type = "CALLS" if self._show_calls else "PUTS"
-            header_text = f"OPTIONS: [cyan]{self._chain.ticker}[/cyan] | [cyan]{self._chain.expiration}[/cyan] | [cyan]{option_type}[/cyan]"
+            filter_text = self._filter_mode.upper()
+            header_text = f"OPTIONS: [cyan]{self._chain.ticker}[/cyan] | [cyan]{self._chain.expiration}[/cyan] | [cyan]{option_type}[/cyan] | Filter: [cyan]{filter_text}[/cyan]"
             header.update(header_text)
         else:
             header.update("OPTIONS")
@@ -236,12 +241,25 @@ class OptionsChainPanel(Widget):
             return
 
         # Get current contracts list (calls or puts)
-        contracts = self._chain.calls if self._show_calls else self._chain.puts
+        all_contracts = self._chain.calls if self._show_calls else self._chain.puts
 
-        if not contracts:
+        if not all_contracts:
             container.mount(
                 Label(
                     f"No {'calls' if self._show_calls else 'puts'} available",
+                    classes="error-state",
+                )
+            )
+            return
+
+        # Apply filter
+        contracts = self._apply_filter(all_contracts)
+
+        # Handle empty filter results
+        if not contracts:
+            container.mount(
+                Label(
+                    "No contracts match filter",
                     classes="error-state",
                 )
             )
@@ -271,6 +289,24 @@ class OptionsChainPanel(Widget):
 
             row_label = Label(row_text, classes=classes, markup=True)
             container.mount(row_label)
+
+    def _apply_filter(self, contracts: list[OptionContract]) -> list[OptionContract]:
+        """Apply the current filter mode to the list of contracts.
+
+        Args:
+            contracts: The full list of contracts to filter.
+
+        Returns:
+            Filtered list of contracts based on current filter mode.
+        """
+        if self._filter_mode == "all":
+            return contracts
+        elif self._filter_mode == "itm":
+            return [c for c in contracts if c.in_the_money]
+        elif self._filter_mode == "otm":
+            return [c for c in contracts if not c.in_the_money]
+        else:
+            return contracts
 
     def _format_contract_row(self, contract: OptionContract) -> str:
         """Format an option contract as a table row.
@@ -314,7 +350,8 @@ class OptionsChainPanel(Widget):
         if self._state != "success" or not self._chain:
             return
 
-        contracts = self._chain.calls if self._show_calls else self._chain.puts
+        all_contracts = self._chain.calls if self._show_calls else self._chain.puts
+        contracts = self._apply_filter(all_contracts)
         if not contracts:
             return
 
@@ -327,7 +364,8 @@ class OptionsChainPanel(Widget):
         if self._state != "success" or not self._chain:
             return
 
-        contracts = self._chain.calls if self._show_calls else self._chain.puts
+        all_contracts = self._chain.calls if self._show_calls else self._chain.puts
+        contracts = self._apply_filter(all_contracts)
         if not contracts:
             return
 
@@ -384,3 +422,20 @@ class OptionsChainPanel(Widget):
             self._show_calls = False
             self._selected_index = 0  # Reset selection when switching
             self._rebuild_content()
+
+    def action_cycle_filter(self) -> None:
+        """Cycle through filter modes: all -> itm -> otm -> all (f key)."""
+        if self._state != "success" or not self._chain:
+            return
+
+        # Cycle filter mode
+        if self._filter_mode == "all":
+            self._filter_mode = "itm"
+        elif self._filter_mode == "itm":
+            self._filter_mode = "otm"
+        else:
+            self._filter_mode = "all"
+
+        # Reset selection when filter changes
+        self._selected_index = 0
+        self._rebuild_content()

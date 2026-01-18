@@ -3896,3 +3896,49 @@ Added expiration date navigation to OptionsChainPanel using bracket keys.
 - All toggle scenarios covered (both directions, idempotent, guards, selection reset)
 
 **Feature 8 Complete!** All 6 stories (VPR-076 through VPR-081) implemented and tested.
+
+---
+
+## Feature 9: Enhanced Options Explorer - VPR-082
+
+### Filter Mode Pattern (ITM/OTM/All)
+- **Filter State Storage**: Use `Literal["all", "itm", "otm"]` type hint for type safety
+- **Filter Application**: Create separate `_apply_filter()` method that takes list of contracts and returns filtered list
+- **Separation of Concerns**: Keep raw data (`_chain`) unchanged, apply filter in rendering/navigation logic
+- **Filter Cycling Pattern**: Use if/elif/else chain for predictable cycling: all -> itm -> otm -> all
+- **State Reset on Filter Change**: Always reset `_selected_index = 0` when filter changes (user expects to start at top)
+- **Empty Filter Results**: Check for empty filtered list and show appropriate message ("No contracts match filter")
+- **Navigation with Filters**: Apply filter in navigation methods (`action_navigate_up/down`) before checking bounds
+- **Header Display**: Show current filter mode in header to give user feedback about active filter
+- **Filter Reset Pattern**: Reset filter to "all" when loading new ticker or showing empty state
+
+### Textual Widget State Management
+- **Orthogonal States**: Filter mode is orthogonal to state machine (empty/loading/success/error) - store as separate boolean/enum
+- **Guard Conditions**: Check state machine (`_state == "success"`) AND data presence (`_chain is not None`) before actions
+- **Keybinding Priority**: Use `priority=True` in BINDINGS for panel-level keybindings to intercept before app-level bindings
+- **Selection Clamping**: Always clamp selection index after any data change that could affect list length
+
+### Testing Patterns for Filter Logic
+- **Test Pure Methods First**: Test `_apply_filter()` as pure function without widget mounting (faster, simpler)
+- **Test Edge Cases**: Empty results, all ITM, all OTM, single contract, mixed contracts
+- **Test Cycling Logic**: Verify each transition in cycle (all->itm, itm->otm, otm->all)
+- **Test State Guards**: Verify actions do nothing in loading/error/empty states
+- **Test Reset Behavior**: Verify filter resets on ticker change and show_empty()
+- **Test Navigation Integration**: Verify j/k navigation respects filtered list length
+
+### Type Safety with Literal
+- **Literal Types**: Use `from typing import Literal` for closed set of string values
+- **Better than Enum for Simple Cases**: For 3 simple string values, Literal is cleaner than Enum
+- **Type Checker Benefits**: mypy catches typos like `_filter_mode = "itm "` (trailing space)
+
+### Rich Markup in Headers
+- **Multiple Values**: Can combine multiple `[cyan]value[/cyan]` segments in single string
+- **Separator Pattern**: Use ` | ` separator for multiple header values
+- **Dynamic Header Updates**: Update header in `_rebuild_content()` to reflect current state
+
+### Coverage Notes
+- **Unit Test Focus**: Feature 9 uses pattern of testing state logic directly (no async/mounting)
+- **Action Method Coverage**: action_* methods using run_worker() tested indirectly via state logic tests
+- **Fast Test Execution**: Pure logic tests run faster than full widget mount tests
+- **Trade-off**: Lower coverage percentage but faster, more focused tests
+

@@ -116,6 +116,7 @@ class HelpScreen(ModalScreen[None]):
                 yield Static("n                    Toggle news panel", classes="help-item")
                 yield Static("o                    Toggle options panel (or open in browser in news/article)", classes="help-item")
                 yield Static("p                    View puts in options panel", classes="help-item")
+                yield Static("f                    Cycle filter in options (All/ITM/OTM)", classes="help-item")
                 yield Static("t                    Technical indicator prefix (press t, then indicator key)", classes="help-item")
                 yield Static("  t-r                Toggle RSI indicator", classes="help-item")
                 yield Static("  t-m                Toggle MACD indicator", classes="help-item")
@@ -215,6 +216,10 @@ class HelpScreen(ModalScreen[None]):
                 )
                 yield Static(
                     "Press 'c' to view calls, 'p' to view puts.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Press 'f' to cycle filter mode: All -> ITM -> OTM -> All.",
                     classes="help-item",
                 )
                 yield Static(

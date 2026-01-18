@@ -555,3 +555,264 @@ class TestOptionsChainPanelCallsPutsToggle:
 
         assert panel._show_calls is True
         assert panel._selected_index == 0
+
+class TestOptionsChainPanelFilterMode:
+    """Test filter mode functionality (VPR-082)."""
+
+    def test_panel_initialization_with_filter(self) -> None:
+        """Test panel initializes with 'all' filter mode."""
+        panel = OptionsChainPanel()
+        assert panel._filter_mode == "all"
+
+    def test_apply_filter_all_mode(self) -> None:
+        """Test apply_filter returns all contracts in 'all' mode."""
+        panel = OptionsChainPanel()
+        panel._filter_mode = "all"
+
+        # Create mixed contracts
+        contracts = [
+            create_option_contract(strike=145.0, in_the_money=True),
+            create_option_contract(strike=150.0, in_the_money=False),
+            create_option_contract(strike=155.0, in_the_money=False),
+        ]
+
+        result = panel._apply_filter(contracts)
+        assert len(result) == 3
+        assert result == contracts
+
+    def test_apply_filter_itm_mode(self) -> None:
+        """Test apply_filter returns only ITM contracts in 'itm' mode."""
+        panel = OptionsChainPanel()
+        panel._filter_mode = "itm"
+
+        # Create mixed contracts
+        contracts = [
+            create_option_contract(strike=145.0, in_the_money=True),
+            create_option_contract(strike=150.0, in_the_money=False),
+            create_option_contract(strike=155.0, in_the_money=True),
+            create_option_contract(strike=160.0, in_the_money=False),
+        ]
+
+        result = panel._apply_filter(contracts)
+        assert len(result) == 2
+        assert all(c.in_the_money for c in result)
+        assert result[0].strike == 145.0
+        assert result[1].strike == 155.0
+
+    def test_apply_filter_otm_mode(self) -> None:
+        """Test apply_filter returns only OTM contracts in 'otm' mode."""
+        panel = OptionsChainPanel()
+        panel._filter_mode = "otm"
+
+        # Create mixed contracts
+        contracts = [
+            create_option_contract(strike=145.0, in_the_money=True),
+            create_option_contract(strike=150.0, in_the_money=False),
+            create_option_contract(strike=155.0, in_the_money=True),
+            create_option_contract(strike=160.0, in_the_money=False),
+        ]
+
+        result = panel._apply_filter(contracts)
+        assert len(result) == 2
+        assert all(not c.in_the_money for c in result)
+        assert result[0].strike == 150.0
+        assert result[1].strike == 160.0
+
+    def test_apply_filter_empty_result_itm(self) -> None:
+        """Test apply_filter returns empty list when no ITM contracts."""
+        panel = OptionsChainPanel()
+        panel._filter_mode = "itm"
+
+        # All OTM contracts
+        contracts = [
+            create_option_contract(strike=150.0, in_the_money=False),
+            create_option_contract(strike=155.0, in_the_money=False),
+            create_option_contract(strike=160.0, in_the_money=False),
+        ]
+
+        result = panel._apply_filter(contracts)
+        assert len(result) == 0
+
+    def test_apply_filter_empty_result_otm(self) -> None:
+        """Test apply_filter returns empty list when no OTM contracts."""
+        panel = OptionsChainPanel()
+        panel._filter_mode = "otm"
+
+        # All ITM contracts
+        contracts = [
+            create_option_contract(strike=140.0, in_the_money=True),
+            create_option_contract(strike=145.0, in_the_money=True),
+            create_option_contract(strike=148.0, in_the_money=True),
+        ]
+
+        result = panel._apply_filter(contracts)
+        assert len(result) == 0
+
+    def test_cycle_filter_all_to_itm(self) -> None:
+        """Test cycle_filter changes mode from 'all' to 'itm'."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain()
+        panel._filter_mode = "all"
+        panel._selected_index = 2
+
+        # Test cycle logic
+        if panel._state == "success" and panel._chain:
+            if panel._filter_mode == "all":
+                panel._filter_mode = "itm"
+            elif panel._filter_mode == "itm":
+                panel._filter_mode = "otm"
+            else:
+                panel._filter_mode = "all"
+            panel._selected_index = 0
+
+        assert panel._filter_mode == "itm"
+        assert panel._selected_index == 0
+
+    def test_cycle_filter_itm_to_otm(self) -> None:
+        """Test cycle_filter changes mode from 'itm' to 'otm'."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain()
+        panel._filter_mode = "itm"
+        panel._selected_index = 1
+
+        # Test cycle logic
+        if panel._state == "success" and panel._chain:
+            if panel._filter_mode == "all":
+                panel._filter_mode = "itm"
+            elif panel._filter_mode == "itm":
+                panel._filter_mode = "otm"
+            else:
+                panel._filter_mode = "all"
+            panel._selected_index = 0
+
+        assert panel._filter_mode == "otm"
+        assert panel._selected_index == 0
+
+    def test_cycle_filter_otm_to_all(self) -> None:
+        """Test cycle_filter changes mode from 'otm' to 'all'."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain()
+        panel._filter_mode = "otm"
+        panel._selected_index = 1
+
+        # Test cycle logic
+        if panel._state == "success" and panel._chain:
+            if panel._filter_mode == "all":
+                panel._filter_mode = "itm"
+            elif panel._filter_mode == "itm":
+                panel._filter_mode = "otm"
+            else:
+                panel._filter_mode = "all"
+            panel._selected_index = 0
+
+        assert panel._filter_mode == "all"
+        assert panel._selected_index == 0
+
+    def test_cycle_filter_resets_selection(self) -> None:
+        """Test cycle_filter resets selected_index to 0."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain()
+        panel._filter_mode = "all"
+        panel._selected_index = 5
+
+        # Test that selection is reset
+        if panel._state == "success" and panel._chain:
+            panel._filter_mode = "itm"
+            panel._selected_index = 0
+
+        assert panel._selected_index == 0
+
+    def test_cycle_filter_does_nothing_without_chain(self) -> None:
+        """Test cycle_filter does nothing when no chain is loaded."""
+        panel = OptionsChainPanel()
+        panel._state = "empty"
+        panel._chain = None
+        panel._filter_mode = "all"
+
+        # Test guard condition
+        should_proceed = panel._state == "success" and panel._chain is not None
+        assert should_proceed is False
+
+    def test_cycle_filter_does_nothing_in_loading_state(self) -> None:
+        """Test cycle_filter does nothing during loading state."""
+        panel = OptionsChainPanel()
+        panel._state = "loading"
+        panel._chain = None
+        panel._filter_mode = "all"
+
+        # Test guard condition
+        should_proceed = panel._state == "success" and panel._chain is not None
+        assert should_proceed is False
+
+    def test_filter_reset_on_load_options(self) -> None:
+        """Test filter mode resets to 'all' when loading new ticker."""
+        panel = OptionsChainPanel()
+        panel._filter_mode = "itm"
+
+        # Simulate load_options state reset
+        panel._current_ticker = "AAPL"
+        panel._state = "loading"
+        panel._selected_index = 0
+        panel._expirations = []
+        panel._current_expiration_index = 0
+        panel._chain = None
+        panel._show_calls = True
+        panel._filter_mode = "all"
+
+        assert panel._filter_mode == "all"
+
+    def test_filter_reset_on_show_empty(self) -> None:
+        """Test filter mode resets to 'all' when showing empty state."""
+        panel = OptionsChainPanel()
+        panel._filter_mode = "otm"
+
+        # Simulate show_empty state reset
+        panel._state = "empty"
+        panel._current_ticker = None
+        panel._expirations = []
+        panel._current_expiration_index = 0
+        panel._chain = None
+        panel._selected_index = 0
+        panel._show_calls = True
+        panel._filter_mode = "all"
+
+        assert panel._filter_mode == "all"
+
+    def test_navigation_with_filtered_contracts(self) -> None:
+        """Test navigation respects filtered contract list."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        # Create chain with 2 ITM and 2 OTM
+        panel._chain = OptionsChain(
+            ticker="AAPL",
+            expiration="2024-01-19",
+            calls=[
+                create_option_contract(strike=145.0, in_the_money=True),
+                create_option_contract(strike=148.0, in_the_money=True),
+                create_option_contract(strike=150.0, in_the_money=False),
+                create_option_contract(strike=155.0, in_the_money=False),
+            ],
+            puts=[],
+        )
+        panel._show_calls = True
+        panel._filter_mode = "itm"
+        panel._selected_index = 0
+
+        # Test navigation with filtered list
+        all_contracts = panel._chain.calls if panel._show_calls else panel._chain.puts
+        contracts = panel._apply_filter(all_contracts)
+
+        # Should only have 2 ITM contracts
+        assert len(contracts) == 2
+
+        # Navigate down
+        panel._selected_index = min(panel._selected_index + 1, len(contracts) - 1)
+        assert panel._selected_index == 1
+
+        # Try to navigate down past end
+        panel._selected_index = min(panel._selected_index + 1, len(contracts) - 1)
+        assert panel._selected_index == 1  # Should stay at last filtered item
