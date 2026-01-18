@@ -1317,3 +1317,75 @@ async def test_options_panel_receives_focus() -> None:
 
         # Options panel should have focus
         assert app.focused == options_panel
+
+
+@pytest.mark.asyncio
+async def test_options_panel_refreshes_on_ticker_change() -> None:
+    """Test that options panel refreshes when a new ticker is selected from watchlist."""
+    app = ViperApp()
+
+    # Mock quote fetch
+    mock_quote_aapl = StockQuote(
+        ticker="AAPL",
+        price=150.00,
+        change=5.00,
+        change_percent=3.45,
+        volume=50000000,
+        market_cap=2500000000000,
+        high_52w=180.00,
+        low_52w=120.00,
+        name="Apple Inc.",
+    )
+    mock_quote_msft = StockQuote(
+        ticker="MSFT",
+        price=380.00,
+        change=2.00,
+        change_percent=0.53,
+        volume=25000000,
+        market_cap=2800000000000,
+        high_52w=420.00,
+        low_52w=320.00,
+        name="Microsoft Corp.",
+    )
+
+    from viper.services.options import OptionsError
+
+    with patch("viper.app.fetch_quote", new_callable=AsyncMock) as mock_fetch_quote, \
+         patch("viper.widgets.options_panel.fetch_option_expirations", new_callable=AsyncMock) as mock_expirations:
+
+        # First call returns AAPL, second returns MSFT
+        mock_fetch_quote.side_effect = [mock_quote_aapl, mock_quote_msft]
+        mock_expirations.return_value = OptionsError(ticker="AAPL", error_message="No options")
+
+        async with app.run_test() as pilot:
+            ticker_input = app.query_one(TickerInput)
+            options_panel = app.query_one(OptionsChainPanel)
+
+            # Submit first ticker (AAPL)
+            ticker_input.focus()
+            ticker_input.value = "AAPL"
+            await pilot.press("enter")
+            await pilot.pause()
+
+            assert app._current_ticker == "AAPL"
+
+            # Show options panel
+            app.action_toggle_options()
+            await pilot.pause()
+
+            # Verify options loaded for AAPL
+            assert mock_expirations.call_count == 1
+            mock_expirations.assert_called_with("AAPL")
+
+            # Now change ticker via input (simulates watchlist selection)
+            ticker_input.focus()
+            ticker_input.value = "MSFT"
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Current ticker should now be MSFT
+            assert app._current_ticker == "MSFT"
+
+            # Options panel should have been refreshed with MSFT
+            assert mock_expirations.call_count == 2
+            mock_expirations.assert_called_with("MSFT")
