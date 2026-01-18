@@ -117,6 +117,7 @@ class OptionsChainPanel(Widget):
         self._atm_strike: Optional[float] = None  # At-the-money strike price
         self._summary_mode: bool = False  # Summary view (multi-expiration) vs normal view
         self._summary_chains: dict[str, OptionsChain | OptionsError] = {}  # Cache chains for summary view
+        self._iv_rank: Optional[float] = None  # Simplified IV rank (0-100%)
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -209,6 +210,7 @@ class OptionsChainPanel(Widget):
         self._atm_strike = None
         self._summary_mode = False
         self._summary_chains = {}
+        self._iv_rank = None
         self._rebuild_content()
 
     def _find_atm_strike(self, contracts: list[OptionContract]) -> Optional[float]:
@@ -230,6 +232,78 @@ class OptionsChainPanel(Widget):
         atm_strike = min(contracts, key=lambda c: abs(c.strike - current_price))
         return atm_strike.strike
 
+    def _calculate_iv_rank(self, contracts: list[OptionContract], atm_strike: Optional[float]) -> Optional[float]:
+        """Calculate simplified IV rank using current chain data only.
+
+        IV rank = (current_atm_iv - min_iv) / (max_iv - min_iv) * 100
+
+        Note: This is NOT true historical IV rank (which requires 52-week IV data).
+        This simplified version compares current ATM IV to IV range in current chain.
+
+        Args:
+            contracts: List of option contracts (calls or puts).
+            atm_strike: The at-the-money strike price.
+
+        Returns:
+            IV rank as a percentage (0-100), or None if calculation not possible.
+        """
+        if not contracts or atm_strike is None:
+            return None
+
+        # Find ATM contract
+        atm_contract = None
+        for contract in contracts:
+            if contract.strike == atm_strike:
+                atm_contract = contract
+                break
+
+        if atm_contract is None:
+            return None
+
+        # Get ATM IV (return None if IV is 0.0, which means it was NaN)
+        atm_iv = atm_contract.implied_volatility
+        if atm_iv <= 0.0:
+            return None
+
+        # Filter out 0.0 IV values (which were NaN in original data)
+        valid_ivs = [c.implied_volatility for c in contracts if c.implied_volatility > 0.0]
+
+        if not valid_ivs:
+            return None
+
+        # Calculate min and max IV
+        min_iv = min(valid_ivs)
+        max_iv = max(valid_ivs)
+
+        # Handle edge case: all IVs are the same
+        if max_iv == min_iv:
+            return 50.0  # Return 50% (middle) when range is zero
+
+        # Calculate IV rank
+        iv_rank = ((atm_iv - min_iv) / (max_iv - min_iv)) * 100
+        return iv_rank
+
+    def _get_iv_rank_color(self, iv_rank: float) -> str:
+        """Get color markup for IV rank display.
+
+        Color logic:
+        - Low IV rank (< 30%): green - options are relatively cheap
+        - Normal IV rank (30-70%): yellow - normal pricing
+        - High IV rank (> 70%): red - options are relatively expensive
+
+        Args:
+            iv_rank: The IV rank percentage (0-100).
+
+        Returns:
+            Rich markup color string: "green", "yellow", or "red".
+        """
+        if iv_rank < 30:
+            return "green"
+        elif iv_rank <= 70:
+            return "yellow"
+        else:
+            return "red"
+
     def _rebuild_content(self) -> None:
         """Render the appropriate content based on current state."""
         # Update header
@@ -241,6 +315,11 @@ class OptionsChainPanel(Widget):
                 option_type = "CALLS" if self._show_calls else "PUTS"
                 filter_text = self._filter_mode.upper()
                 header_text = f"OPTIONS: [cyan]{self._chain.ticker}[/cyan] | [cyan]{self._chain.expiration}[/cyan] | [cyan]{option_type}[/cyan] | Filter: [cyan]{filter_text}[/cyan]"
+
+                # Add IV rank to header if available
+                if self._iv_rank is not None:
+                    iv_rank_color = self._get_iv_rank_color(self._iv_rank)
+                    header_text += f" | IV Rank: [{iv_rank_color}]{self._iv_rank:.0f}%[/{iv_rank_color}]"
             header.update(header_text)
         else:
             header.update("OPTIONS")
@@ -312,6 +391,9 @@ class OptionsChainPanel(Widget):
 
         # Calculate ATM strike from all contracts (not filtered)
         self._atm_strike = self._find_atm_strike(all_contracts)
+
+        # Calculate IV rank (from all contracts, not filtered)
+        self._iv_rank = self._calculate_iv_rank(all_contracts, self._atm_strike)
 
         # Calculate IV range for color coding (from all contracts, not filtered)
         # Filter out 0.0 IV values (which were NaN in original data)

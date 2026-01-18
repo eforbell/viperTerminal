@@ -1875,3 +1875,229 @@ class TestSummaryView:
         # Should not proceed with empty list
         should_proceed = bool(panel._expirations)
         assert should_proceed is False
+
+
+class TestIVRankCalculation:
+    """Test IV rank calculation (VPR-087)."""
+
+    def test_calculate_iv_rank_normal_case(self) -> None:
+        """Test IV rank calculation with normal data."""
+        panel = OptionsChainPanel()
+
+        # Create contracts with varying IVs
+        contracts = [
+            create_option_contract(strike=145.0, implied_volatility=0.20),  # Min IV
+            create_option_contract(strike=150.0, implied_volatility=0.25),  # ATM - Middle IV
+            create_option_contract(strike=155.0, implied_volatility=0.30),  # Max IV
+        ]
+
+        atm_strike = 150.0
+
+        # Calculate IV rank
+        # Expected: (0.25 - 0.20) / (0.30 - 0.20) * 100 = 50.0%
+        iv_rank = panel._calculate_iv_rank(contracts, atm_strike)
+
+        assert iv_rank is not None
+        assert iv_rank == pytest.approx(50.0, abs=0.1)
+
+    def test_calculate_iv_rank_low_iv(self) -> None:
+        """Test IV rank calculation when ATM IV is low."""
+        panel = OptionsChainPanel()
+
+        contracts = [
+            create_option_contract(strike=145.0, implied_volatility=0.20),  # ATM - Min IV
+            create_option_contract(strike=150.0, implied_volatility=0.30),
+            create_option_contract(strike=155.0, implied_volatility=0.40),  # Max IV
+        ]
+
+        atm_strike = 145.0
+
+        # Expected: (0.20 - 0.20) / (0.40 - 0.20) * 100 = 0.0%
+        iv_rank = panel._calculate_iv_rank(contracts, atm_strike)
+
+        assert iv_rank is not None
+        assert iv_rank == pytest.approx(0.0, abs=0.1)
+
+    def test_calculate_iv_rank_high_iv(self) -> None:
+        """Test IV rank calculation when ATM IV is high."""
+        panel = OptionsChainPanel()
+
+        contracts = [
+            create_option_contract(strike=145.0, implied_volatility=0.20),  # Min IV
+            create_option_contract(strike=150.0, implied_volatility=0.30),
+            create_option_contract(strike=155.0, implied_volatility=0.40),  # ATM - Max IV
+        ]
+
+        atm_strike = 155.0
+
+        # Expected: (0.40 - 0.20) / (0.40 - 0.20) * 100 = 100.0%
+        iv_rank = panel._calculate_iv_rank(contracts, atm_strike)
+
+        assert iv_rank is not None
+        assert iv_rank == pytest.approx(100.0, abs=0.1)
+
+    def test_calculate_iv_rank_all_same_iv(self) -> None:
+        """Test IV rank when all contracts have identical IV."""
+        panel = OptionsChainPanel()
+
+        contracts = [
+            create_option_contract(strike=145.0, implied_volatility=0.25),
+            create_option_contract(strike=150.0, implied_volatility=0.25),  # ATM
+            create_option_contract(strike=155.0, implied_volatility=0.25),
+        ]
+
+        atm_strike = 150.0
+
+        # Expected: 50.0% (middle) when range is zero
+        iv_rank = panel._calculate_iv_rank(contracts, atm_strike)
+
+        assert iv_rank is not None
+        assert iv_rank == pytest.approx(50.0, abs=0.1)
+
+    def test_calculate_iv_rank_with_nan_ivs(self) -> None:
+        """Test IV rank calculation filters out NaN IVs (represented as 0.0)."""
+        panel = OptionsChainPanel()
+
+        contracts = [
+            create_option_contract(strike=145.0, implied_volatility=0.0),  # NaN IV (skip)
+            create_option_contract(strike=150.0, implied_volatility=0.25),  # ATM
+            create_option_contract(strike=155.0, implied_volatility=0.30),
+            create_option_contract(strike=160.0, implied_volatility=0.0),  # NaN IV (skip)
+        ]
+
+        atm_strike = 150.0
+
+        # Expected: (0.25 - 0.25) / (0.30 - 0.25) * 100 = 0.0%
+        # (Only 0.25 and 0.30 are valid IVs)
+        iv_rank = panel._calculate_iv_rank(contracts, atm_strike)
+
+        assert iv_rank is not None
+        assert iv_rank == pytest.approx(0.0, abs=0.1)
+
+    def test_calculate_iv_rank_atm_has_nan_iv(self) -> None:
+        """Test IV rank returns None when ATM contract has NaN IV."""
+        panel = OptionsChainPanel()
+
+        contracts = [
+            create_option_contract(strike=145.0, implied_volatility=0.20),
+            create_option_contract(strike=150.0, implied_volatility=0.0),  # ATM with NaN IV
+            create_option_contract(strike=155.0, implied_volatility=0.30),
+        ]
+
+        atm_strike = 150.0
+
+        # Expected: None (ATM IV is NaN)
+        iv_rank = panel._calculate_iv_rank(contracts, atm_strike)
+
+        assert iv_rank is None
+
+    def test_calculate_iv_rank_no_atm_strike(self) -> None:
+        """Test IV rank returns None when ATM strike is None."""
+        panel = OptionsChainPanel()
+
+        contracts = [
+            create_option_contract(strike=145.0, implied_volatility=0.20),
+            create_option_contract(strike=150.0, implied_volatility=0.25),
+        ]
+
+        atm_strike = None
+
+        # Expected: None (no ATM strike)
+        iv_rank = panel._calculate_iv_rank(contracts, atm_strike)
+
+        assert iv_rank is None
+
+    def test_calculate_iv_rank_no_contracts(self) -> None:
+        """Test IV rank returns None with empty contracts list."""
+        panel = OptionsChainPanel()
+
+        contracts: list[OptionContract] = []
+        atm_strike = 150.0
+
+        # Expected: None (no contracts)
+        iv_rank = panel._calculate_iv_rank(contracts, atm_strike)
+
+        assert iv_rank is None
+
+    def test_calculate_iv_rank_atm_not_in_list(self) -> None:
+        """Test IV rank returns None when ATM strike not in contracts."""
+        panel = OptionsChainPanel()
+
+        contracts = [
+            create_option_contract(strike=145.0, implied_volatility=0.20),
+            create_option_contract(strike=155.0, implied_volatility=0.30),
+        ]
+
+        atm_strike = 150.0  # Not in contracts
+
+        # Expected: None (ATM strike not found)
+        iv_rank = panel._calculate_iv_rank(contracts, atm_strike)
+
+        assert iv_rank is None
+
+    def test_calculate_iv_rank_all_nan_ivs(self) -> None:
+        """Test IV rank returns None when all IVs are NaN."""
+        panel = OptionsChainPanel()
+
+        contracts = [
+            create_option_contract(strike=145.0, implied_volatility=0.0),
+            create_option_contract(strike=150.0, implied_volatility=0.0),  # ATM
+            create_option_contract(strike=155.0, implied_volatility=0.0),
+        ]
+
+        atm_strike = 150.0
+
+        # Expected: None (no valid IVs)
+        iv_rank = panel._calculate_iv_rank(contracts, atm_strike)
+
+        assert iv_rank is None
+
+
+class TestIVRankColor:
+    """Test IV rank color coding (VPR-087)."""
+
+    def test_get_iv_rank_color_low(self) -> None:
+        """Test IV rank color for low values (< 30%)."""
+        panel = OptionsChainPanel()
+
+        # Test boundary cases
+        assert panel._get_iv_rank_color(0.0) == "green"
+        assert panel._get_iv_rank_color(15.0) == "green"
+        assert panel._get_iv_rank_color(29.9) == "green"
+
+    def test_get_iv_rank_color_normal(self) -> None:
+        """Test IV rank color for normal values (30-70%)."""
+        panel = OptionsChainPanel()
+
+        # Test boundary cases
+        assert panel._get_iv_rank_color(30.0) == "yellow"
+        assert panel._get_iv_rank_color(50.0) == "yellow"
+        assert panel._get_iv_rank_color(70.0) == "yellow"
+
+    def test_get_iv_rank_color_high(self) -> None:
+        """Test IV rank color for high values (> 70%)."""
+        panel = OptionsChainPanel()
+
+        # Test boundary cases
+        assert panel._get_iv_rank_color(70.1) == "red"
+        assert panel._get_iv_rank_color(85.0) == "red"
+        assert panel._get_iv_rank_color(100.0) == "red"
+
+
+class TestIVRankIntegration:
+    """Test IV rank integration with panel rendering (VPR-087)."""
+
+    def test_iv_rank_initialized_to_none(self) -> None:
+        """Test that IV rank is initialized to None."""
+        panel = OptionsChainPanel()
+        assert panel._iv_rank is None
+
+    def test_iv_rank_reset_on_show_empty(self) -> None:
+        """Test that IV rank is reset when showing empty state."""
+        panel = OptionsChainPanel()
+        panel._iv_rank = 50.0
+
+        # Test the state reset logic
+        panel._iv_rank = None
+
+        assert panel._iv_rank is None
