@@ -3630,8 +3630,62 @@ Feature 7 complete! Ready for next feature (Feature 8 TBD).
 - `mypy --strict` passes with no errors
 - Explicit return type annotations on all functions
 
-**Result**: 
+**Result**:
 - Foundation service complete
 - Ready for VPR-077 (fetch option chain data)
 - All tests pass (820 total)
 - Coverage: 92% overall, 94% for options.py
+
+---
+
+### VPR-077: Create Options Service - Fetch Chain Data
+
+**Implementation Date**: 2026-01-18
+
+**Story**: Create dataclasses and async service to fetch option chain data (calls and puts)
+
+**Key Learnings**:
+- **yfinance option_chain API**: Use `ticker.option_chain(expiration)` to get namedtuple with `.calls` and `.puts` DataFrames
+- **DataFrame Column Mapping**: yfinance uses camelCase (lastPrice, openInterest, impliedVolatility, inTheMoney)
+- **OptionContract Dataclass**: Immutable dataclass with 8 fields: strike, bid, ask, last_price, volume, open_interest, implied_volatility, in_the_money
+- **OptionsChain Dataclass**: Container with ticker, expiration, calls list, puts list
+- **NaN Handling Critical**: Cannot convert NaN to int directly - use math.isnan() check before conversion
+- **NaN Detection Pattern**: Use `math.isnan()` after converting to float - works for both np.nan and None
+- **Safe Conversion Functions**: Create nested `safe_float()` and `safe_int()` helpers within parsing function
+- **DataFrame.get() Returns NaN**: When column exists with NaN, .get() returns NaN not None - must check both
+- **Try-Except for Conversion**: Wrap float/int conversions in try-except to handle ValueError and TypeError
+- **Default Values**: Use 0.0 for floats, 0 for ints, False for booleans when encountering NaN/None
+- **Empty DataFrame Handling**: Empty DataFrames are valid (ticker might have expiration but no contracts at some strikes)
+- **Invalid Expiration Detection**: Check for "not in list" or "expiration" in error message
+- **Type Hints for DataFrame**: Use `Any` type for pandas DataFrames to avoid untyped import issues
+- **Math Module Import**: Add `import math` for `math.isnan()` function
+
+**Testing Patterns**:
+- Test valid chain with multiple strikes (3 calls, 3 puts)
+- Test empty chain (no contracts, valid DataFrame)
+- Test NaN values in numeric columns (bid, ask, volume, etc.)
+- Test missing columns in DataFrame (use defaults)
+- Test invalid expiration date (returns OptionsError)
+- Test invalid ticker (returns OptionsError)
+- Test network errors and timeouts
+- Test ticker normalization (uppercase)
+- Mock helper: Create `_create_mock_option_chain()` with pd.DataFrame for calls/puts
+- Use `import numpy as np` in tests to create NaN values
+- Verify data integrity: calls[0].strike, puts[2].in_the_money, etc.
+
+**Files Modified**:
+- `viper/services/options.py` - Added OptionContract, OptionsChain dataclasses and fetch_option_chain function
+- `tests/test_options.py` - Added 12 new tests for chain fetching (25 tests total)
+
+**Type Safety**:
+- `OptionsChainResult = OptionsChain | OptionsError` - Union type for results
+- All dataclasses have explicit type annotations
+- `mypy --strict` passes with no errors
+- Used `Any` type for DataFrame parameter to avoid untyped import
+
+**Result**:
+- Option chain fetching complete
+- All 25 tests pass (832 total)
+- Coverage: 95% for options.py
+- Ready for VPR-078 (OptionsChainPanel widget)
+- Robust NaN/None handling prevents runtime errors
