@@ -1257,3 +1257,37 @@
   - Test pattern: Use import numpy as np to create np.nan values for NaN testing
   - All 832 tests passing with 95% coverage on options.py
 ---
+
+---
+
+## 2026-01-18 - VPR-078
+- **What was implemented**: Created OptionsChainPanel widget with state machine, j/k navigation, and ITM/OTM color highlighting
+- **Files changed**:
+  - `viper/widgets/options_panel.py`: New widget with 4-state machine (empty/loading/success/error)
+  - `tests/test_options_panel.py`: 15 unit tests for widget states and navigation logic
+  - `viper/widgets/__init__.py`: Exported OptionsChainPanel
+  - `AGENTS.md`: Added VPR-078 learnings section
+  - `scripts/ralph/features/feature-8.prd.json`: Marked VPR-078 as complete
+- **Learnings**:
+  - **Rich Markup in Headers**: Use `[cyan]text[/cyan]` in labels, requires `markup=True` attribute
+  - **Monospace Table Formatting**: Right-align numbers with f-string format (e.g., `{strike:>8.2f}`)
+  - **Comma Formatting for Volume**: Use `:,d` format to add thousand separators (e.g., `{volume:>8,d}`)
+  - **ITM Color Highlighting**: Wrap entire row in `[green]...[/green]` or `[red]...[/red]` based on `in_the_money`
+  - **Navigation Clamping**: Use `min(index + 1, len(contracts) - 1)` and `max(index - 1, 0)` for bounds
+  - **Calls vs Puts Toggle**: Track `_show_calls: bool` flag to switch between displaying calls or puts
+  - **Async Load Pattern**: `load_options()` fetches expirations first, then auto-loads first chain
+  - **Ticker Change Detection**: Store `_current_ticker` and check if changed during async fetch (ignore stale)
+  - **VerticalScroll Container**: Required for scrolling long options lists
+  - **IV Percentage Display**: Multiply `implied_volatility * 100` to show as percentage
+  - **Selection Reset**: Reset `_selected_index = 0` when loading new chain or switching calls/puts
+  - **Testing Without Mounting**: Test state logic directly without calling methods that require DOM
+  - **Query Requires Mount**: Cannot use `query_one()` in tests unless widget mounted in app context
+  - **Unit Test Pattern**: Set state attributes directly in tests, verify logic without triggering renders
+  - Widget follows established patterns: QuotePanel (state machine), NewsPanel (j/k navigation)
+  - Table uses simple Labels in VerticalScroll (not DataTable widget for simplicity)
+  - Header dynamically updates: "OPTIONS: AAPL | 2024-01-19 | CALLS"
+  - All 15 tests pass, mypy --strict passes, 847 total tests passing
+  - Coverage: 31% for options_panel.py (unit tests only, integration tests in VPR-079+)
+  - Ready for VPR-079: app integration with 'o' keybinding
+
+---

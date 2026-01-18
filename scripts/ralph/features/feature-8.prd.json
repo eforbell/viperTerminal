@@ -129,7 +129,11 @@
       "priority": 3,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-077"],
-      "notes": "Follow NewsPanel pattern for j/k navigation and selection. State management follows QuotePanel. Table is simple Labels in Container, not DataTable widget (keeps it simple)."
+      "notes": "Follow NewsPanel pattern for j/k navigation and selection. State management follows QuotePanel. Table is simple Labels in Container, not DataTable widget (keeps it simple).",
+      "passes": true,
+      "completedAt": "2026-01-18",
+      "testsPassing": 847,
+      "coverage": "31% options_panel.py, 89% overall"
     },
     {
       "id": "VPR-079",
