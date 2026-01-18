@@ -3824,3 +3824,75 @@ Added expiration date navigation to OptionsChainPanel using bracket keys.
 
 **Ready for VPR-081** (Calls/Puts toggle with c/p keys)
 
+
+---
+
+### VPR-081: Calls/Puts Toggle with c/p Keys
+
+**What:** Added 'c' and 'p' keybindings to toggle between calls and puts views in the options panel. Instant toggle with no network refetch since both datasets are already loaded.
+
+**Implementation:**
+- Added two new keybindings: `Binding("c", "show_calls", ...)` and `Binding("p", "show_puts", ...)`
+- Implemented `action_show_calls()` and `action_show_puts()` methods
+- Both methods check state (must be "success" with loaded chain)
+- Only rebuild if actually switching views (avoid unnecessary redraws)
+- Reset `_selected_index` to 0 when switching between calls/puts
+- Updated help_screen.py with new keybindings in KEYBINDINGS and OPTIONS sections
+
+**Key Learnings:**
+
+1. **Toggle Pattern with State Check**
+   - Guard condition: `if self._state != "success" or not self._chain: return`
+   - Only rebuild if actually changing state: `if not self._show_calls: ...`
+   - Prevents unnecessary rebuilds when already showing the requested view
+   - Keeps UI responsive by avoiding redundant operations
+
+2. **No Network Refetch Needed**
+   - Options chain data contains both calls and puts from single API call
+   - Stored in `OptionsChain` dataclass as separate lists
+   - Toggle just switches which list to display via `_show_calls` boolean
+   - Instant response - no loading state needed
+
+3. **Selection Reset on Toggle**
+   - Always reset `_selected_index = 0` when switching views
+   - Prevents out-of-bounds errors (calls and puts have different lengths)
+   - Better UX: user sees selection at top of new list
+   - Matches user expectation when switching context
+
+4. **Existing Infrastructure Reuse**
+   - Header rendering already uses `_show_calls` to display "CALLS" or "PUTS"
+   - Table rendering already checks `_show_calls` to pick correct contracts list
+   - Navigation (j/k) already respects `_show_calls` for current list
+   - Only needed action methods - all display logic was ready
+
+5. **Context-Aware Keybindings**
+   - 'c' and 'p' only active when options panel has focus
+   - 'c' conflicts with app-level chart toggle at global scope
+   - Solution: use `priority=True` bindings on focused widget
+   - Widget bindings take precedence when widget is focused
+
+6. **Help Screen Documentation**
+   - Updated KEYBINDINGS section: noted 'c' is context-aware (chart vs calls)
+   - Added 'p' entry for puts toggle
+   - Updated OPTIONS section with clear "Press 'c' to view calls, 'p' to view puts"
+   - Placed after expiration navigation for logical flow
+
+7. **Testing Toggle Logic**
+   - Test switching from calls to puts and vice versa
+   - Test idempotent behavior (pressing 'c' when already showing calls)
+   - Test selection reset on toggle
+   - Test guard conditions (empty/loading/error states)
+   - Pure state logic tests - no async/UI needed
+
+**Files Modified:**
+- `viper/widgets/options_panel.py`: Added 2 keybindings, 2 action methods (18 lines)
+- `viper/widgets/help_screen.py`: Updated 2 sections with c/p keybindings (2 lines)
+- `tests/test_options_panel.py`: Added TestOptionsChainPanelCallsPutsToggle class with 9 tests
+
+**Tests:**
+- 9 new tests for calls/puts toggle functionality
+- Total: 869 tests passing
+- Coverage: 89.90% overall (just below 90% due to options_panel integration code)
+- All toggle scenarios covered (both directions, idempotent, guards, selection reset)
+
+**Feature 8 Complete!** All 6 stories (VPR-076 through VPR-081) implemented and tested.

@@ -29,6 +29,8 @@ class OptionsChainPanel(Widget):
         Binding("k", "navigate_up", "Previous", show=False, priority=True),
         Binding("[", "prev_expiration", "Prev Expiry", show=False, priority=True),
         Binding("]", "next_expiration", "Next Expiry", show=False, priority=True),
+        Binding("c", "show_calls", "Calls", show=False, priority=True),
+        Binding("p", "show_puts", "Puts", show=False, priority=True),
     ]
 
     DEFAULT_CSS = """
@@ -360,3 +362,25 @@ class OptionsChainPanel(Widget):
         # Load the new chain
         expiration = self._expirations[self._current_expiration_index]
         self.run_worker(self._load_chain(self._current_ticker, expiration))
+
+    def action_show_calls(self) -> None:
+        """Switch to calls view (c key)."""
+        if self._state != "success" or not self._chain:
+            return
+
+        # Only rebuild if we're not already showing calls
+        if not self._show_calls:
+            self._show_calls = True
+            self._selected_index = 0  # Reset selection when switching
+            self._rebuild_content()
+
+    def action_show_puts(self) -> None:
+        """Switch to puts view (p key)."""
+        if self._state != "success" or not self._chain:
+            return
+
+        # Only rebuild if we're not already showing puts
+        if self._show_calls:
+            self._show_calls = False
+            self._selected_index = 0  # Reset selection when switching
+            self._rebuild_content()

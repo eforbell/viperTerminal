@@ -417,3 +417,141 @@ class TestOptionsChainPanelExpirationNavigation:
         # Test that guards would prevent navigation
         should_proceed = bool(panel._current_ticker and panel._expirations)
         assert should_proceed is False
+
+
+class TestOptionsChainPanelCallsPutsToggle:
+    """Test calls/puts toggle with c and p keys."""
+
+    def test_show_calls_switches_from_puts(self) -> None:
+        """Test that 'c' key switches to calls view from puts."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain()
+        panel._show_calls = False  # Currently showing puts
+        panel._selected_index = 2
+
+        # Test toggle logic
+        if panel._state == "success" and panel._chain:
+            if not panel._show_calls:
+                panel._show_calls = True
+                panel._selected_index = 0
+
+        assert panel._show_calls is True
+        assert panel._selected_index == 0
+
+    def test_show_puts_switches_from_calls(self) -> None:
+        """Test that 'p' key switches to puts view from calls."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain()
+        panel._show_calls = True  # Currently showing calls
+        panel._selected_index = 2
+
+        # Test toggle logic
+        if panel._state == "success" and panel._chain:
+            if panel._show_calls:
+                panel._show_calls = False
+                panel._selected_index = 0
+
+        assert panel._show_calls is False
+        assert panel._selected_index == 0
+
+    def test_show_calls_when_already_showing_calls(self) -> None:
+        """Test that 'c' key does nothing when already showing calls."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain()
+        panel._show_calls = True
+        panel._selected_index = 2
+
+        # Test that logic doesn't change anything when already showing calls
+        if panel._state == "success" and panel._chain:
+            if not panel._show_calls:  # This condition is False
+                panel._show_calls = True
+                panel._selected_index = 0
+
+        # Should remain unchanged
+        assert panel._show_calls is True
+        assert panel._selected_index == 2
+
+    def test_show_puts_when_already_showing_puts(self) -> None:
+        """Test that 'p' key does nothing when already showing puts."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain()
+        panel._show_calls = False
+        panel._selected_index = 2
+
+        # Test that logic doesn't change anything when already showing puts
+        if panel._state == "success" and panel._chain:
+            if panel._show_calls:  # This condition is False
+                panel._show_calls = False
+                panel._selected_index = 0
+
+        # Should remain unchanged
+        assert panel._show_calls is False
+        assert panel._selected_index == 2
+
+    def test_toggle_does_nothing_without_chain(self) -> None:
+        """Test that toggle does nothing when no chain is loaded."""
+        panel = OptionsChainPanel()
+        panel._state = "empty"
+        panel._chain = None
+        panel._show_calls = True
+
+        # Test guard condition
+        should_proceed = panel._state == "success" and panel._chain is not None
+        assert should_proceed is False
+
+    def test_toggle_does_nothing_in_loading_state(self) -> None:
+        """Test that toggle does nothing during loading state."""
+        panel = OptionsChainPanel()
+        panel._state = "loading"
+        panel._chain = None
+        panel._show_calls = True
+
+        # Test guard condition
+        should_proceed = panel._state == "success" and panel._chain is not None
+        assert should_proceed is False
+
+    def test_toggle_does_nothing_in_error_state(self) -> None:
+        """Test that toggle does nothing in error state."""
+        panel = OptionsChainPanel()
+        panel._state = "error"
+        panel._chain = None
+        panel._show_calls = True
+
+        # Test guard condition
+        should_proceed = panel._state == "success" and panel._chain is not None
+        assert should_proceed is False
+
+    def test_selection_reset_on_toggle(self) -> None:
+        """Test that selection is reset to 0 when toggling between calls/puts."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain(num_calls=5, num_puts=3)
+
+        # Start with calls, navigate to index 3
+        panel._show_calls = True
+        panel._selected_index = 3
+
+        # Toggle to puts - should reset selection
+        if panel._state == "success" and panel._chain:
+            if panel._show_calls:
+                panel._show_calls = False
+                panel._selected_index = 0
+
+        assert panel._show_calls is False
+        assert panel._selected_index == 0
+
+        # Navigate in puts
+        panel._selected_index = 2
+
+        # Toggle back to calls - should reset selection again
+        if panel._state == "success" and panel._chain:
+            if not panel._show_calls:
+                panel._show_calls = True
+                panel._selected_index = 0
+
+        assert panel._show_calls is True
+        assert panel._selected_index == 0

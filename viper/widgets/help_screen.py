@@ -112,9 +112,10 @@ class HelpScreen(ModalScreen[None]):
                 yield Static("j / k                Navigate list items", classes="help-item")
                 yield Static("Enter                Read article / Select item", classes="help-item")
                 yield Static("i                    Toggle info panel", classes="help-item")
-                yield Static("c                    Toggle chart panel", classes="help-item")
+                yield Static("c                    Toggle chart panel (or view calls in options)", classes="help-item")
                 yield Static("n                    Toggle news panel", classes="help-item")
                 yield Static("o                    Toggle options panel (or open in browser in news/article)", classes="help-item")
+                yield Static("p                    View puts in options panel", classes="help-item")
                 yield Static("t                    Technical indicator prefix (press t, then indicator key)", classes="help-item")
                 yield Static("  t-r                Toggle RSI indicator", classes="help-item")
                 yield Static("  t-m                Toggle MACD indicator", classes="help-item")
@@ -210,6 +211,10 @@ class HelpScreen(ModalScreen[None]):
                 )
                 yield Static(
                     "Use [ / ] to cycle through expiration dates.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Press 'c' to view calls, 'p' to view puts.",
                     classes="help-item",
                 )
                 yield Static(
