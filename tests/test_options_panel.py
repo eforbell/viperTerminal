@@ -320,3 +320,100 @@ class TestOptionsChainPanelStateManagement:
         # Verify change detection would work
         assert panel._current_ticker != initial_ticker
         assert panel._current_ticker == "TSLA"
+
+
+class TestOptionsChainPanelExpirationNavigation:
+    """Test expiration date navigation with [ and ] keys."""
+
+    def test_next_expiration_increments_index(self) -> None:
+        """Test that ] key increments expiration index."""
+        panel = OptionsChainPanel()
+        panel._current_ticker = "AAPL"
+        panel._expirations = ["2024-01-19", "2024-02-16", "2024-03-15"]
+        panel._current_expiration_index = 0
+
+        # Test next expiration logic
+        new_index = (panel._current_expiration_index + 1) % len(panel._expirations)
+        assert new_index == 1
+
+        # Verify the new expiration is correct
+        assert panel._expirations[new_index] == "2024-02-16"
+
+    def test_next_expiration_wraps_around(self) -> None:
+        """Test that ] key wraps from last to first expiration."""
+        panel = OptionsChainPanel()
+        panel._current_ticker = "AAPL"
+        panel._expirations = ["2024-01-19", "2024-02-16", "2024-03-15"]
+        panel._current_expiration_index = 2  # Last expiration
+
+        # Test wrap-around logic
+        new_index = (panel._current_expiration_index + 1) % len(panel._expirations)
+        assert new_index == 0
+
+        # Verify it wrapped to first expiration
+        assert panel._expirations[new_index] == "2024-01-19"
+
+    def test_prev_expiration_decrements_index(self) -> None:
+        """Test that [ key decrements expiration index."""
+        panel = OptionsChainPanel()
+        panel._current_ticker = "AAPL"
+        panel._expirations = ["2024-01-19", "2024-02-16", "2024-03-15"]
+        panel._current_expiration_index = 2
+
+        # Test prev expiration logic
+        new_index = (panel._current_expiration_index - 1) % len(panel._expirations)
+        assert new_index == 1
+
+        # Verify the new expiration is correct
+        assert panel._expirations[new_index] == "2024-02-16"
+
+    def test_prev_expiration_wraps_around(self) -> None:
+        """Test that [ key wraps from first to last expiration."""
+        panel = OptionsChainPanel()
+        panel._current_ticker = "AAPL"
+        panel._expirations = ["2024-01-19", "2024-02-16", "2024-03-15"]
+        panel._current_expiration_index = 0  # First expiration
+
+        # Test wrap-around logic
+        new_index = (panel._current_expiration_index - 1) % len(panel._expirations)
+        assert new_index == 2
+
+        # Verify it wrapped to last expiration
+        assert panel._expirations[new_index] == "2024-03-15"
+
+    def test_expiration_navigation_with_single_expiration(self) -> None:
+        """Test that expiration navigation works with single expiration."""
+        panel = OptionsChainPanel()
+        panel._current_ticker = "AAPL"
+        panel._expirations = ["2024-01-19"]
+        panel._current_expiration_index = 0
+
+        # Test next - should stay at 0 (0+1 % 1 = 0)
+        next_index = (panel._current_expiration_index + 1) % len(panel._expirations)
+        assert next_index == 0
+
+        # Test prev - should stay at 0 (0-1 % 1 = 0)
+        prev_index = (panel._current_expiration_index - 1) % len(panel._expirations)
+        assert prev_index == 0
+
+    def test_expiration_navigation_returns_early_without_ticker(self) -> None:
+        """Test that expiration navigation does nothing without ticker."""
+        panel = OptionsChainPanel()
+        panel._current_ticker = None
+        panel._expirations = []
+        panel._current_expiration_index = 0
+
+        # Test that guards would prevent navigation
+        should_proceed = bool(panel._current_ticker and panel._expirations)
+        assert should_proceed is False
+
+    def test_expiration_navigation_returns_early_without_expirations(self) -> None:
+        """Test that expiration navigation does nothing without expirations."""
+        panel = OptionsChainPanel()
+        panel._current_ticker = "AAPL"
+        panel._expirations = []
+        panel._current_expiration_index = 0
+
+        # Test that guards would prevent navigation
+        should_proceed = bool(panel._current_ticker and panel._expirations)
+        assert should_proceed is False

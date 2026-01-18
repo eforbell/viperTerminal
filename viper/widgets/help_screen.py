@@ -209,6 +209,10 @@ class HelpScreen(ModalScreen[None]):
                     classes="help-item",
                 )
                 yield Static(
+                    "Use [ / ] to cycle through expiration dates.",
+                    classes="help-item",
+                )
+                yield Static(
                     "ITM (In The Money) contracts are highlighted in green.",
                     classes="help-item",
                 )

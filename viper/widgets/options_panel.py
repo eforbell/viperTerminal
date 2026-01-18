@@ -27,6 +27,8 @@ class OptionsChainPanel(Widget):
     BINDINGS = [
         Binding("j", "navigate_down", "Next", show=False, priority=True),
         Binding("k", "navigate_up", "Previous", show=False, priority=True),
+        Binding("[", "prev_expiration", "Prev Expiry", show=False, priority=True),
+        Binding("]", "next_expiration", "Next Expiry", show=False, priority=True),
     ]
 
     DEFAULT_CSS = """
@@ -330,3 +332,31 @@ class OptionsChainPanel(Widget):
         # Move selection up
         self._selected_index = max(self._selected_index - 1, 0)
         self._rebuild_content()
+
+    def action_prev_expiration(self) -> None:
+        """Navigate to the previous expiration date ([ key)."""
+        if not self._current_ticker or not self._expirations:
+            return
+
+        # Move to previous expiration with wrap-around
+        self._current_expiration_index = (
+            self._current_expiration_index - 1
+        ) % len(self._expirations)
+
+        # Load the new chain
+        expiration = self._expirations[self._current_expiration_index]
+        self.run_worker(self._load_chain(self._current_ticker, expiration))
+
+    def action_next_expiration(self) -> None:
+        """Navigate to the next expiration date (] key)."""
+        if not self._current_ticker or not self._expirations:
+            return
+
+        # Move to next expiration with wrap-around
+        self._current_expiration_index = (
+            self._current_expiration_index + 1
+        ) % len(self._expirations)
+
+        # Load the new chain
+        expiration = self._expirations[self._current_expiration_index]
+        self.run_worker(self._load_chain(self._current_ticker, expiration))
