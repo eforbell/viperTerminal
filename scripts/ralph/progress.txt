@@ -1214,3 +1214,23 @@
   - **MACD Feature**: Works with stocks/crypto, all timeframes, coexists with RSI, comprehensive tests, type-safe implementation
 
 ---
+
+## 2026-01-18 - VPR-076
+- Implemented async options service to fetch expiration dates using yfinance
+- Created OptionsError dataclass for error handling
+- Distinguishes between invalid ticker and valid ticker with no options
+- Added comprehensive test suite with 13 tests covering all edge cases
+- Files changed:
+  - Created: viper/services/options.py
+  - Created: tests/test_options.py
+  - Modified: viper/services/__init__.py (added options export)
+  - Modified: AGENTS.md (added VPR-076 learnings)
+  - Modified: scripts/ralph/features/feature-8.prd.json (marked VPR-076 as passing)
+- **Learnings:**
+  - yfinance ticker.options returns tuple of date strings in YYYY-MM-DD format
+  - Must distinguish between invalid ticker and ticker with no options using fast_info.last_price check
+  - MagicMock cannot raise exceptions on property access - must use custom class with @property
+  - Custom MockFastInfoInvalid class pattern needed for testing AttributeError scenarios
+  - 94% coverage acceptable when generic exception handler is untestable
+  - Follow established service patterns: async wrapper, executor, timeout, error handling
+---

@@ -77,7 +77,11 @@
       "priority": 1,
       "estimatedEffort": "Small",
       "dependencies": [],
-      "notes": "Foundation for options feature. yfinance returns tuple of date strings from ticker.options property. Convert to list and handle None/empty cases."
+      "notes": "Foundation for options feature. yfinance returns tuple of date strings from ticker.options property. Convert to list and handle None/empty cases.",
+      "passes": true,
+      "completedAt": "2026-01-18",
+      "testsPassing": 820,
+      "coverage": "94%"
     },
     {
       "id": "VPR-077",
