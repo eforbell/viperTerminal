@@ -1291,3 +1291,24 @@
   - Ready for VPR-079: app integration with 'o' keybinding
 
 ---
+
+---
+
+## 2026-01-18 - VPR-079
+- **What was implemented**: App integration for options panel with 'o' toggle keybinding
+- **Files changed**:
+  - `viper/app.py`: Added OptionsChainPanel import, Binding import, 'o' keybinding, #options-container CSS, _options_panel_visible flag, compose OptionsChainPanel instance, action_toggle_options() method
+  - `viper/widgets/help_screen.py`: Added 'o' keybinding documentation, OPTIONS section, added options to features list
+  - `tests/test_app.py`: Added OptionsChainPanel import, 6 new integration tests for options panel toggling, focus, and state management
+  - `scripts/ralph/features/feature-8.prd.json`: Marked VPR-079 as complete with passes: true
+- **Learnings**:
+  - Binding class required for keyword args: Use `Binding("o", "toggle_options", "Options", show=False)` instead of tuple when using `show=False`
+  - Import Binding from textual.binding: `from textual.binding import Binding`
+  - Panel toggle pattern: Hide other panels when showing new panel, track state with _panel_visible flag
+  - CSS display check: Use `str(container.styles.display)` in tests to compare display property values
+  - Test pattern for actions: Call `app.action_toggle_options()` directly instead of `await pilot.press("o")` to avoid keybinding conflicts
+  - Keybinding priority: Panel-level bindings with priority=True intercept keys before app-level bindings (e.g., NewsPanel 'o' for browser)
+  - Empty state handling: Call panel.show_empty() when no ticker selected, load_options() when ticker exists
+  - Focus management: Set focus to panel after showing with panel.focus()
+  - Help screen updates: Document new keybindings, add feature section, update existing key descriptions for context
+  - Test coverage maintained: 854 tests passing with 90.48% coverage after integration

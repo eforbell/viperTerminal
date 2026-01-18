@@ -156,7 +156,11 @@
       "priority": 4,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-078"],
-      "notes": "'o' for Options (mnemonic). Options panel can coexist with chart/news or replace multi-purpose area - implementation decision. Start simple: toggle replaces current view."
+      "notes": "'o' for Options (mnemonic). Options panel can coexist with chart/news or replace multi-purpose area - implementation decision. Start simple: toggle replaces current view.",
+      "passes": true,
+      "completedAt": "2026-01-18",
+      "testsPassing": 854,
+      "coverage": "90%"
     },
     {
       "id": "VPR-080",
