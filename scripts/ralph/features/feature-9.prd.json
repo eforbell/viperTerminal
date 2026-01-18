@@ -167,6 +167,7 @@
     {
       "id": "VPR-083",
       "title": "Near-the-money focus",
+      "passes": true,
       "acceptanceCriteria": [
         "Calculate ATM strike: closest strike to current stock price",
         "Add method: _find_atm_strike(contracts, current_price) -> float",
@@ -183,7 +184,8 @@
       "priority": 2,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-082"],
-      "notes": "ATM focus helps users quickly find relevant strikes. Need to pass current stock price to options panel - can get from existing quote service."
+      "notes": "ATM focus helps users quickly find relevant strikes. Need to pass current stock price to options panel - can get from existing quote service.",
+      "completedAt": "2026-01-18"
     },
     {
       "id": "VPR-084",

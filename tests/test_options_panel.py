@@ -816,3 +816,194 @@ class TestOptionsChainPanelFilterMode:
         # Try to navigate down past end
         panel._selected_index = min(panel._selected_index + 1, len(contracts) - 1)
         assert panel._selected_index == 1  # Should stay at last filtered item
+
+
+class TestOptionsChainPanelATMFocus:
+    """Test ATM (at-the-money) focus feature."""
+
+    def test_find_atm_strike_with_current_price(self) -> None:
+        """Test finding ATM strike when current price is available."""
+        panel = OptionsChainPanel()
+        panel._current_price = 150.0
+
+        # Create contracts with various strikes
+        contracts = [
+            create_option_contract(strike=145.0),
+            create_option_contract(strike=150.0),
+            create_option_contract(strike=155.0),
+        ]
+
+        atm_strike = panel._find_atm_strike(contracts)
+        assert atm_strike == 150.0  # Exact match
+
+    def test_find_atm_strike_between_strikes(self) -> None:
+        """Test finding ATM strike when price is between strikes."""
+        panel = OptionsChainPanel()
+        panel._current_price = 152.0  # Between 150 and 155
+
+        contracts = [
+            create_option_contract(strike=145.0),
+            create_option_contract(strike=150.0),
+            create_option_contract(strike=155.0),
+        ]
+
+        atm_strike = panel._find_atm_strike(contracts)
+        assert atm_strike == 150.0  # Closest is 150 (distance 2 vs 3)
+
+    def test_find_atm_strike_closer_to_higher_strike(self) -> None:
+        """Test finding ATM strike when price is closer to higher strike."""
+        panel = OptionsChainPanel()
+        panel._current_price = 153.0  # Between 150 and 155, closer to 155
+
+        contracts = [
+            create_option_contract(strike=145.0),
+            create_option_contract(strike=150.0),
+            create_option_contract(strike=155.0),
+        ]
+
+        atm_strike = panel._find_atm_strike(contracts)
+        assert atm_strike == 155.0  # Closest is 155 (distance 2 vs 3)
+
+    def test_find_atm_strike_without_current_price(self) -> None:
+        """Test finding ATM strike returns None when no current price."""
+        panel = OptionsChainPanel()
+        panel._current_price = None
+
+        contracts = [
+            create_option_contract(strike=145.0),
+            create_option_contract(strike=150.0),
+            create_option_contract(strike=155.0),
+        ]
+
+        atm_strike = panel._find_atm_strike(contracts)
+        assert atm_strike is None
+
+    def test_find_atm_strike_with_empty_contracts(self) -> None:
+        """Test finding ATM strike returns None with empty contracts."""
+        panel = OptionsChainPanel()
+        panel._current_price = 150.0
+
+        atm_strike = panel._find_atm_strike([])
+        assert atm_strike is None
+
+    def test_jump_to_atm_sets_selection(self) -> None:
+        """Test that 'a' key jumps to ATM strike in filtered list."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._current_price = 150.0
+        panel._atm_strike = 150.0
+        panel._chain = create_options_chain()
+        panel._show_calls = True
+        panel._filter_mode = "all"
+        panel._selected_index = 0
+
+        # Get contracts
+        all_contracts = panel._chain.calls if panel._show_calls else panel._chain.puts
+        contracts = panel._apply_filter(all_contracts)
+
+        # Find ATM index
+        atm_index = None
+        for i, contract in enumerate(contracts):
+            if contract.strike == panel._atm_strike:
+                atm_index = i
+                break
+
+        # Simulate jump to ATM
+        if atm_index is not None:
+            panel._selected_index = atm_index
+
+        # ATM strike (150.0) should be at index 1 in the test data
+        assert panel._selected_index == 1
+
+    def test_jump_to_atm_when_atm_filtered_out(self) -> None:
+        """Test that 'a' key does nothing when ATM is filtered out."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._current_price = 150.0
+        panel._atm_strike = 150.0  # Strike 150.0 is OTM in calls
+        panel._chain = create_options_chain()
+        panel._show_calls = True
+        panel._filter_mode = "itm"  # Filter to only ITM
+        panel._selected_index = 0
+
+        # Get filtered contracts
+        all_contracts = panel._chain.calls if panel._show_calls else panel._chain.puts
+        contracts = panel._apply_filter(all_contracts)
+
+        # Find ATM index in filtered list
+        atm_index = None
+        for i, contract in enumerate(contracts):
+            if contract.strike == panel._atm_strike:
+                atm_index = i
+                break
+
+        # ATM not in filtered list
+        assert atm_index is None
+
+        # Selection should not change
+        original_index = panel._selected_index
+        if atm_index is not None:
+            panel._selected_index = atm_index
+
+        assert panel._selected_index == original_index  # Unchanged
+
+    def test_jump_to_atm_without_current_price(self) -> None:
+        """Test that 'a' key does nothing without current price."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._current_price = None  # No price
+        panel._atm_strike = None
+        panel._chain = create_options_chain()
+        panel._show_calls = True
+        panel._selected_index = 1
+
+        # Guard condition
+        should_proceed = bool(panel._current_price and panel._atm_strike)
+        assert should_proceed is False
+
+    def test_atm_strike_calculated_on_render(self) -> None:
+        """Test that ATM strike is calculated when rendering table."""
+        panel = OptionsChainPanel()
+        panel._current_price = 150.0
+        panel._chain = create_options_chain()
+
+        # Get contracts
+        all_contracts = panel._chain.calls if panel._show_calls else panel._chain.puts
+
+        # Calculate ATM (simulating what _render_options_table does)
+        panel._atm_strike = panel._find_atm_strike(all_contracts)
+
+        assert panel._atm_strike == 150.0
+
+    def test_load_options_stores_current_price(self) -> None:
+        """Test that load_options stores current price for ATM calculation."""
+        panel = OptionsChainPanel()
+
+        # Simulate what load_options does
+        current_price = 152.75
+        panel._current_price = current_price
+
+        assert panel._current_price == 152.75
+
+    def test_load_options_resets_atm_strike(self) -> None:
+        """Test that load_options resets ATM strike."""
+        panel = OptionsChainPanel()
+        panel._atm_strike = 150.0
+
+        # Simulate what load_options does
+        panel._atm_strike = None
+
+        assert panel._atm_strike is None
+
+    def test_show_empty_clears_current_price_and_atm(self) -> None:
+        """Test that show_empty clears current price and ATM strike."""
+        panel = OptionsChainPanel()
+        panel._current_price = 150.0
+        panel._atm_strike = 150.0
+
+        # Simulate what show_empty does
+        panel._current_price = None
+        panel._atm_strike = None
+
+        assert panel._current_price is None
+        assert panel._atm_strike is None

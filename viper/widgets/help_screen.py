@@ -223,7 +223,15 @@ class HelpScreen(ModalScreen[None]):
                     classes="help-item",
                 )
                 yield Static(
+                    "Press 'a' to jump to the at-the-money (ATM) strike.",
+                    classes="help-item",
+                )
+                yield Static(
                     "ITM (In The Money) contracts are highlighted in green.",
+                    classes="help-item",
+                )
+                yield Static(
+                    "ATM (At The Money) strikes are highlighted in cyan.",
                     classes="help-item",
                 )
                 yield Static(
