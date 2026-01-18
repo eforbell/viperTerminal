@@ -142,6 +142,7 @@
     {
       "id": "VPR-082",
       "title": "Add filter mode - ITM/OTM/All",
+      "passes": true,
       "acceptanceCriteria": [
         "Add 'f' keybinding to cycle filter mode: All -> ITM -> OTM -> All",
         "Filter mode shown in header: 'OPTIONS: AAPL | 2024-03-15 | CALLS | Filter: All'",
@@ -160,7 +161,8 @@
       "priority": 1,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-081"],
-      "notes": "Simple filter on existing data. No refetch needed. Filter icon or text in header shows current mode."
+      "notes": "Simple filter on existing data. No refetch needed. Filter icon or text in header shows current mode.",
+      "completedAt": "2026-01-18"
     },
     {
       "id": "VPR-083",

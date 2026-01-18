@@ -1359,3 +1359,26 @@
   - Feature 8 (Options Chain Basic) complete! All 6 stories (VPR-076 through VPR-081) passing
   - Total: 869 tests passing, 89.90% coverage
 ---
+
+## 2026-01-18 - VPR-082
+- **What was implemented**: Added filter mode cycling (All/ITM/OTM) to options chain panel with 'f' keybinding
+- **Files changed**:
+  - `viper/widgets/options_panel.py`: Added _filter_mode attribute, _apply_filter() method, action_cycle_filter(), updated navigation and rendering to respect filter
+  - `viper/widgets/help_screen.py`: Added 'f' keybinding documentation in KEYBINDINGS and OPTIONS sections
+  - `tests/test_options_panel.py`: Added 15 comprehensive test cases for filter functionality
+  - `AGENTS.md`: Added VPR-082 learnings section with filter patterns and testing strategies
+  - `scripts/ralph/features/feature-9.prd.json`: Marked VPR-082 as complete with passes: true
+- **Learnings**:
+  - Use `Literal["all", "itm", "otm"]` type hint for type-safe filter state
+  - Separate `_apply_filter()` method keeps filtering logic testable and reusable
+  - Keep raw data (`_chain`) unchanged, apply filter at render/navigation time
+  - Always reset `_selected_index = 0` when filter changes for predictable UX
+  - Show "No contracts match filter" message when filtered list is empty
+  - Apply filter in navigation methods BEFORE bounds checking
+  - Filter is orthogonal to state machine - store as separate attribute, not a 5th state
+  - Reset filter to "all" when loading new ticker or showing empty state
+  - Test pure methods first (no widget mounting) for faster, simpler tests
+  - Literal types catch typos at mypy time (e.g., "itm " with trailing space)
+  - Rich markup allows multiple `[cyan]value[/cyan]` segments in single header string
+  - All 885 tests passing, mypy --strict clean, 89.45% coverage
+---
