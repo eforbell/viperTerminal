@@ -46,6 +46,98 @@
       "interpretation": "High IV = expensive options (good for selling), Low IV = cheap options (good for buying)"
     }
   },
+  "feature8Learnings": {
+    "CRITICAL_READ_BEFORE_IMPLEMENTING": "These learnings from Feature 8 MUST be applied to avoid bugs and rework",
+    "nanHandling": {
+      "issue": "Options data has many NaN values - IV, volume, and OI can all be NaN/None",
+      "pattern": "Use math.isnan() after float conversion - cannot convert NaN to int directly",
+      "implementation": "Create safe_float() and safe_int() helper functions for ALL numeric conversions",
+      "affectedStories": ["VPR-084 (IV color)", "VPR-085 (volume/OI)", "VPR-087 (IV rank)"],
+      "testCase": "Always test with contracts that have NaN IV, zero volume, zero OI"
+    },
+    "widgetStateMachine": {
+      "existingStates": ["empty", "loading", "success", "error"],
+      "concern": "VPR-086 adds summary_mode - decide if this is a 5th state or orthogonal boolean",
+      "recommendation": "Keep as orthogonal boolean (_summary_mode: bool) since summary can have its own loading/error states",
+      "guardConditions": "Always check state before actions - don't filter/jump if in loading/error state"
+    },
+    "priorityBindings": {
+      "pattern": "Panel keybindings use priority=True to intercept before app-level bindings",
+      "newKeys": ["f (filter)", "a (ATM jump)", "s (summary toggle)"],
+      "implementation": "Add to BINDINGS list with Binding(..., priority=True)"
+    },
+    "selectionResetPattern": {
+      "when": "Reset _selected_index = 0 when displayed data changes",
+      "triggers": ["Filter mode changes", "Calls/puts toggle", "Expiration change", "Ticker change"],
+      "newTrigger": "ATM jump should SET selection to ATM row index, not reset to 0"
+    },
+    "noRefetchForViewChanges": {
+      "principle": "Both calls and puts already loaded from single API call",
+      "applies_to": ["Filter mode changes", "Calls/puts toggle", "IV color calculation", "Volume highlighting"],
+      "exception": "Summary view (VPR-086) MAY need to fetch multiple chains - cache aggressively"
+    },
+    "testPatterns": {
+      "stateLogicTests": "Test state logic directly without mounting widget (avoids async complexity)",
+      "attributeSetting": "Use direct attribute setting for state transitions in tests",
+      "pureLogicTests": "ATM finding, IV color thresholds, volume averages are pure functions - test independently"
+    }
+  },
+  "edgeCasesAndConcerns": {
+    "ivMayBeNaN": {
+      "scenario": "Contract has NaN implied_volatility",
+      "affected": ["_get_iv_color()", "IV rank calculation", "min/max IV calculation"],
+      "solution": "Filter out NaN IVs before min/max calculation, return default color for NaN",
+      "testCase": "Test chain where some contracts have NaN IV"
+    },
+    "volumeOiMayBeZero": {
+      "scenario": "All contracts have zero volume or zero OI",
+      "affected": ["Average calculation for highlighting threshold"],
+      "solution": "If avg is 0, skip highlighting (nothing is 'high' relative to zero)",
+      "testCase": "Test chain with all zero volumes"
+    },
+    "atmWithNoCurrentPrice": {
+      "scenario": "Current stock price unavailable (quote failed)",
+      "affected": ["ATM strike calculation", "ATM highlighting", "'a' key jump"],
+      "solution": "Graceful degradation - skip ATM features, show all strikes without highlight",
+      "testCase": "Test options panel when _current_price is None"
+    },
+    "summaryViewMultipleChains": {
+      "scenario": "Summary view needs data from 8 expirations",
+      "affected": ["VPR-086 implementation"],
+      "concerns": ["Could be slow (8 API calls)", "Need loading state per expiration or global"],
+      "solution": "Show loading indicator, fetch chains in parallel, cache results",
+      "testCase": "Test summary view with slow/failed chain fetches"
+    },
+    "filterAndAtmInteraction": {
+      "scenario": "ATM strike is OTM, user applies ITM filter, presses 'a' to jump to ATM",
+      "affected": ["VPR-082 + VPR-083 interaction"],
+      "options": [
+        "Option A: 'a' key temporarily shows ATM even if filtered out (confusing)",
+        "Option B: 'a' key does nothing if ATM not in filtered list (show message)",
+        "Option C: 'a' key clears filter first, then jumps (implicit filter change)"
+      ],
+      "recommendation": "Option B - show 'ATM strike not visible with current filter' message",
+      "testCase": "Test 'a' key when ATM strike is filtered out"
+    },
+    "emptyFilterResults": {
+      "scenario": "Filter results in zero contracts (e.g., all contracts are OTM, user filters ITM)",
+      "affected": ["VPR-082"],
+      "solution": "Show 'No contracts match filter' message, disable j/k navigation",
+      "testCase": "Test ITM filter when all contracts are OTM"
+    },
+    "sameIvAllContracts": {
+      "scenario": "All contracts have identical IV (edge case)",
+      "affected": ["VPR-084 IV color coding"],
+      "solution": "If max_iv == min_iv, all contracts get medium (yellow) color",
+      "testCase": "Test chain where all IVs are 0.25"
+    },
+    "ivRankDivisionByZero": {
+      "scenario": "max_iv == min_iv when calculating IV rank",
+      "affected": ["VPR-087"],
+      "solution": "Return 50% (middle) or N/A when range is zero",
+      "testCase": "Test IV rank with identical min/max IV"
+    }
+  },
   "userStories": [
     {
       "id": "VPR-082",
