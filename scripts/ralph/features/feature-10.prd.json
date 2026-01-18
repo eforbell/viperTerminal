@@ -1,0 +1,294 @@
+{
+  "branchName": "viper/feature-10-candlestick-chart",
+  "projectName": "Viper Terminal - Feature 10",
+  "description": "Candlestick Chart View: Add alternative price chart visualization using candlestick patterns. Toggle between line chart and candlestick view. Builds on existing chart infrastructure with minimal disruption to working code.",
+  "principles": [
+    "Rock-solid quality over speed - every feature must be bulletproof before moving on",
+    "Comprehensive test coverage - unit tests, integration tests, edge cases",
+    "All tests must pass before a story is marked complete",
+    "ZERO disruption to existing line chart - candlestick is additive, not replacing",
+    "Stability first - if in doubt, keep it simple",
+    "Leverage existing OHLC data already in HistoricalData/ChartContext"
+  ],
+  "CRITICAL_RENDERING_NOTES": {
+    "warning": "READ THIS BEFORE ANY WIDGET/RENDERING WORK",
+    "textual_colors": "Textual uses Rich markup, NOT ANSI escape codes!",
+    "bullish_candle": "[green] for close > open (price went up)",
+    "bearish_candle": "[red] for close < open (price went down)",
+    "unicode_approach": "Use box-drawing characters for candle bodies, vertical lines for wicks",
+    "existing_patterns": "Follow ChartStyle enum pattern - add CANDLESTICK alongside BRAILLE and BLOCK"
+  },
+  "techStack": {
+    "language": "Python 3.11+",
+    "tui": "Textual (built on Rich)",
+    "charting": "Custom terminal rendering (existing ChartRenderer)",
+    "data_source": "yfinance via existing HistoricalData service",
+    "testing": "pytest + pytest-asyncio + pytest-cov",
+    "mocking": "pytest-mock",
+    "typecheck": "mypy --strict",
+    "linting": "ruff"
+  },
+  "background": {
+    "candlestickOverview": {
+      "description": "Candlestick charts show OHLC (Open, High, Low, Close) data in a visual format",
+      "components": {
+        "body": "Rectangle between open and close prices",
+        "upperWick": "Line from body top to high price",
+        "lowerWick": "Line from body bottom to low price",
+        "bullish": "Close > Open - typically green/white, shows buying pressure",
+        "bearish": "Close < Open - typically red/black, shows selling pressure"
+      },
+      "advantages": [
+        "Shows price range (high-low) not visible in line charts",
+        "Shows open vs close relationship",
+        "Reveals market sentiment per period",
+        "Standard format traders are familiar with"
+      ]
+    },
+    "existingInfrastructure": {
+      "chartRenderer": "viper/widgets/chart_renderer.py - already has ChartStyle enum with BRAILLE/BLOCK",
+      "chartContext": "viper/widgets/chart_context.py - already carries opens, closes, highs, lows",
+      "chartPanel": "viper/widgets/chart_panel.py - UI widget that uses ChartRenderer",
+      "historyData": "viper/services/history_data.py - HistoricalData dataclass has all OHLC fields"
+    },
+    "dataAvailability": {
+      "alreadyHave": ["opens", "closes", "highs", "lows", "volumes", "dates"],
+      "noNewApiCalls": "All OHLC data already fetched by existing history service",
+      "noNewDependencies": "Pure rendering change using existing data"
+    }
+  },
+  "designDecisions": {
+    "characterWidth": {
+      "decision": "Each candle = 1 character width",
+      "rationale": "Maximizes data density while still showing OHLC structure",
+      "alternative_considered": "3-char candles (body + 2 wicks) - rejected for space efficiency",
+      "implementation": "Use block characters vertically positioned to show body, dots/lines for wicks"
+    },
+    "unicodeCharacters": {
+      "bodyChars": "Use block characters (▁▂▃▄▅▆▇█) for body fill",
+      "wickChars": "Use vertical line (│) or light vertical (╎) for wicks",
+      "combinedApproach": "May combine box-drawing with blocks for best visual effect"
+    },
+    "toggleMechanism": {
+      "keybinding": "'v' key to cycle chart view: line -> candlestick -> line",
+      "rationale": "'v' for 'view' is intuitive and unassigned",
+      "alternative": "Could use 't v' (technical -> view) but single key is simpler for common action"
+    },
+    "indicatorCompatibility": {
+      "overlays": "SMA/EMA overlays should work on candlestick view",
+      "subPanels": "RSI/MACD panels remain unchanged below chart",
+      "volumeBars": "Volume bars remain unchanged"
+    }
+  },
+  "userStories": [
+    {
+      "id": "VPR-088",
+      "title": "Add CANDLESTICK to ChartStyle enum",
+      "acceptanceCriteria": [
+        "Add CANDLESTICK = 'candlestick' to ChartStyle enum in chart_renderer.py",
+        "Update ChartRenderer.render() to dispatch to _render_candlestick() for this style",
+        "Create stub _render_candlestick() method that returns placeholder (copy of _render_braille for now)",
+        "Verify existing BRAILLE and BLOCK styles still work unchanged",
+        "100% test coverage on style dispatch logic",
+        "Test: new enum value exists and is usable",
+        "Test: existing styles produce identical output as before"
+      ],
+      "priority": 1,
+      "estimatedEffort": "Small",
+      "dependencies": [],
+      "notes": "Foundation change. Stub implementation allows incremental development. Must not break existing charts."
+    },
+    {
+      "id": "VPR-089",
+      "title": "Implement candlestick rendering logic",
+      "acceptanceCriteria": [
+        "Implement _render_candlestick() method in ChartRenderer",
+        "Each candle represents one data point (open, high, low, close)",
+        "Candle body shows open-to-close range using block characters",
+        "Upper wick extends from body top to high",
+        "Lower wick extends from body bottom to low",
+        "Bullish candles (close > open) colored green",
+        "Bearish candles (close < open) colored red",
+        "Doji candles (close == open) shown as horizontal line",
+        "Y-axis scaling uses full high-low range (not just closes)",
+        "Downsampling preserves OHLC structure (use representative candle, not average)",
+        "Handle edge case: all candles same price (flat line)",
+        "100% test coverage on candlestick rendering",
+        "Test: bullish candle renders correctly",
+        "Test: bearish candle renders correctly",
+        "Test: doji candle renders correctly",
+        "Test: wicks extend to high/low correctly"
+      ],
+      "priority": 2,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-088"],
+      "notes": "Core rendering logic. Focus on clarity over density - better to show fewer candles clearly than many candles poorly."
+    },
+    {
+      "id": "VPR-090",
+      "title": "Add chart style toggle keybinding with interval display",
+      "acceptanceCriteria": [
+        "Add 'v' keybinding to ChartPanel: toggle chart view style",
+        "Cycle through styles: BRAILLE -> CANDLESTICK -> BRAILLE (skip BLOCK for simplicity)",
+        "Store _chart_style: ChartStyle = ChartStyle.BRAILLE in ChartPanel",
+        "Re-render chart immediately on style change (no refetch needed)",
+        "Show current style AND interval in chart header when candlestick mode active",
+        "Header format: 'AAPL - 1M Chart [Candlestick · Daily]' or similar",
+        "Map interval codes to human-readable: 1d->Daily, 1wk->Weekly, 1mo->Monthly",
+        "Interval indicator helps users understand what each candle represents",
+        "Update help_screen.py with 'v' keybinding documentation",
+        "Keybinding only active when ChartPanel has focus",
+        "100% test coverage on toggle logic",
+        "Test: 'v' cycles through styles correctly",
+        "Test: chart re-renders on style change",
+        "Test: header shows correct interval for each period"
+      ],
+      "priority": 3,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-089"],
+      "notes": "Simple toggle - data already loaded, just re-render with different style. No network calls needed. Interval display is especially useful for candlesticks so users know if they're looking at daily, weekly, or monthly candles."
+    },
+    {
+      "id": "VPR-091",
+      "title": "Ensure overlay compatibility with candlesticks",
+      "acceptanceCriteria": [
+        "SMA/EMA overlays render correctly over candlestick chart",
+        "Overlay colors remain distinct from candle colors (cyan, magenta vs green, red)",
+        "Overlays use same Y-axis scaling as candlesticks (high-low range)",
+        "Test overlay alignment matches candle positions",
+        "Volume bars below candlestick chart work correctly",
+        "RSI/MACD panels unaffected by chart style change",
+        "100% test coverage on overlay integration",
+        "Test: SMA overlay on candlestick chart renders correctly",
+        "Test: volume bars align with candlesticks"
+      ],
+      "priority": 4,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-090"],
+      "notes": "Overlays already work with braille - verify they work with candlesticks too. May need minor adjustments to overlay positioning."
+    },
+    {
+      "id": "VPR-092",
+      "title": "Handle edge cases and polish",
+      "acceptanceCriteria": [
+        "Sparse data: interpolation strategy for candlesticks (or disable interpolation)",
+        "Very short timeframes (1W): ensure enough candles visible",
+        "Very long timeframes (MAX): downsampling preserves meaningful OHLC",
+        "Crypto data: verify candlesticks work with crypto OHLC data",
+        "Terminal width changes: chart re-renders correctly on resize",
+        "Add visual polish: consider subtle background or grid",
+        "Performance: verify no lag on style toggle",
+        "Test: sparse data handled gracefully",
+        "Test: various timeframes render correctly",
+        "Test: crypto candlesticks work"
+      ],
+      "priority": 5,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-091"],
+      "notes": "Polish pass. Address any edge cases discovered during implementation. May add/remove items based on testing."
+    }
+  ],
+  "technicalNotes": {
+    "intervalMapping": {
+      "existingIntervals": {
+        "1d": "Daily",
+        "1wk": "Weekly",
+        "1mo": "Monthly"
+      },
+      "periodToInterval": {
+        "1W": "1d (Daily)",
+        "1M": "1d (Daily)",
+        "3M": "1d (Daily)",
+        "6M": "1d (Daily)",
+        "1Y": "1d (Daily)",
+        "2Y": "1wk (Weekly)",
+        "5Y": "1wk (Weekly)",
+        "MAX": "1mo (Monthly)"
+      },
+      "displayFormat": "Show in header: 'AAPL - 1M Chart [Candlestick · Daily]'",
+      "dataSource": "HistoricalData.interval already contains this value"
+    },
+    "candlestickRendering": {
+      "approach": "Single character per candle for maximum data density",
+      "bodyRepresentation": "Use vertical position + block height to show body",
+      "wickRepresentation": "Use braille dots or thin line characters above/below body",
+      "colorScheme": "Green (bullish), Red (bearish) using Rich markup"
+    },
+    "downsamplingStrategy": {
+      "problem": "More data points than screen width",
+      "solution": "Group periods and create representative OHLC candle",
+      "representativeCandle": {
+        "open": "First open in group",
+        "high": "Max high in group",
+        "low": "Min low in group",
+        "close": "Last close in group"
+      },
+      "note": "This preserves price range information lost in simple averaging"
+    },
+    "yAxisScaling": {
+      "lineChart": "Currently uses close prices for min/max",
+      "candlestickChart": "Must use high/low for min/max to show full wicks",
+      "implementation": "Pass scaling_mode parameter or auto-detect from chart style"
+    },
+    "unicodeOptions": {
+      "blockChars": ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"],
+      "boxDrawing": ["│", "┃", "╎", "╏", "┆", "┇", "┊", "┋"],
+      "brailleDots": "Can combine braille patterns for wick rendering",
+      "recommendation": "Start simple with blocks, iterate on visual quality"
+    },
+    "testingStrategy": [
+      "Unit tests: candlestick rendering with known OHLC values",
+      "Unit tests: downsampling preserves OHLC structure",
+      "Integration tests: toggle between styles",
+      "Visual tests: manual verification of chart appearance",
+      "Regression tests: existing line chart unchanged"
+    ],
+    "filesToModify": [
+      "viper/widgets/chart_renderer.py - add CANDLESTICK style and _render_candlestick()",
+      "viper/widgets/chart_panel.py - add 'v' keybinding and style state",
+      "viper/widgets/help_screen.py - document 'v' keybinding"
+    ],
+    "newFiles": [
+      "tests/test_candlestick_renderer.py - candlestick-specific tests"
+    ]
+  },
+  "outOfScope": [
+    "Heikin-Ashi candles (smoothed candlesticks) - future enhancement",
+    "Candle pattern recognition (doji, hammer, engulfing) - future feature",
+    "Hollow vs filled candles option - keep it simple with color only",
+    "Customizable colors - use standard green/red for now",
+    "Multi-timeframe candlestick comparison - future feature"
+  ],
+  "successMetrics": [
+    "'v' key toggles between line and candlestick view",
+    "Candlesticks clearly show open, high, low, close",
+    "Bullish candles are green, bearish candles are red",
+    "Wicks visible extending from candle bodies",
+    "Overlays (SMA/EMA) work on candlestick view",
+    "Volume bars align correctly with candlesticks",
+    "RSI/MACD panels unaffected by chart style",
+    "No regression in existing line chart functionality",
+    "All tests pass with >= 90% coverage",
+    "mypy --strict passes with no errors"
+  ],
+  "storyDependencyGraph": {
+    "description": "Linear dependency chain building candlestick support",
+    "flow": "VPR-088 (enum) -> VPR-089 (rendering) -> VPR-090 (toggle) -> VPR-091 (overlays) -> VPR-092 (polish)",
+    "parallelization": "VPR-091 and VPR-092 could potentially run in parallel after VPR-090"
+  },
+  "riskAssessment": {
+    "level": "LOW",
+    "reasons": [
+      "Additive change - not modifying existing line chart code",
+      "Data already available - no new API calls needed",
+      "Well-tested chart architecture to build on",
+      "Simple toggle mechanism - easy rollback if issues",
+      "Isolated rendering method - contained blast radius"
+    ],
+    "mitigations": [
+      "Keep line chart as default - candlestick is opt-in",
+      "Extensive testing before merge",
+      "Manual visual verification across timeframes"
+    ]
+  }
+}

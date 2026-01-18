@@ -1,10 +1,23 @@
 {
-  "currentFeature": "feature-9",
-  "featureName": "Enhanced Options Explorer",
-  "prdPath": "features/feature-9.prd.json",
-  "branch": "viper/feature-9-enhanced-options",
-  "status": "in-progress",
+  "currentFeature": "feature-10",
+  "featureName": "Candlestick Chart View",
+  "prdPath": "features/feature-10.prd.json",
+  "branch": "viper/feature-10-candlestick-chart",
+  "status": "planning",
   "completedFeatures": [
+    {
+      "feature": "feature-9",
+      "featureName": "Enhanced Options Explorer",
+      "prdPath": "features/feature-9.prd.json",
+      "branch": "viper/feature-9-enhanced-options",
+      "status": "complete",
+      "completedAt": "2026-01-18",
+      "stories": 6,
+      "testsPassing": 870,
+      "coverage": "90%",
+      "notes": "Implemented ITM/OTM/All filtering, ATM strike detection and highlighting, IV color coding (green/yellow/red), volume/OI highlighting, multi-expiration summary view with 's' toggle, and IV rank calculation. All keybindings (f/a/s) added to help screen.",
+      "description": "Extended options chain with filtering (ITM/OTM), near-the-money focus, IV color coding, volume/OI highlighting, multi-expiration summary view, and IV rank display."
+    },
     {
       "feature": "feature-8",
       "featureName": "Options Chain (Basic)",
