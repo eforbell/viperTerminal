@@ -111,22 +111,28 @@ async def test_panel_displays_watchlist_items(
 
 
 async def test_panel_shows_loading_state(watchlist_manager: WatchlistManager) -> None:
-    """Test that panel shows loading state before quotes are fetched."""
+    """Test that panel shows loading spinner during initial load."""
     watchlist_manager.add("AAPL")
 
     app = WatchlistTestApp(watchlist_manager, refresh_interval=9999)
 
     async with app.run_test() as pilot:
         panel = app.query_one(WatchlistPanel)
-        # Clear quotes cache and render to show loading
+        # Simulate initial load state (no quotes fetched yet)
         panel._quotes.clear()
+        panel._initial_load = True
         panel._render_items()
         await pilot.pause()
 
-        # Should show loading state (quote not in cache)
-        labels = panel.query(".watchlist-item")
-        label_texts = [str(label.render()) for label in labels]
-        assert any("Loading" in text for text in label_texts)
+        # Should show loading spinner with "Loading" text
+        loading_containers = panel.query(".loading-container")
+        assert len(loading_containers) == 1
+
+        # Check that loading text mentions ticker count
+        labels = panel.query(".loading-text")
+        assert len(labels) == 1
+        label_text = str(labels[0].render())
+        assert "Loading" in label_text
 
 
 @patch("viper.widgets.watchlist_panel.fetch_quote")

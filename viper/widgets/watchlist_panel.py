@@ -2,10 +2,10 @@
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import VerticalScroll
+from textual.containers import Container, VerticalScroll
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Label
+from textual.widgets import Label, LoadingIndicator
 
 from viper.services.quote import Quote, QuoteError, fetch_quote
 from viper.services.stock import StockQuote
@@ -66,6 +66,16 @@ class WatchlistPanel(Widget):
         margin-top: 3;
     }
 
+    WatchlistPanel .loading-container {
+        align: center middle;
+        height: 100%;
+    }
+
+    WatchlistPanel .loading-text {
+        color: #666666;
+        margin-top: 1;
+    }
+
     WatchlistPanel .selected {
         background: #003300;
         text-style: bold;
@@ -103,6 +113,7 @@ class WatchlistPanel(Widget):
         self._quotes: dict[str, Quote | QuoteError] = {}
         self._refresh_timer_active = False
         self._selected_index = 0
+        self._initial_load = True  # Track if this is the first load
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -112,6 +123,9 @@ class WatchlistPanel(Widget):
     def on_mount(self) -> None:
         """Start the auto-refresh timer when mounted."""
         self._refresh_timer_active = True
+        # Show loading state if we have tickers to load
+        if self._watchlist_manager.get_all():
+            self._render_items()  # Will show loading spinner
         self.set_interval(self._refresh_interval, self.refresh_quotes)
         self.run_worker(self.refresh_quotes())
 
@@ -126,6 +140,7 @@ class WatchlistPanel(Widget):
 
         tickers = self._watchlist_manager.get_all()
         if not tickers:
+            self._initial_load = False
             self._render_items()
             return
 
@@ -134,6 +149,7 @@ class WatchlistPanel(Widget):
             result = await fetch_quote(ticker)
             self._quotes[ticker] = result
 
+        self._initial_load = False
         self._render_items()
 
     def _render_items(self) -> None:
@@ -146,6 +162,17 @@ class WatchlistPanel(Widget):
         if not tickers:
             container.mount(Label("No tickers in watchlist", classes="empty-state"))
             self._selected_index = 0
+            return
+
+        # Show loading spinner during initial load
+        if self._initial_load and not self._quotes:
+            loading_container = Container(
+                LoadingIndicator(),
+                Label(f"Loading {len(tickers)} ticker{'s' if len(tickers) > 1 else ''}...",
+                      classes="loading-text"),
+                classes="loading-container",
+            )
+            container.mount(loading_container)
             return
 
         # Clamp selected index to valid range
