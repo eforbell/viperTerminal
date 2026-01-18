@@ -311,6 +311,10 @@ class OptionsChainPanel(Widget):
             min_iv = 0.0
             max_iv = 0.0
 
+        # Calculate average volume and OI for highlighting (from all contracts, not filtered)
+        avg_volume = self._calculate_average_volume(all_contracts)
+        avg_oi = self._calculate_average_oi(all_contracts)
+
         # Clamp selected index to valid range
         if self._selected_index >= len(contracts):
             self._selected_index = len(contracts) - 1
@@ -332,8 +336,14 @@ class OptionsChainPanel(Widget):
             else:
                 iv_color = "yellow"
 
+            # Check for high volume/OI
+            is_high_vol = self._is_high_volume(contract.volume, avg_volume)
+            is_high_oi = self._is_high_oi(contract.open_interest, avg_oi)
+
             # Format row data
-            row_text = self._format_contract_row(contract, is_atm=is_atm, iv_color=iv_color)
+            row_text = self._format_contract_row(
+                contract, is_atm=is_atm, iv_color=iv_color, is_high_vol=is_high_vol, is_high_oi=is_high_oi
+            )
 
             # Create row container with appropriate classes
             classes = "table-row"
@@ -396,11 +406,75 @@ class OptionsChainPanel(Widget):
         else:
             return "red"
 
+    def _calculate_average_volume(self, contracts: list[OptionContract]) -> float:
+        """Calculate average volume across all contracts.
+
+        Args:
+            contracts: List of option contracts.
+
+        Returns:
+            Average volume, or 0.0 if no contracts or all volumes are zero.
+        """
+        if not contracts:
+            return 0.0
+
+        total_volume = sum(c.volume for c in contracts)
+        return total_volume / len(contracts)
+
+    def _calculate_average_oi(self, contracts: list[OptionContract]) -> float:
+        """Calculate average open interest across all contracts.
+
+        Args:
+            contracts: List of option contracts.
+
+        Returns:
+            Average open interest, or 0.0 if no contracts or all OI are zero.
+        """
+        if not contracts:
+            return 0.0
+
+        total_oi = sum(c.open_interest for c in contracts)
+        return total_oi / len(contracts)
+
+    def _is_high_volume(self, volume: int, avg_volume: float) -> bool:
+        """Check if volume is considered high (> 2x average).
+
+        Args:
+            volume: Volume of the contract.
+            avg_volume: Average volume across all contracts in the chain.
+
+        Returns:
+            True if volume is high (> 2x average), False otherwise.
+        """
+        # If average is zero, nothing is considered "high"
+        if avg_volume <= 0:
+            return False
+
+        return volume > 2 * avg_volume
+
+    def _is_high_oi(self, oi: int, avg_oi: float) -> bool:
+        """Check if open interest is considered high (> 2x average).
+
+        Args:
+            oi: Open interest of the contract.
+            avg_oi: Average open interest across all contracts in the chain.
+
+        Returns:
+            True if OI is high (> 2x average), False otherwise.
+        """
+        # If average is zero, nothing is considered "high"
+        if avg_oi <= 0:
+            return False
+
+        return oi > 2 * avg_oi
+
     def _format_contract_row(
         self,
         contract: OptionContract,
         is_atm: bool = False,
         iv_color: str = "white",
+        is_high_vol: bool = False,
+        is_high_oi: bool = False,
     ) -> str:
         """Format an option contract as a table row.
 
@@ -408,6 +482,8 @@ class OptionsChainPanel(Widget):
             contract: The option contract to format.
             is_atm: Whether this is the at-the-money strike.
             iv_color: Color markup for IV column ("green", "yellow", or "red").
+            is_high_vol: Whether this contract has high volume (> 2x average).
+            is_high_oi: Whether this contract has high OI (> 2x average).
 
         Returns:
             Formatted row string with Rich markup.
@@ -420,9 +496,20 @@ class OptionsChainPanel(Widget):
         ask_str = f"{contract.ask:>8.2f}"
         last_str = f"{contract.last_price:>8.2f}"
 
-        # Format volume and OI (right-aligned in 8 chars)
-        vol_str = f"{contract.volume:>8,d}"
-        oi_str = f"{contract.open_interest:>8,d}"
+        # Format volume (right-aligned in 8 chars) with bold if high volume
+        vol_formatted = f"{contract.volume:>8,d}"
+        if is_high_vol:
+            vol_str = f"[bold]{vol_formatted}[/bold]"
+        else:
+            vol_str = vol_formatted
+
+        # Format OI (right-aligned in 8 chars) with * prefix if high OI
+        # Note: We need to adjust alignment to account for the * character
+        if is_high_oi:
+            oi_formatted = f"{contract.open_interest:>7,d}"
+            oi_str = f"*{oi_formatted}"
+        else:
+            oi_str = f"{contract.open_interest:>8,d}"
 
         # Format IV (right-aligned in 6 chars, percentage) with color
         iv_pct = contract.implied_volatility * 100

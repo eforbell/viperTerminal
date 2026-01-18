@@ -1233,3 +1233,235 @@ class TestOptionsChainPanelIVColorCoding:
         assert panel._get_iv_color(0.85, min_iv, max_iv) == "green"
         assert panel._get_iv_color(1.00, min_iv, max_iv) == "yellow"
         assert panel._get_iv_color(1.15, min_iv, max_iv) == "red"
+
+
+class TestVolumeAndOIHighlighting:
+    """Test volume and OI highlighting features (VPR-085)."""
+
+    def test_calculate_average_volume(self) -> None:
+        """Test average volume calculation across contracts."""
+        panel = OptionsChainPanel()
+
+        # Test with normal volumes
+        contracts = [
+            create_option_contract(volume=100),
+            create_option_contract(volume=200),
+            create_option_contract(volume=300),
+        ]
+        avg = panel._calculate_average_volume(contracts)
+        assert avg == 200.0
+
+        # Test with zero volumes
+        contracts = [
+            create_option_contract(volume=0),
+            create_option_contract(volume=0),
+        ]
+        avg = panel._calculate_average_volume(contracts)
+        assert avg == 0.0
+
+        # Test with empty list
+        avg = panel._calculate_average_volume([])
+        assert avg == 0.0
+
+    def test_calculate_average_oi(self) -> None:
+        """Test average OI calculation across contracts."""
+        panel = OptionsChainPanel()
+
+        # Test with normal OI values
+        contracts = [
+            create_option_contract(open_interest=1000),
+            create_option_contract(open_interest=2000),
+            create_option_contract(open_interest=3000),
+        ]
+        avg = panel._calculate_average_oi(contracts)
+        assert avg == 2000.0
+
+        # Test with zero OI
+        contracts = [
+            create_option_contract(open_interest=0),
+            create_option_contract(open_interest=0),
+        ]
+        avg = panel._calculate_average_oi(contracts)
+        assert avg == 0.0
+
+        # Test with empty list
+        avg = panel._calculate_average_oi([])
+        assert avg == 0.0
+
+    def test_is_high_volume(self) -> None:
+        """Test high volume detection (> 2x average)."""
+        panel = OptionsChainPanel()
+
+        # Test with volume > 2x average
+        assert panel._is_high_volume(250, 100.0) is True
+
+        # Test with volume = 2x average (should be False, needs > not >=)
+        assert panel._is_high_volume(200, 100.0) is False
+
+        # Test with volume < 2x average
+        assert panel._is_high_volume(150, 100.0) is False
+
+        # Test with zero average (edge case)
+        assert panel._is_high_volume(100, 0.0) is False
+
+        # Test with negative average (edge case)
+        assert panel._is_high_volume(100, -10.0) is False
+
+    def test_is_high_oi(self) -> None:
+        """Test high OI detection (> 2x average)."""
+        panel = OptionsChainPanel()
+
+        # Test with OI > 2x average
+        assert panel._is_high_oi(2500, 1000.0) is True
+
+        # Test with OI = 2x average (should be False, needs > not >=)
+        assert panel._is_high_oi(2000, 1000.0) is False
+
+        # Test with OI < 2x average
+        assert panel._is_high_oi(1500, 1000.0) is False
+
+        # Test with zero average (edge case)
+        assert panel._is_high_oi(1000, 0.0) is False
+
+        # Test with negative average (edge case)
+        assert panel._is_high_oi(1000, -100.0) is False
+
+    def test_format_contract_with_high_volume(self) -> None:
+        """Test contract formatting with high volume (bold)."""
+        panel = OptionsChainPanel()
+        contract = create_option_contract(volume=500)
+
+        # Format with high volume flag
+        result = panel._format_contract_row(
+            contract, is_high_vol=True, is_high_oi=False
+        )
+
+        # Should contain bold markup around volume
+        assert "[bold]" in result
+        assert "[/bold]" in result
+        # Volume should be in the result
+        assert "500" in result
+
+    def test_format_contract_with_high_oi(self) -> None:
+        """Test contract formatting with high OI (* prefix)."""
+        panel = OptionsChainPanel()
+        contract = create_option_contract(open_interest=5000)
+
+        # Format with high OI flag
+        result = panel._format_contract_row(
+            contract, is_high_vol=False, is_high_oi=True
+        )
+
+        # Should contain * prefix for OI
+        assert "*" in result
+        # OI value should be in the result
+        assert "5,000" in result or "5000" in result
+
+    def test_format_contract_with_both_high_vol_and_oi(self) -> None:
+        """Test contract formatting with both high volume and OI."""
+        panel = OptionsChainPanel()
+        contract = create_option_contract(volume=1000, open_interest=10000)
+
+        # Format with both flags
+        result = panel._format_contract_row(
+            contract, is_high_vol=True, is_high_oi=True
+        )
+
+        # Should contain both bold for volume and * for OI
+        assert "[bold]" in result
+        assert "[/bold]" in result
+        assert "*" in result
+
+    def test_format_contract_with_no_highlighting(self) -> None:
+        """Test contract formatting with no volume/OI highlighting."""
+        panel = OptionsChainPanel()
+        contract = create_option_contract(volume=100, open_interest=500)
+
+        # Format without highlighting
+        result = panel._format_contract_row(
+            contract, is_high_vol=False, is_high_oi=False
+        )
+
+        # Should NOT contain bold or * for normal volume/OI
+        # (but might contain bold from other features like ATM)
+        # Just verify the values are present
+        assert "100" in result
+        assert "500" in result
+
+    def test_highlighting_with_varied_volumes(self) -> None:
+        """Test volume highlighting with realistic varied data."""
+        panel = OptionsChainPanel()
+
+        # Create contracts with varied volumes
+        contracts = [
+            create_option_contract(strike=100.0, volume=50),   # Low
+            create_option_contract(strike=105.0, volume=100),  # Average
+            create_option_contract(strike=110.0, volume=150),  # Average
+            create_option_contract(strike=115.0, volume=500),  # High (> 2x avg)
+        ]
+
+        # Calculate average: (50 + 100 + 150 + 500) / 4 = 200
+        avg_vol = panel._calculate_average_volume(contracts)
+        assert avg_vol == 200.0
+
+        # Test each contract
+        assert panel._is_high_volume(50, avg_vol) is False    # 50 < 400
+        assert panel._is_high_volume(100, avg_vol) is False   # 100 < 400
+        assert panel._is_high_volume(150, avg_vol) is False   # 150 < 400
+        assert panel._is_high_volume(500, avg_vol) is True    # 500 > 400
+
+    def test_highlighting_with_varied_oi(self) -> None:
+        """Test OI highlighting with realistic varied data."""
+        panel = OptionsChainPanel()
+
+        # Create contracts with varied OI
+        contracts = [
+            create_option_contract(strike=100.0, open_interest=500),   # Low
+            create_option_contract(strike=105.0, open_interest=1000),  # Average
+            create_option_contract(strike=110.0, open_interest=1500),  # Average
+            create_option_contract(strike=115.0, open_interest=5000),  # High (> 2x avg)
+        ]
+
+        # Calculate average: (500 + 1000 + 1500 + 5000) / 4 = 2000
+        avg_oi = panel._calculate_average_oi(contracts)
+        assert avg_oi == 2000.0
+
+        # Test each contract
+        assert panel._is_high_oi(500, avg_oi) is False     # 500 < 4000
+        assert panel._is_high_oi(1000, avg_oi) is False    # 1000 < 4000
+        assert panel._is_high_oi(1500, avg_oi) is False    # 1500 < 4000
+        assert panel._is_high_oi(5000, avg_oi) is True     # 5000 > 4000
+
+    def test_all_zero_volumes_no_highlighting(self) -> None:
+        """Test that no highlighting occurs when all volumes are zero."""
+        panel = OptionsChainPanel()
+
+        # Create contracts with all zero volumes
+        contracts = [
+            create_option_contract(volume=0),
+            create_option_contract(volume=0),
+            create_option_contract(volume=0),
+        ]
+
+        avg_vol = panel._calculate_average_volume(contracts)
+        assert avg_vol == 0.0
+
+        # None should be highlighted
+        assert panel._is_high_volume(0, avg_vol) is False
+
+    def test_all_zero_oi_no_highlighting(self) -> None:
+        """Test that no highlighting occurs when all OI are zero."""
+        panel = OptionsChainPanel()
+
+        # Create contracts with all zero OI
+        contracts = [
+            create_option_contract(open_interest=0),
+            create_option_contract(open_interest=0),
+            create_option_contract(open_interest=0),
+        ]
+
+        avg_oi = panel._calculate_average_oi(contracts)
+        assert avg_oi == 0.0
+
+        # None should be highlighted
+        assert panel._is_high_oi(0, avg_oi) is False

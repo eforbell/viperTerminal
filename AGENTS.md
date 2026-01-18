@@ -4027,3 +4027,118 @@ Added expiration date navigation to OptionsChainPanel using bracket keys.
 - **Mypy**: Clean `mypy --strict` pass
 - **Feature Status**: VPR-084 complete and ready to commit
 
+
+## Feature 9: Enhanced Options Explorer - VPR-085
+
+**Story**: Volume and OI Highlighting
+**Date**: 2026-01-18
+**Branch**: `viper/feature-9-enhanced-options`
+
+### What Was Implemented
+
+Added volume and open interest (OI) highlighting to identify high-activity contracts in the options chain:
+
+1. **Average Calculation Methods**:
+   - `_calculate_average_volume()`: Calculates average volume across all contracts
+   - `_calculate_average_oi()`: Calculates average open interest across all contracts
+   - Both return `0.0` for empty lists (edge case handling)
+
+2. **High Activity Detection**:
+   - `_is_high_volume(volume, avg_volume)`: Returns True if volume > 2x average
+   - `_is_high_oi(oi, avg_oi)`: Returns True if OI > 2x average
+   - Both return False when average is 0 or negative (no highlighting for zero baselines)
+
+3. **Visual Highlighting**:
+   - High volume contracts: **Bold** text on volume column (`[bold]...[/bold]`)
+   - High OI contracts: `*` prefix before OI value
+   - Both can occur simultaneously on the same contract
+   - Highlighting applied independently of ITM/OTM/ATM status
+
+4. **Integration**:
+   - Averages calculated in `_render_options_table()` from all contracts (not filtered)
+   - Highlighting flags passed to `_format_contract_row()`
+   - Works seamlessly with existing IV color coding and ATM highlighting
+
+### Files Modified
+
+- `viper/widgets/options_panel.py`:
+  - Added `_calculate_average_volume()` helper method
+  - Added `_calculate_average_oi()` helper method
+  - Added `_is_high_volume()` detection method
+  - Added `_is_high_oi()` detection method
+  - Updated `_format_contract_row()` signature with `is_high_vol` and `is_high_oi` parameters
+  - Modified volume/OI formatting to apply bold/asterisk when flagged
+  - Updated `_render_options_table()` to calculate averages and pass flags
+
+- `tests/test_options_panel.py`:
+  - Added `TestVolumeAndOIHighlighting` class with 12 comprehensive tests
+  - Tested average calculations with normal, zero, and empty data
+  - Tested high volume/OI detection with various thresholds
+  - Tested edge cases: all zeros, negative averages, boundary conditions
+  - Tested formatting with bold and asterisk markers
+  - Tested realistic varied volume/OI distributions
+
+### Technical Patterns and Learnings
+
+1. **2x Threshold Standard**:
+   - Using `> 2x average` (not `>= 2x`) is a common heuristic for "high" activity
+   - Prevents exactly-double values from being flagged as high
+
+2. **Zero Average Handling**:
+   - When average is 0, no contracts should be highlighted as "high"
+   - Prevents divide-by-zero and logical inconsistencies
+   - Pattern: `if avg_volume <= 0: return False`
+
+3. **Calculation from All Contracts**:
+   - Averages calculated from unfiltered contract list
+   - Ensures highlighting is consistent regardless of active filter
+   - Same pattern as IV min/max calculation
+
+4. **Rich Markup for Styling**:
+   - `[bold]value[/bold]` for emphasis (high volume)
+   - Plain `*` character prefix for indicators (high OI)
+   - Both work within existing color markup (nested tags)
+
+5. **Alignment Considerations**:
+   - `*` prefix requires adjusting alignment from 8 chars to 7 chars
+   - Pattern: `f"*{value:>7,d}"` instead of `f"{value:>8,d}"`
+   - Maintains column alignment in fixed-width display
+
+6. **Independent Highlighting**:
+   - Volume and OI highlighting are independent features
+   - A contract can have high volume, high OI, both, or neither
+   - Highlighting works alongside ITM/OTM colors and ATM highlighting
+
+7. **Test Coverage Patterns**:
+   - Test each calculation method independently
+   - Test edge cases: empty lists, all zeros, boundary values
+   - Test formatting with each flag combination
+   - Test realistic data distributions (varied volumes/OI)
+
+### Edge Cases Handled
+
+- ✅ Empty contract list → average = 0.0
+- ✅ All zero volumes → no highlighting
+- ✅ All zero OI → no highlighting
+- ✅ Negative averages (defensive) → no highlighting
+- ✅ Volume/OI exactly 2x average → not highlighted (uses `>` not `>=`)
+- ✅ Single high-volume contract among many low → correctly highlighted
+- ✅ Alignment with `*` prefix → adjusted to 7 chars for OI column
+
+### Test Results
+
+- **Tests Added**: 12 new tests in `TestVolumeAndOIHighlighting` class
+- **Total Tests**: 921 tests passing (up from 909)
+- **Coverage**: 88.62% overall
+- **Mypy**: Clean `mypy --strict` pass
+- **Feature Status**: VPR-085 complete and ready to commit
+
+### Key Takeaways
+
+1. **Simple Heuristics Work**: 2x average is a practical threshold that doesn't require complex statistics
+2. **Zero Baseline Protection**: Always check for zero averages before applying thresholds
+3. **Calculate from Full Dataset**: Use all contracts (not filtered) for consistent highlighting
+4. **Nested Markup Works**: Rich supports nested tags like `[green][bold]...[/bold][/green]`
+5. **Alignment Matters**: Account for prefix characters when formatting fixed-width columns
+6. **Independent Features**: Volume and OI highlighting are orthogonal - test all combinations
+
