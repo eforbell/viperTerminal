@@ -1431,3 +1431,25 @@
 - **Test results**: 909 tests passing (up from 897), mypy --strict clean, 88.64% coverage
 - **Commit**: feat: VPR-084 - IV color coding for options panel
 ---
+
+## 2026-01-18 - VPR-085
+- **What was implemented**: Volume and OI highlighting for options chain panel
+- **Files changed**:
+  - `viper/widgets/options_panel.py`: Added volume/OI average calculation and highlighting logic
+    - Added `_calculate_average_volume()` and `_calculate_average_oi()` methods
+    - Added `_is_high_volume()` and `_is_high_oi()` detection methods (>2x average threshold)
+    - Updated `_format_contract_row()` with `is_high_vol` and `is_high_oi` parameters
+    - Applied bold markup for high volume, asterisk prefix for high OI
+  - `tests/test_options_panel.py`: Added `TestVolumeAndOIHighlighting` class with 12 comprehensive tests
+  - `AGENTS.md`: Added VPR-085 learnings section
+- **Learnings**:
+  - **2x Threshold Pattern**: Use `> 2x average` (not `>=`) as standard heuristic for "high" activity
+  - **Zero Average Protection**: Always check `if avg <= 0: return False` to avoid highlighting when baseline is zero
+  - **Calculate from Full Dataset**: Use all contracts (not filtered list) for consistent highlighting across filter modes
+  - **Rich Markup Nesting**: `[bold]` and other markup works inside existing color tags like `[green][bold]...[/bold][/green]`
+  - **Alignment with Prefix**: When adding `*` prefix, adjust alignment from 8 to 7 chars: `f"*{value:>7,d}"`
+  - **Independent Highlighting**: Volume and OI highlighting are orthogonal - a contract can have both, neither, or just one
+  - **Edge Case Testing**: Test empty lists, all zeros, negative values, and boundary conditions (exactly 2x)
+  - **Simple Heuristics Work**: No need for complex statistics - 2x average is practical and effective
+  - **Test Results**: 921 total tests passing, 88.62% coverage, mypy --strict clean
+---

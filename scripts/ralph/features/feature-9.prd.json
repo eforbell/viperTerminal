@@ -213,6 +213,7 @@
     {
       "id": "VPR-085",
       "title": "Volume and OI highlighting",
+      "passes": true,
       "acceptanceCriteria": [
         "Identify high-volume contracts: volume > 2x average volume in chain",
         "Identify high-OI contracts: open_interest > 2x average OI in chain",
@@ -228,7 +229,8 @@
       "priority": 4,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-084"],
-      "notes": "High volume/OI indicates institutional interest or popular strikes. Simple 2x threshold is a reasonable heuristic."
+      "notes": "High volume/OI indicates institutional interest or popular strikes. Simple 2x threshold is a reasonable heuristic.",
+      "completedAt": "2026-01-18"
     },
     {
       "id": "VPR-086",
