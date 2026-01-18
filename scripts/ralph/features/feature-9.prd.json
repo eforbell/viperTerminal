@@ -259,6 +259,7 @@
     {
       "id": "VPR-087",
       "title": "IV rank calculation (simplified)",
+      "passes": true,
       "acceptanceCriteria": [
         "Calculate simplified IV rank using current chain data only",
         "IV rank = (current_atm_iv - min_iv) / (max_iv - min_iv) * 100",
@@ -275,7 +276,8 @@
       "priority": 6,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-086"],
-      "notes": "True IV rank requires historical IV data (not available in yfinance). This simplified version compares current ATM IV to IV range in current chain - still useful for relative assessment."
+      "notes": "True IV rank requires historical IV data (not available in yfinance). This simplified version compares current ATM IV to IV range in current chain - still useful for relative assessment.",
+      "completedAt": "2026-01-18"
     }
   ],
   "technicalNotes": {

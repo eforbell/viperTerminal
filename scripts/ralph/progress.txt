@@ -1496,3 +1496,24 @@
   - **Test Results**: 944 total tests passing (up from 921), mypy --strict clean, 86.89% overall coverage
 - **Commit**: feat: VPR-086 - Multi-expiration summary view
 ---
+
+## 2026-01-18 - VPR-087
+- **What was implemented**: Simplified IV rank calculation showing ATM IV position relative to chain's IV range
+- **Files changed**:
+  - `viper/widgets/options_panel.py`: Added _iv_rank attribute, _calculate_iv_rank() method, _get_iv_rank_color() method, header display logic
+  - `tests/test_options_panel.py`: Added 18 tests in TestIVRankCalculation, TestIVRankColor, TestIVRankIntegration classes
+  - `AGENTS.md`: Added VPR-087 learnings section
+- **Learnings**:
+  - Simplified IV rank formula: (atm_iv - min_iv) / (max_iv - min_iv) * 100
+  - Not true historical IV rank (requires 52-week data), but still useful for relative assessment
+  - Division by zero protection: return 50.0% when max_iv == min_iv (all IVs identical)
+  - Multiple None checks for graceful degradation: no ATM, ATM has NaN IV, no valid IVs
+  - Filter out 0.0 IVs (represent NaN) before min/max calculation, consistent with VPR-084
+  - Optional[float] return type lets caller decide how to handle None (don't force default)
+  - Color thresholds: <30% green, 30-70% yellow, >70% red (three equal bands)
+  - Calculate from full dataset (not filtered) for consistency with other features
+  - Header-only display: IV rank is chain metadata, not per-contract data
+  - Conditional display: only show if calculation succeeded (self._iv_rank is not None)
+  - 18 comprehensive tests covering all edge cases: ATM not found, NaN IVs, same IVs, boundary values
+  - All 959 tests passing, 87% overall coverage, mypy --strict clean
+---
