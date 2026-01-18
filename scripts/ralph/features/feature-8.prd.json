@@ -207,7 +207,11 @@
       "priority": 6,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-080"],
-      "notes": "Simple toggle between two pre-loaded lists. No network request needed since option_chain() returns both calls and puts at once."
+      "notes": "Simple toggle between two pre-loaded lists. No network request needed since option_chain() returns both calls and puts at once.",
+      "passes": true,
+      "completedAt": "2026-01-18",
+      "testsPassing": 869,
+      "coverage": "90%"
     }
   ],
   "technicalNotes": {

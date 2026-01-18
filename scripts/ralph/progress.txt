@@ -1336,3 +1336,26 @@
   - Test coverage impact: Added 97 lines of test code, all tests passing (861 total), coverage 90.21%
   - Bracket keys semantic: [ = backward/previous, ] = forward/next (intuitive for expiration timeline navigation)
 
+
+## 2026-01-18 - VPR-081
+- **What was implemented**: Calls/Puts toggle with 'c' and 'p' keybindings for instant switching between views
+- **Files changed**:
+  - `viper/widgets/options_panel.py`: Added 2 keybindings and 2 action methods (18 lines)
+  - `viper/widgets/help_screen.py`: Updated KEYBINDINGS and OPTIONS sections (2 lines)
+  - `tests/test_options_panel.py`: Added TestOptionsChainPanelCallsPutsToggle class with 9 tests
+  - `scripts/ralph/features/feature-8.prd.json`: Marked VPR-081 as complete
+  - `AGENTS.md`: Added VPR-081 learnings section
+- **Learnings**:
+  - Toggle pattern with state check: only rebuild if actually switching views
+  - No network refetch needed - both calls and puts loaded from single API call
+  - Selection reset on toggle prevents out-of-bounds errors (lists have different lengths)
+  - Existing infrastructure reuse: header/table rendering already supported `_show_calls`
+  - Context-aware keybindings: 'c'/'p' only active when options panel focused
+  - Widget bindings with `priority=True` take precedence over app-level bindings
+  - Help screen documentation: updated both KEYBINDINGS and OPTIONS sections
+  - Idempotent operations: pressing 'c' when showing calls does nothing (avoids rebuilds)
+  - Guard conditions prevent actions in empty/loading/error states
+  - Pure state logic tests - no async/UI needed for toggle behavior
+  - Feature 8 (Options Chain Basic) complete! All 6 stories (VPR-076 through VPR-081) passing
+  - Total: 869 tests passing, 89.90% coverage
+---
