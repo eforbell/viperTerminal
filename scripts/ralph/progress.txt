@@ -1580,3 +1580,31 @@
   - Result: 978 tests passing, 87% coverage, VPR-090 complete
 
 ---
+
+## 2026-01-18 - VPR-091
+- **What was implemented**: Overlay compatibility with candlestick charts (SMA/EMA overlays, volume bars, RSI/MACD panels)
+- **Files changed**:
+  - `viper/widgets/chart_renderer.py`: Added _apply_overlays_candlestick() method, integrated into _render_candlestick() pipeline
+  - `tests/test_chart_renderer.py`: Added 4 comprehensive overlay integration tests
+  - `AGENTS.md`: Added VPR-091 learnings section
+  - `scripts/ralph/features/feature-10.prd.json`: Marked VPR-091 as complete
+- **Learnings**:
+  - **Overlay Implementation for Candlesticks**: Created `_apply_overlays_candlestick()` method mirroring braille approach
+  - **Dot Marker Visual**: Use '·' (middle dot) for overlay markers on candlesticks, distinct from candle bodies (█) and wicks (│)
+  - **Color Palette Separation**: Candles (green/red/white) vs overlays (cyan/magenta) - no overlap for easy visual distinction
+  - **Grid-Based Rendering**: Convert string lines to 2D mutable grid, place overlay markers, convert back to strings
+  - **Safe Overwriting**: Only replace spaces or plain characters: `if current == " " or (not current.startswith("[") and len(current) == 1)`
+  - **Y-Axis Scaling Consistency**: Both candlesticks and overlays use high-low range (min_price, max_price) for alignment
+  - **Overlay Downsampling**: Reuse existing `_downsample_overlay()` method, preserves None values for calculation gaps
+  - **None Value Handling**: Skip overlay points where `value is None` (e.g., first 19 values for SMA20)
+  - **Flat Chart Edge Case**: Return early if `price_range == 0` - can't normalize overlay positions
+  - **Bounds Checking**: Always verify row/column within grid before access to prevent index errors
+  - **Volume Bar Compatibility**: Volume bars work automatically - already use `rendered.interpolated_count` and `style`
+  - **Indicator Panel Compatibility**: RSI/MACD panels work unchanged - use ChartContext for alignment
+  - **Pipeline Integration**: Apply overlays AFTER candlestick grid rendering, BEFORE Y-axis labels (same as braille)
+  - **Rich Markup for Colors**: Use `[cyan]·[/cyan]` and `[magenta]·[/magenta]` for overlay colors
+  - **Test Coverage Strategy**: Test single overlay, multiple overlays, color distinction, Y-axis scaling separately
+  - **Comprehensive Tests**: 4 new tests covering all overlay integration scenarios with candlesticks
+  - **Result**: 982 total tests passing (up from 978), mypy --strict clean, 87% coverage
+  - All acceptance criteria met: SMA/EMA overlays work, colors distinct, Y-axis aligned, volume/indicators unchanged
+---

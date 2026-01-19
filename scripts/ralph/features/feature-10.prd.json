@@ -177,7 +177,11 @@
       "priority": 4,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-090"],
-      "notes": "Overlays already work with braille - verify they work with candlesticks too. May need minor adjustments to overlay positioning."
+      "notes": "Overlays already work with braille - verify they work with candlesticks too. May need minor adjustments to overlay positioning.",
+      "passes": true,
+      "completedAt": "2026-01-18",
+      "testsPassing": 982,
+      "coverage": "87%"
     },
     {
       "id": "VPR-092",
