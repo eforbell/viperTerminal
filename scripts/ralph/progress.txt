@@ -1608,3 +1608,28 @@
   - **Result**: 982 total tests passing (up from 978), mypy --strict clean, 87% coverage
   - All acceptance criteria met: SMA/EMA overlays work, colors distinct, Y-axis aligned, volume/indicators unchanged
 ---
+
+## 2026-01-18 - VPR-092
+- **What was implemented**: Comprehensive edge case testing for candlestick charts (9 new tests)
+- **Files changed**:
+  - `tests/test_chart_renderer.py`: Added `TestCandlestickEdgeCases` class with 9 comprehensive tests
+  - `AGENTS.md`: Added VPR-092 learnings section
+  - `scripts/ralph/features/feature-10.prd.json`: Marked VPR-092 complete
+- **Learnings**:
+  - **No Code Changes Needed**: Existing implementation already handles all edge cases correctly - testament to solid design from VPR-088/089
+  - **Test-Driven Validation**: Comprehensive tests verify robustness without requiring fixes - proving quality before claiming completion
+  - **Sparse Data**: Candlesticks don't interpolate like braille - 3 candles on 60-char chart is acceptable (no upsampling)
+  - **Timeframe Variations**: Short (1W, 7 days) and long (MAX, 60 months) both work - downsampling preserves OHLC structure
+  - **OHLC Downsampling**: First open, max high, min low, last close - preserves price extremes unlike simple averaging
+  - **Crypto Compatibility**: Large prices (45000+) and volumes (5B+) work with existing float/int types and formatting
+  - **Terminal Resize**: ChartContext recreation handles dimension changes - both larger (30→80) and smaller (80→30) widths work
+  - **Performance**: 365 data points render in ~10ms (well under 1s threshold) - grid-based rendering is O(width × height)
+  - **Realistic Test Data**: Create OHLC with proper relationships (high ≥ open/close ≥ low), add wicks, vary trends
+  - **Test Both Structure and Visual**: Check height/width/min/max (structural) AND colors/characters (visual) for completeness
+  - **One Edge Case Per Test**: Don't combine scenarios - focused tests make failures easy to diagnose
+  - **Performance Test Pattern**: `time.time()` before/after, assert < threshold, use generous threshold for CI stability
+  - **Terminal Resize Test Pattern**: Same data, two widths, verify both succeed, verify same price range preserved
+  - **Extreme Volatility**: Wicks extending 50% above/below body test edge case where high/low far from open/close
+  - All 991 tests passing (up from 982), chart_renderer.py at 93% coverage (up from 89%)
+  - Overall coverage 87%, mypy --strict clean
+---
