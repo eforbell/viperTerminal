@@ -2252,3 +2252,251 @@ async def test_chart_panel_macd_with_crypto() -> None:
         assert panel._signal_line is not None
         assert panel._histogram is not None
         assert panel.is_macd_visible() is True
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_toggle_chart_style() -> None:
+    """Test that chart style can be toggled between BRAILLE and CANDLESTICK."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Chart should start with BRAILLE style (default)
+        assert panel._chart_style == ChartStyle.BRAILLE
+
+        # Load chart data
+        dates = [datetime(2024, 1, i + 1) for i in range(30)]
+        prices = [float(100 + i % 10) for i in range(30)]
+        volumes = [int(1000000) for _ in range(30)]
+        opens = [float(100) for _ in range(30)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Toggle to CANDLESTICK
+        panel.toggle_chart_style()
+        await pilot.pause()
+        assert panel._chart_style == ChartStyle.CANDLESTICK
+        assert panel._renderer.style == ChartStyle.CANDLESTICK
+
+        # Toggle back to BRAILLE
+        panel.toggle_chart_style()
+        await pilot.pause()
+        assert panel._chart_style == ChartStyle.BRAILLE
+        assert panel._renderer.style == ChartStyle.BRAILLE
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_interval_display() -> None:
+    """Test that interval display is correctly formatted for different intervals."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Test with 1d interval
+        dates = [datetime(2024, 1, i + 1) for i in range(30)]
+        prices = [float(100 + i) for i in range(30)]
+        volumes = [int(1000000) for _ in range(30)]
+        opens = [float(100) for _ in range(30)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data_daily = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        panel.show_chart(data_daily, None)
+        await pilot.pause()
+
+        # Check interval display
+        assert panel._get_interval_display() == "Daily"
+
+        # Test with 1wk interval
+        data_weekly = HistoricalData(
+            ticker="AAPL",
+            period="2Y",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1wk",
+        )
+
+        panel.show_chart(data_weekly, None)
+        await pilot.pause()
+
+        assert panel._get_interval_display() == "Weekly"
+
+        # Test with 1mo interval
+        data_monthly = HistoricalData(
+            ticker="AAPL",
+            period="MAX",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1mo",
+        )
+
+        panel.show_chart(data_monthly, None)
+        await pilot.pause()
+
+        assert panel._get_interval_display() == "Monthly"
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_candlestick_header_includes_interval() -> None:
+    """Test that candlestick mode shows interval in header."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Load chart data
+        dates = [datetime(2024, 1, i + 1) for i in range(30)]
+        prices = [float(100 + i) for i in range(30)]
+        volumes = [int(1000000) for _ in range(30)]
+        opens = [float(100) for _ in range(30)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # In BRAILLE mode, header should not have interval
+        labels = panel.query(Label)
+        header_labels = [label for label in labels if "Chart" in str(label.render())]
+        assert any("AAPL - 1M Chart" in str(label.render()) for label in header_labels)
+        assert not any("Candlestick" in str(label.render()) for label in header_labels)
+
+        # Toggle to CANDLESTICK
+        panel.toggle_chart_style()
+        await pilot.pause()
+
+        # In CANDLESTICK mode, header should include interval
+        labels = panel.query(Label)
+        header_labels = [label for label in labels if "Chart" in str(label.render())]
+        assert any("[Candlestick · Daily]" in str(label.render()) for label in header_labels)
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_style_toggle_preserves_data() -> None:
+    """Test that toggling chart style preserves all chart data and state."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Load chart data
+        dates = [datetime(2024, 1, i + 1) for i in range(30)]
+        prices = [float(100 + i % 10) for i in range(30)]
+        volumes = [int(1000000) for _ in range(30)]
+        opens = [float(100) for _ in range(30)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Verify initial state
+        assert panel._state == "success"
+        assert panel._current_ticker == "AAPL"
+        assert panel._current_period == "1M"
+        assert panel._data == data
+        assert panel._stats == stats
+
+        # Toggle to CANDLESTICK
+        panel.toggle_chart_style()
+        await pilot.pause()
+
+        # Verify data is preserved
+        assert panel._state == "success"
+        assert panel._current_ticker == "AAPL"
+        assert panel._current_period == "1M"
+        assert panel._data == data
+        assert panel._stats == stats
+        assert panel._chart_style == ChartStyle.CANDLESTICK
+
+        # Toggle back to BRAILLE
+        panel.toggle_chart_style()
+        await pilot.pause()
+
+        # Verify data is still preserved
+        assert panel._state == "success"
+        assert panel._current_ticker == "AAPL"
+        assert panel._current_period == "1M"
+        assert panel._data == data
+        assert panel._stats == stats
+        assert panel._chart_style == ChartStyle.BRAILLE

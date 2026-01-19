@@ -6,6 +6,7 @@ from textual.containers import Container, Horizontal
 from textual.widgets import Footer, Header
 
 from viper.config import load_config
+from viper.widgets.chart_renderer import ChartStyle
 from viper.services.crypto import CryptoError, CryptoInfo, CryptoInfoError, CryptoQuote, fetch_crypto_info
 from viper.services.history import HistoryManager
 from viper.services.quote import fetch_quote, is_crypto_quote
@@ -178,6 +179,7 @@ class ViperApp(App[None]):
         ("5", "timeframe_5", "1Y"),
         ("6", "timeframe_6", "5Y"),
         ("7", "timeframe_7", "MAX"),
+        Binding("v", "toggle_chart_style", "Chart View", show=False),
         ("question_mark,f1", "show_help", "Help"),
     ]
 
@@ -250,7 +252,10 @@ class ViperApp(App[None]):
                 with Container(id="info-container"):
                     yield InfoPanel()
                 with Container(id="chart-container"):
-                    yield ChartPanel()
+                    # Map config chart_style string to ChartStyle enum
+                    style_map = {"braille": ChartStyle.BRAILLE, "block": ChartStyle.BLOCK, "candlestick": ChartStyle.CANDLESTICK}
+                    chart_style = style_map.get(self.config.chart_style, ChartStyle.BRAILLE)
+                    yield ChartPanel(style=chart_style)
                 with Container(id="news-container"):
                     yield NewsPanel()
                 with Container(id="article-reader-container"):
@@ -508,6 +513,13 @@ class ViperApp(App[None]):
         if self._chart_panel_visible:
             chart_panel = self.query_one("#chart-container ChartPanel", ChartPanel)
             chart_panel.toggle_macd()
+
+    def action_toggle_chart_style(self) -> None:
+        """Toggle between line and candlestick chart views."""
+        # Only toggle chart style when chart panel is visible
+        if self._chart_panel_visible:
+            chart_panel = self.query_one("#chart-container ChartPanel", ChartPanel)
+            chart_panel.toggle_chart_style()
 
     def on_key(self, event: object) -> None:
         """Handle key presses for prefix system routing.

@@ -1517,3 +1517,119 @@
   - 18 comprehensive tests covering all edge cases: ATM not found, NaN IVs, same IVs, boundary values
   - All 959 tests passing, 87% overall coverage, mypy --strict clean
 ---
+
+## 2026-01-18 - VPR-088
+- **What was implemented**: Added CANDLESTICK to ChartStyle enum with stub implementation
+- **Files changed**:
+  - `viper/widgets/chart_renderer.py`: Added CANDLESTICK enum value, updated dispatch logic, added stub _render_candlestick() method
+  - `tests/test_chart_renderer.py`: Added TestCandlestickStyle class with 8 comprehensive tests
+  - `AGENTS.md`: Added VPR-088 learnings section
+- **Learnings**:
+  - **Stub Implementation Pattern**: Delegate to existing renderer (braille) to enable end-to-end testing while deferring full implementation to next story
+  - **Incremental Feature Building**: Foundation story adds enum/routing → next story adds logic → then toggle → then integration
+  - **Regression Testing Critical**: Test that existing BRAILLE and BLOCK styles produce identical output after adding new enum value
+  - **Dispatch with elif**: Use `elif self.style == ChartStyle.CANDLESTICK:` to ensure correct routing, BLOCK remains fallback
+  - **Test Enum Both Ways**: Test enum exists (`hasattr()`, `.value` check) AND test initialization with new value
+  - **Clear Stub Documentation**: Comment in stub method clarifies temporary status and references next story (VPR-089)
+  - **Test Organization**: Group related tests in dedicated class (TestCandlestickStyle) for easy maintenance
+  - **Type Safety**: mypy --strict passes cleanly - enum addition doesn't break type checking
+  - Achieved 87% overall coverage, chart_renderer.py at 93%
+  - All 967 tests passing - no regressions from adding new feature
+---
+
+## 2026-01-18 - VPR-089
+- **What was implemented**: Full OHLC candlestick rendering with bodies, wicks, and color coding
+- **Files changed**:
+  - `viper/widgets/chart_renderer.py`: Implemented `_render_candlestick()`, `_render_candlestick_grid()`, `_draw_candle()`, `_draw_doji()`, `_render_flat_candlesticks()`, and 4 OHLC downsampling methods
+  - `tests/test_chart_renderer.py`: Added 7 comprehensive candlestick tests
+  - `AGENTS.md`: Added VPR-089 learnings section
+- **Learnings**:
+  - ChartContext is single source of truth for OHLC data (highs, lows, opens, closes)
+  - Y-axis scaling MUST use high-low range for candlesticks (not just close prices like line charts)
+  - OHLC downsampling requires 4 separate functions: first open, max high, min low, last close
+  - Each candle = 1 character width for maximum data density
+  - Wicks use `│` character, bodies use `█` character, doji uses `─` horizontal line
+  - Vertical position encodes price level (row 0 = top = max price)
+  - Bullish (close > open): green color, bearish (close < open): red color
+  - Doji threshold: abs(close - open) < price_range * 0.001 (0.1%)
+  - Grid-based rendering: build 2D character grid, apply colors, join to strings
+  - Rich markup for colors: `[green]█[/green]` not ANSI codes
+  - Test with realistic OHLC data via HistoricalData + ChartContext
+  - Achieved 93% coverage on chart_renderer.py, all 974 tests pass
+  - Type-safe implementation: mypy --strict passes with no issues
+---
+
+## 2026-01-18 - VPR-090
+- **What was implemented**: Added 'v' keybinding to toggle chart style between line (BRAILLE) and candlestick views with interval display in header
+- **Files changed**:
+  - `viper/widgets/chart_panel.py`: Added _chart_style state, toggle_chart_style() method, _get_interval_display() helper
+  - `viper/app.py`: Added 'v' keybinding and action_toggle_chart_style() handler
+  - `viper/widgets/help_screen.py`: Added 'v' keybinding documentation in KEYBINDINGS and CHARTS sections
+  - `tests/test_chart_panel.py`: Added 4 comprehensive tests (toggle cycles, interval display, header format, data preservation)
+  - `scripts/ralph/features/feature-10.prd.json`: Marked VPR-090 complete
+  - `AGENTS.md`: Added VPR-090 learnings section
+- **Learnings**:
+  - Store both _chart_style (panel state) and _renderer.style (renderer state) - update both on toggle to prevent desync
+  - Map interval codes to human-readable names: "1d"→"Daily", "1wk"→"Weekly", "1mo"→"Monthly"
+  - Only show style/interval indicator in candlestick mode header: "AAPL - 1M Chart [Candlestick · Daily]"
+  - Style toggle is purely visual - no data refetch needed, just call _rebuild_content()
+  - Set show=False for contextual keybindings (chart must be visible to use 'v')
+  - Document keybindings in TWO places in help screen: KEYBINDINGS (brief) and feature section (detailed)
+  - Test toggle cycles, interval display, header format, and data preservation separately for easy diagnosis
+  - Keep toggle logic in ChartPanel, App just dispatches - good separation of concerns
+  - Result: 978 tests passing, 87% coverage, VPR-090 complete
+
+---
+
+## 2026-01-18 - VPR-091
+- **What was implemented**: Overlay compatibility with candlestick charts (SMA/EMA overlays, volume bars, RSI/MACD panels)
+- **Files changed**:
+  - `viper/widgets/chart_renderer.py`: Added _apply_overlays_candlestick() method, integrated into _render_candlestick() pipeline
+  - `tests/test_chart_renderer.py`: Added 4 comprehensive overlay integration tests
+  - `AGENTS.md`: Added VPR-091 learnings section
+  - `scripts/ralph/features/feature-10.prd.json`: Marked VPR-091 as complete
+- **Learnings**:
+  - **Overlay Implementation for Candlesticks**: Created `_apply_overlays_candlestick()` method mirroring braille approach
+  - **Dot Marker Visual**: Use '·' (middle dot) for overlay markers on candlesticks, distinct from candle bodies (█) and wicks (│)
+  - **Color Palette Separation**: Candles (green/red/white) vs overlays (cyan/magenta) - no overlap for easy visual distinction
+  - **Grid-Based Rendering**: Convert string lines to 2D mutable grid, place overlay markers, convert back to strings
+  - **Safe Overwriting**: Only replace spaces or plain characters: `if current == " " or (not current.startswith("[") and len(current) == 1)`
+  - **Y-Axis Scaling Consistency**: Both candlesticks and overlays use high-low range (min_price, max_price) for alignment
+  - **Overlay Downsampling**: Reuse existing `_downsample_overlay()` method, preserves None values for calculation gaps
+  - **None Value Handling**: Skip overlay points where `value is None` (e.g., first 19 values for SMA20)
+  - **Flat Chart Edge Case**: Return early if `price_range == 0` - can't normalize overlay positions
+  - **Bounds Checking**: Always verify row/column within grid before access to prevent index errors
+  - **Volume Bar Compatibility**: Volume bars work automatically - already use `rendered.interpolated_count` and `style`
+  - **Indicator Panel Compatibility**: RSI/MACD panels work unchanged - use ChartContext for alignment
+  - **Pipeline Integration**: Apply overlays AFTER candlestick grid rendering, BEFORE Y-axis labels (same as braille)
+  - **Rich Markup for Colors**: Use `[cyan]·[/cyan]` and `[magenta]·[/magenta]` for overlay colors
+  - **Test Coverage Strategy**: Test single overlay, multiple overlays, color distinction, Y-axis scaling separately
+  - **Comprehensive Tests**: 4 new tests covering all overlay integration scenarios with candlesticks
+  - **Result**: 982 total tests passing (up from 978), mypy --strict clean, 87% coverage
+  - All acceptance criteria met: SMA/EMA overlays work, colors distinct, Y-axis aligned, volume/indicators unchanged
+---
+
+## 2026-01-18 - VPR-092
+- **What was implemented**: Comprehensive edge case testing for candlestick charts (9 new tests)
+- **Files changed**:
+  - `tests/test_chart_renderer.py`: Added `TestCandlestickEdgeCases` class with 9 comprehensive tests
+  - `AGENTS.md`: Added VPR-092 learnings section
+  - `scripts/ralph/features/feature-10.prd.json`: Marked VPR-092 complete
+- **Learnings**:
+  - **No Code Changes Needed**: Existing implementation already handles all edge cases correctly - testament to solid design from VPR-088/089
+  - **Test-Driven Validation**: Comprehensive tests verify robustness without requiring fixes - proving quality before claiming completion
+  - **Sparse Data**: Candlesticks don't interpolate like braille - 3 candles on 60-char chart is acceptable (no upsampling)
+  - **Timeframe Variations**: Short (1W, 7 days) and long (MAX, 60 months) both work - downsampling preserves OHLC structure
+  - **OHLC Downsampling**: First open, max high, min low, last close - preserves price extremes unlike simple averaging
+  - **Crypto Compatibility**: Large prices (45000+) and volumes (5B+) work with existing float/int types and formatting
+  - **Terminal Resize**: ChartContext recreation handles dimension changes - both larger (30→80) and smaller (80→30) widths work
+  - **Performance**: 365 data points render in ~10ms (well under 1s threshold) - grid-based rendering is O(width × height)
+  - **Realistic Test Data**: Create OHLC with proper relationships (high ≥ open/close ≥ low), add wicks, vary trends
+  - **Test Both Structure and Visual**: Check height/width/min/max (structural) AND colors/characters (visual) for completeness
+  - **One Edge Case Per Test**: Don't combine scenarios - focused tests make failures easy to diagnose
+  - **Performance Test Pattern**: `time.time()` before/after, assert < threshold, use generous threshold for CI stability
+  - **Terminal Resize Test Pattern**: Same data, two widths, verify both succeed, verify same price range preserved
+  - **Extreme Volatility**: Wicks extending 50% above/below body test edge case where high/low far from open/close
+  - All 991 tests passing (up from 982), chart_renderer.py at 93% coverage (up from 89%)
+  - Overall coverage 87%, mypy --strict clean
+---

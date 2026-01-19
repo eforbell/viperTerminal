@@ -45,3 +45,4 @@ Thumbs.db
 # Viper specific
 viper.log
 .config/
+bugs/

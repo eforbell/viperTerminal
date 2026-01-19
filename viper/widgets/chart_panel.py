@@ -126,6 +126,7 @@ class ChartPanel(Widget):
         self._stats: HistoricalStats | None = None
         self._current_ticker: str | None = None
         self._current_period: str = "1M"  # Default period
+        self._chart_style: ChartStyle = style  # Current chart style
         self._renderer = ChartRenderer(style=style)
         # Timeframe mappings
         self._timeframes = {
@@ -262,6 +263,12 @@ class ChartPanel(Widget):
         # Header with ticker and timeframe
         header_text = f"{data.ticker} - {data.period} Chart"
 
+        # Add style and interval info when in candlestick mode
+        if self._chart_style == ChartStyle.CANDLESTICK:
+            interval_display = self._get_interval_display()
+            if interval_display:
+                header_text += f" [Candlestick · {interval_display}]"
+
         # Add MA legend if MAs are displayed
         if self._ma_mode != "off":
             ma_legend_parts = []
@@ -378,10 +385,11 @@ class ChartPanel(Widget):
         )
 
         # Mount each line of the chart
-        # Enable markup when overlays are present (they use Rich markup for colors)
-        has_overlays = bool(overlays)
+        # Enable markup when overlays are present OR when using candlestick style
+        # (both use Rich markup for colors - overlays use cyan/magenta, candlesticks use green/red)
+        needs_markup = bool(overlays) or self._chart_style == ChartStyle.CANDLESTICK
         for line in rendered.lines:
-            container.mount(Label(line, classes="chart-line", markup=has_overlays))
+            container.mount(Label(line, classes="chart-line", markup=needs_markup))
 
         # Cache chart area width for volume and RSI (derived from ChartContext)
         chart_area_width = self._chart_context.chart_area_width
@@ -600,3 +608,35 @@ class ChartPanel(Widget):
             True if MACD is visible, False otherwise
         """
         return self._macd_panel.is_visible() if self._macd_panel else False
+
+    def toggle_chart_style(self) -> None:
+        """Toggle between BRAILLE and CANDLESTICK chart styles."""
+        # Cycle: BRAILLE -> CANDLESTICK -> BRAILLE
+        if self._chart_style == ChartStyle.BRAILLE:
+            self._chart_style = ChartStyle.CANDLESTICK
+        else:
+            self._chart_style = ChartStyle.BRAILLE
+
+        # Update renderer style
+        self._renderer.style = self._chart_style
+
+        # Re-render chart with new style (no refetch needed)
+        self._rebuild_content()
+
+    def _get_interval_display(self) -> str:
+        """Get human-readable interval name for current chart data.
+
+        Returns:
+            Human-readable interval (e.g., "Daily", "Weekly", "Monthly")
+        """
+        if not self._data or not isinstance(self._data, HistoricalData):
+            return ""
+
+        # Map interval codes to human-readable names
+        interval_map = {
+            "1d": "Daily",
+            "1wk": "Weekly",
+            "1mo": "Monthly",
+        }
+
+        return interval_map.get(self._data.interval, self._data.interval)

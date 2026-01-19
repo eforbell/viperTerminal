@@ -16,6 +16,7 @@ class ChartStyle(Enum):
 
     BRAILLE = "braille"  # High-resolution using Braille patterns (2x4 dots per char)
     BLOCK = "block"  # Simple block characters (▁▂▃▄▅▆▇█)
+    CANDLESTICK = "candlestick"  # OHLC candlestick chart with bodies and wicks
 
 
 @dataclass
@@ -133,7 +134,10 @@ class ChartRenderer:
                 y_axis_width=context.y_axis_width,
             )
             period = context.period
-            # Note: volumes and opens not used in render(), but stored in context
+            # For candlestick rendering, extract OHLC data from context
+            opens = context.opens
+            # Store context reference for accessing highs/lows in _render_candlestick
+            self._current_context = context
 
         # Legacy path: use individual parameters
         if not prices:
@@ -145,6 +149,8 @@ class ChartRenderer:
         # Delegate to specific renderer
         if self.style == ChartStyle.BRAILLE:
             return self._render_braille(prices, dates, dimensions, volumes, opens, period, overlays)
+        elif self.style == ChartStyle.CANDLESTICK:
+            return self._render_candlestick(prices, dates, dimensions, volumes, opens, period, overlays, context)
         else:
             return self._render_block(prices, dates, dimensions, volumes, opens, period, overlays)
 
@@ -468,6 +474,141 @@ class ChartRenderer:
             interpolated_count=0,  # Block style doesn't interpolate
         )
 
+    def _render_candlestick(
+        self,
+        prices: list[float],
+        dates: list[datetime] | None,
+        dimensions: ChartDimensions,
+        volumes: list[int] | None = None,
+        opens: list[float] | None = None,
+        period: str | None = None,
+        overlays: list[OverlayData] | None = None,
+        context: ChartContext | None = None,
+    ) -> RenderedChart:
+        """Render chart using candlestick patterns (OHLC visualization).
+
+        Each candlestick shows:
+        - Body: Rectangle between open and close (green if close > open, red otherwise)
+        - Upper wick: Line from body top to high
+        - Lower wick: Line from body bottom to low
+        - Doji: When open == close, shown as horizontal line
+
+        Args:
+            prices: List of close prices
+            dates: Optional list of datetime objects
+            dimensions: Chart dimensions
+            volumes: Optional list of volume values
+            opens: Optional list of open prices (required for candlesticks)
+            period: Optional time period for date formatting
+            overlays: Optional list of overlay data (e.g., moving averages)
+            context: ChartContext with OHLC data (modern path)
+
+        Returns:
+            RenderedChart with candlestick visualization
+        """
+        # Calculate available space for chart
+        chart_width = dimensions.width
+        chart_height = dimensions.height
+
+        if dimensions.include_y_axis:
+            chart_width -= dimensions.y_axis_width
+        if dimensions.include_x_axis:
+            chart_height -= dimensions.x_axis_height
+
+        # For candlestick charts, we need OHLC data
+        # If opens not provided, fall back to braille renderer
+        if opens is None or len(opens) != len(prices):
+            return self._render_braille(prices, dates, dimensions, volumes, None, period, overlays)
+
+        # Get highs and lows from context if available
+        if context is not None:
+            highs = context.highs
+            lows = context.lows
+        else:
+            # Legacy fallback: approximate from open/close
+            highs = [max(o, c) for o, c in zip(opens, prices)]
+            lows = [min(o, c) for o, c in zip(opens, prices)]
+
+        # Use high-low range for Y-axis scaling (critical for candlesticks)
+        min_price = min(lows)
+        max_price = max(highs)
+
+        # Downsample to fit chart width (one candle per character)
+        # For candlesticks, we preserve OHLC structure during downsampling
+        max_candles = chart_width
+
+        # Track if we interpolated (for volume alignment)
+        interpolated_count = 0
+
+        # Downsample OHLC data to fit width
+        if len(prices) > max_candles:
+            # Downsample while preserving OHLC structure
+            downsampled_opens = self._downsample_ohlc_opens(opens, prices, highs, lows, max_candles)
+            downsampled_highs = self._downsample_ohlc_highs(opens, prices, highs, lows, max_candles)
+            downsampled_lows = self._downsample_ohlc_lows(opens, prices, highs, lows, max_candles)
+            downsampled_closes = self._downsample_ohlc_closes(opens, prices, highs, lows, max_candles)
+            downsampled_dates = self._downsample(dates, max_candles) if dates else None
+        else:
+            downsampled_opens = opens
+            downsampled_highs = highs
+            downsampled_lows = lows
+            downsampled_closes = prices
+            downsampled_dates = dates
+
+        # Normalize prices to fit chart height
+        price_range = max_price - min_price
+
+        if price_range == 0:
+            # Flat line - all prices the same
+            # Show as doji candles in the middle
+            grid = self._render_flat_candlesticks(chart_height, chart_width)
+        else:
+            # Render candlesticks
+            grid = self._render_candlestick_grid(
+                downsampled_opens,
+                downsampled_highs,
+                downsampled_lows,
+                downsampled_closes,
+                min_price,
+                max_price,
+                chart_height,
+                chart_width,
+            )
+
+        # Apply overlays if provided (before converting grid to strings)
+        if overlays:
+            grid = self._apply_overlays_candlestick(
+                grid,
+                overlays,
+                downsampled_closes,
+                min_price,
+                max_price,
+                chart_height,
+                chart_width,
+            )
+
+        # Convert grid to strings (join each row's cells)
+        chart_lines = ["".join(row) for row in grid]
+
+        # Add Y-axis labels
+        if dimensions.include_y_axis:
+            chart_lines = self._add_y_axis(chart_lines, min_price, max_price, dimensions.y_axis_width)
+
+        # Add X-axis labels
+        if dimensions.include_x_axis:
+            x_axis_lines = self._create_x_axis(downsampled_dates, chart_width, dimensions.y_axis_width, period)
+            # X-axis returns multiple lines separated by \n
+            chart_lines.extend(x_axis_lines.split("\n"))
+
+        return RenderedChart(
+            lines=chart_lines,
+            width=len(chart_lines[0]) if chart_lines else 0,
+            height=len(chart_lines),
+            min_value=min_price,
+            max_value=max_price,
+            interpolated_count=interpolated_count,
+        )
+
     @overload
     def _upsample(self, data: list[float], target_size: int) -> list[float]: ...
 
@@ -685,6 +826,71 @@ class ChartRenderer:
         # Convert grid back to strings
         return ["".join(line) for line in grid]
 
+    def _apply_overlays_candlestick(
+        self,
+        grid: list[list[str]],
+        overlays: list[OverlayData],
+        downsampled_closes: list[float],
+        min_price: float,
+        max_price: float,
+        chart_height: int,
+        chart_width: int,
+    ) -> list[list[str]]:
+        """Apply overlay lines to rendered candlestick grid.
+
+        For candlesticks, we use a simple dot marker ('·') to show overlay positions.
+        This creates a clean visual distinction from the candlestick bodies and wicks.
+
+        Args:
+            grid: 2D grid of cells (each cell may contain Rich markup like "[green]█[/green]")
+            overlays: List of overlay data to render
+            downsampled_closes: Downsampled close prices (for alignment check)
+            min_price: Minimum price value (for scaling)
+            max_price: Maximum price value (for scaling)
+            chart_height: Chart height in characters
+            chart_width: Chart width in characters
+
+        Returns:
+            Modified grid with overlays applied
+        """
+        price_range = max_price - min_price
+        if price_range == 0:
+            return grid  # Can't render overlays on flat chart
+
+        # Process each overlay
+        for overlay in overlays:
+            overlay_values = overlay.values
+            # Use Rich markup for Textual compatibility
+            color_open = f"[{overlay.color}]"
+            color_close = f"[/{overlay.color}]"
+            overlay_char = "·"  # Dot marker for overlay points
+
+            # Downsample overlay to match chart width (one value per candle)
+            if len(overlay_values) > chart_width:
+                downsampled_overlay = self._downsample_overlay(overlay_values, chart_width)
+            else:
+                downsampled_overlay = overlay_values
+
+            # Render overlay points
+            for i, value in enumerate(downsampled_overlay):
+                if value is None or i >= chart_width:
+                    continue  # Skip None values and out-of-bounds
+
+                # Normalize value to 0-1 range
+                normalized = (value - min_price) / price_range
+
+                # Convert to row index (inverted - row 0 is top = max price)
+                row = int((1 - normalized) * (chart_height - 1))
+
+                # Place overlay marker in grid
+                # Only overwrite empty cells (space character)
+                # Each grid cell is a complete unit (e.g., " " or "[green]█[/green]")
+                if 0 <= row < chart_height and 0 <= i < chart_width:
+                    if grid[row][i] == " ":
+                        grid[row][i] = f"{color_open}{overlay_char}{color_close}"
+
+        return grid
+
     def _get_overlay_braille_char(
         self, left_row: int | None, left_dot: int | None, right_row: int | None, right_dot: int | None, height: int
     ) -> str:
@@ -732,6 +938,273 @@ class ChartRenderer:
         # Calculate step size
         step = len(values) / target_size
         return [values[int(i * step)] for i in range(target_size)]
+
+    def _downsample_ohlc_opens(
+        self, opens: list[float], closes: list[float], highs: list[float], lows: list[float], target_size: int
+    ) -> list[float]:
+        """Downsample OHLC data to get opens for each period.
+
+        For each downsampled period, take the first open in the group.
+
+        Args:
+            opens: Original open prices
+            closes: Original close prices (unused, for signature consistency)
+            highs: Original high prices (unused, for signature consistency)
+            lows: Original low prices (unused, for signature consistency)
+            target_size: Target number of candles
+
+        Returns:
+            Downsampled open prices
+        """
+        if len(opens) <= target_size:
+            return opens
+
+        step = len(opens) / target_size
+        result = []
+        for i in range(target_size):
+            idx = int(i * step)
+            result.append(opens[idx])
+        return result
+
+    def _downsample_ohlc_closes(
+        self, opens: list[float], closes: list[float], highs: list[float], lows: list[float], target_size: int
+    ) -> list[float]:
+        """Downsample OHLC data to get closes for each period.
+
+        For each downsampled period, take the last close in the group.
+
+        Args:
+            opens: Original open prices (unused, for signature consistency)
+            closes: Original close prices
+            highs: Original high prices (unused, for signature consistency)
+            lows: Original low prices (unused, for signature consistency)
+            target_size: Target number of candles
+
+        Returns:
+            Downsampled close prices
+        """
+        if len(closes) <= target_size:
+            return closes
+
+        step = len(closes) / target_size
+        result = []
+        for i in range(target_size):
+            # For the last value in each group, use min to avoid index out of bounds
+            idx = min(int((i + 1) * step) - 1, len(closes) - 1)
+            result.append(closes[idx])
+        return result
+
+    def _downsample_ohlc_highs(
+        self, opens: list[float], closes: list[float], highs: list[float], lows: list[float], target_size: int
+    ) -> list[float]:
+        """Downsample OHLC data to get highs for each period.
+
+        For each downsampled period, take the maximum high in the group.
+
+        Args:
+            opens: Original open prices (unused, for signature consistency)
+            closes: Original close prices (unused, for signature consistency)
+            highs: Original high prices
+            lows: Original low prices (unused, for signature consistency)
+            target_size: Target number of candles
+
+        Returns:
+            Downsampled high prices
+        """
+        if len(highs) <= target_size:
+            return highs
+
+        step = len(highs) / target_size
+        result = []
+        for i in range(target_size):
+            start_idx = int(i * step)
+            end_idx = int((i + 1) * step)
+            # Get max high in this range
+            group_highs = highs[start_idx:end_idx]
+            result.append(max(group_highs) if group_highs else highs[start_idx])
+        return result
+
+    def _downsample_ohlc_lows(
+        self, opens: list[float], closes: list[float], highs: list[float], lows: list[float], target_size: int
+    ) -> list[float]:
+        """Downsample OHLC data to get lows for each period.
+
+        For each downsampled period, take the minimum low in the group.
+
+        Args:
+            opens: Original open prices (unused, for signature consistency)
+            closes: Original close prices (unused, for signature consistency)
+            highs: Original high prices (unused, for signature consistency)
+            lows: Original low prices
+            target_size: Target number of candles
+
+        Returns:
+            Downsampled low prices
+        """
+        if len(lows) <= target_size:
+            return lows
+
+        step = len(lows) / target_size
+        result = []
+        for i in range(target_size):
+            start_idx = int(i * step)
+            end_idx = int((i + 1) * step)
+            # Get min low in this range
+            group_lows = lows[start_idx:end_idx]
+            result.append(min(group_lows) if group_lows else lows[start_idx])
+        return result
+
+    def _render_flat_candlesticks(self, chart_height: int, chart_width: int) -> list[list[str]]:
+        """Render flat candlesticks when all prices are the same.
+
+        Shows doji candles (horizontal lines) in the middle of the chart.
+
+        Args:
+            chart_height: Chart height in characters
+            chart_width: Chart width in characters
+
+        Returns:
+            2D grid of cells (each cell may contain Rich markup)
+        """
+        # Initialize empty grid
+        grid = [[" " for _ in range(chart_width)] for _ in range(chart_height)]
+
+        # Draw doji candles in the middle row
+        middle_row = chart_height // 2
+        for col in range(chart_width):
+            grid[middle_row][col] = "─"
+
+        return grid
+
+    def _render_candlestick_grid(
+        self,
+        opens: list[float],
+        highs: list[float],
+        lows: list[float],
+        closes: list[float],
+        min_price: float,
+        max_price: float,
+        chart_height: int,
+        chart_width: int,
+    ) -> list[list[str]]:
+        """Render candlestick grid with bodies and wicks.
+
+        Each candle is rendered as a single character column:
+        - Upper wick: extends from body top to high
+        - Body: filled block showing open-to-close range
+        - Lower wick: extends from body bottom to low
+        - Color: green if bullish (close > open), red if bearish
+
+        Args:
+            opens: Open prices for each candle
+            highs: High prices for each candle
+            lows: Low prices for each candle
+            closes: Close prices for each candle
+            min_price: Minimum price for scaling
+            max_price: Maximum price for scaling
+            chart_height: Chart height in characters
+            chart_width: Chart width in characters
+
+        Returns:
+            2D grid of cells (each cell may contain Rich markup)
+        """
+        # Initialize empty grid
+        grid = [[" " for _ in range(chart_width)] for _ in range(chart_height)]
+
+        price_range = max_price - min_price
+
+        # Render each candle
+        for i, (open_price, high, low, close) in enumerate(zip(opens, highs, lows, closes)):
+            if i >= chart_width:
+                break
+
+            # Normalize prices to 0-1 range
+            norm_open = (open_price - min_price) / price_range
+            norm_high = (high - min_price) / price_range
+            norm_low = (low - min_price) / price_range
+            norm_close = (close - min_price) / price_range
+
+            # Convert to row indices (inverted - row 0 is top = max price)
+            row_open = int((1 - norm_open) * (chart_height - 1))
+            row_high = int((1 - norm_high) * (chart_height - 1))
+            row_low = int((1 - norm_low) * (chart_height - 1))
+            row_close = int((1 - norm_close) * (chart_height - 1))
+
+            # Determine candle type and color
+            is_bullish = close > open_price
+            is_doji = abs(close - open_price) < price_range * 0.001  # Doji threshold
+
+            if is_doji:
+                # Doji: show as horizontal line
+                color = "white"
+                self._draw_doji(grid, i, row_close, color)
+            elif is_bullish:
+                # Bullish: green
+                self._draw_candle(grid, i, row_open, row_close, row_high, row_low, "green")
+            else:
+                # Bearish: red
+                self._draw_candle(grid, i, row_open, row_close, row_high, row_low, "red")
+
+        return grid
+
+    def _draw_doji(self, grid: list[list[str]], col: int, row: int, color: str) -> None:
+        """Draw a doji candle (horizontal line) at the specified position.
+
+        Args:
+            grid: 2D grid of characters
+            col: Column index for the candle
+            row: Row index for the doji line
+            color: Color name for Rich markup
+        """
+        if 0 <= row < len(grid) and 0 <= col < len(grid[0]):
+            grid[row][col] = f"[{color}]─[/{color}]"
+
+    def _draw_candle(
+        self,
+        grid: list[list[str]],
+        col: int,
+        row_open: int,
+        row_close: int,
+        row_high: int,
+        row_low: int,
+        color: str,
+    ) -> None:
+        """Draw a single candlestick with body and wicks.
+
+        Args:
+            grid: 2D grid of characters
+            col: Column index for the candle
+            row_open: Row index for open price
+            row_close: Row index for close price
+            row_high: Row index for high price
+            row_low: Row index for low price
+            color: Color name for Rich markup (green or red)
+        """
+        chart_height = len(grid)
+        chart_width = len(grid[0]) if grid else 0
+
+        if col < 0 or col >= chart_width:
+            return
+
+        # Determine body boundaries
+        body_top = min(row_open, row_close)
+        body_bottom = max(row_open, row_close)
+
+        # Draw upper wick (from high to body top)
+        for row in range(row_high, body_top):
+            if 0 <= row < chart_height:
+                grid[row][col] = f"[{color}]│[/{color}]"
+
+        # Draw body (from body top to body bottom)
+        for row in range(body_top, body_bottom + 1):
+            if 0 <= row < chart_height:
+                # Use full block for body
+                grid[row][col] = f"[{color}]█[/{color}]"
+
+        # Draw lower wick (from body bottom to low)
+        for row in range(body_bottom + 1, row_low + 1):
+            if 0 <= row < chart_height:
+                grid[row][col] = f"[{color}]│[/{color}]"
 
     def _add_y_axis(self, chart_lines: list[str], min_value: float, max_value: float, axis_width: int) -> list[str]:
         """Add Y-axis with price labels to the left of chart.
