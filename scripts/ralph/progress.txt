@@ -1558,3 +1558,25 @@
   - Achieved 93% coverage on chart_renderer.py, all 974 tests pass
   - Type-safe implementation: mypy --strict passes with no issues
 ---
+
+## 2026-01-18 - VPR-090
+- **What was implemented**: Added 'v' keybinding to toggle chart style between line (BRAILLE) and candlestick views with interval display in header
+- **Files changed**:
+  - `viper/widgets/chart_panel.py`: Added _chart_style state, toggle_chart_style() method, _get_interval_display() helper
+  - `viper/app.py`: Added 'v' keybinding and action_toggle_chart_style() handler
+  - `viper/widgets/help_screen.py`: Added 'v' keybinding documentation in KEYBINDINGS and CHARTS sections
+  - `tests/test_chart_panel.py`: Added 4 comprehensive tests (toggle cycles, interval display, header format, data preservation)
+  - `scripts/ralph/features/feature-10.prd.json`: Marked VPR-090 complete
+  - `AGENTS.md`: Added VPR-090 learnings section
+- **Learnings**:
+  - Store both _chart_style (panel state) and _renderer.style (renderer state) - update both on toggle to prevent desync
+  - Map interval codes to human-readable names: "1d"→"Daily", "1wk"→"Weekly", "1mo"→"Monthly"
+  - Only show style/interval indicator in candlestick mode header: "AAPL - 1M Chart [Candlestick · Daily]"
+  - Style toggle is purely visual - no data refetch needed, just call _rebuild_content()
+  - Set show=False for contextual keybindings (chart must be visible to use 'v')
+  - Document keybindings in TWO places in help screen: KEYBINDINGS (brief) and feature section (detailed)
+  - Test toggle cycles, interval display, header format, and data preservation separately for easy diagnosis
+  - Keep toggle logic in ChartPanel, App just dispatches - good separation of concerns
+  - Result: 978 tests passing, 87% coverage, VPR-090 complete
+
+---
