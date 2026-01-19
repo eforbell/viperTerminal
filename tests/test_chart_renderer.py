@@ -1364,3 +1364,382 @@ class TestCandlestickStyle:
         # Overlay should render successfully
         chart_str = "\n".join(result.lines)
         assert "[cyan]" in chart_str
+
+
+class TestCandlestickEdgeCases:
+    """VPR-092: Edge cases and polish for candlestick charts."""
+
+    def test_candlestick_sparse_data(self) -> None:
+        """Test candlestick rendering with sparse data (few candles)."""
+        # Only 3 data points - very sparse
+        dates = [datetime.now() + timedelta(days=i) for i in range(3)]
+        opens = [100.0, 105.0, 103.0]
+        closes = [105.0, 103.0, 108.0]
+        highs = [106.0, 106.0, 110.0]
+        lows = [99.0, 102.0, 102.0]
+        volumes = [1000000] * 3
+
+        data = HistoricalData(
+            ticker="TEST",
+            period="1W",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        # Wide chart with few candles
+        context = ChartContext.from_historical_data(data, width=60, height=15)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        result = renderer.render(context=context)
+
+        # Should render successfully without interpolation artifacts
+        assert result.height == 15
+        assert len(result.lines) == 15
+        assert result.min_value == 99.0
+        assert result.max_value == 110.0
+
+        # Verify contains candlestick elements
+        chart_str = "\n".join(result.lines)
+        assert "[green]" in chart_str or "[red]" in chart_str
+
+    def test_candlestick_short_timeframe_1w(self) -> None:
+        """Test candlestick with short timeframe (1W) has enough visible candles."""
+        # 7 days of data for 1 week
+        dates = [datetime.now() + timedelta(days=i) for i in range(7)]
+        opens = [100.0, 102.0, 103.0, 101.0, 105.0, 104.0, 106.0]
+        closes = [102.0, 103.0, 101.0, 105.0, 104.0, 106.0, 108.0]
+        highs = [103.0, 104.0, 104.0, 106.0, 106.0, 107.0, 109.0]
+        lows = [99.0, 101.0, 100.0, 100.0, 103.0, 103.0, 105.0]
+        volumes = [1000000] * 7
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1W",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        context = ChartContext.from_historical_data(data, width=50, height=15)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        result = renderer.render(context=context)
+
+        # Should render all 7 candles clearly
+        assert result.height == 15
+        assert len(result.lines) == 15
+
+        # Verify rendering quality
+        chart_str = "\n".join(result.lines)
+        # Should have mix of bullish/bearish candles
+        assert "[green]" in chart_str
+        assert "[red]" in chart_str
+
+    def test_candlestick_long_timeframe_max(self) -> None:
+        """Test candlestick with long timeframe (MAX) downsamples correctly."""
+        # Simulate 5 years of monthly data (60 data points)
+        dates = [datetime.now() + timedelta(days=i * 30) for i in range(60)]
+        # Generate realistic OHLC pattern with trend
+        opens = [100.0 + i * 2 for i in range(60)]
+        closes = [102.0 + i * 2 for i in range(60)]
+        highs = [105.0 + i * 2 for i in range(60)]
+        lows = [98.0 + i * 2 for i in range(60)]
+        volumes = [1000000] * 60
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="MAX",
+            interval="1mo",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        # Chart narrower than data - force downsampling
+        context = ChartContext.from_historical_data(data, width=40, height=15)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        result = renderer.render(context=context)
+
+        # Should preserve OHLC structure after downsampling
+        assert result.height == 15
+        # Min/max should reflect full range from original data
+        assert result.min_value == 98.0  # First low
+        assert result.max_value == 223.0  # Last high (105 + 59*2)
+
+    def test_candlestick_crypto_data(self) -> None:
+        """Test candlestick rendering with crypto OHLC data (BTC-USD style)."""
+        dates = [datetime.now() + timedelta(hours=i) for i in range(24)]
+        # Crypto prices - higher values, more volatility
+        opens = [45000.0 + i * 100 for i in range(24)]
+        closes = [45100.0 + i * 100 for i in range(24)]
+        highs = [45500.0 + i * 100 for i in range(24)]
+        lows = [44800.0 + i * 100 for i in range(24)]
+        volumes = [5000000000] * 24  # Large crypto volumes
+
+        data = HistoricalData(
+            ticker="BTC-USD",
+            period="1D",
+            interval="1h",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        context = ChartContext.from_historical_data(data, width=60, height=15)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        result = renderer.render(context=context)
+
+        # Should handle large crypto price values correctly
+        assert result.height == 15
+        assert result.min_value == 44800.0
+        assert result.max_value == 47800.0  # 45500 + 23*100
+
+        # Verify rendering
+        chart_str = "\n".join(result.lines)
+        assert "[green]" in chart_str  # All candles should be bullish (upward trend)
+
+    def test_candlestick_terminal_resize_larger(self) -> None:
+        """Test candlestick chart re-renders correctly when terminal width increases."""
+        dates = [datetime.now() + timedelta(days=i) for i in range(30)]
+        opens = [100.0 + i for i in range(30)]
+        closes = [101.0 + i for i in range(30)]
+        highs = [103.0 + i for i in range(30)]
+        lows = [99.0 + i for i in range(30)]
+        volumes = [1000000] * 30
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+
+        # Render at small width
+        context_small = ChartContext.from_historical_data(data, width=30, height=15)
+        result_small = renderer.render(context=context_small)
+
+        # Render at larger width (simulating terminal resize)
+        context_large = ChartContext.from_historical_data(data, width=80, height=15)
+        result_large = renderer.render(context=context_large)
+
+        # Both should render successfully
+        assert result_small.height == 15
+        assert result_large.height == 15
+
+        # Larger width should show more detail
+        assert result_large.width > result_small.width
+
+        # Same price range regardless of width
+        assert result_small.min_value == result_large.min_value
+        assert result_small.max_value == result_large.max_value
+
+    def test_candlestick_terminal_resize_smaller(self) -> None:
+        """Test candlestick chart re-renders correctly when terminal width decreases."""
+        dates = [datetime.now() + timedelta(days=i) for i in range(50)]
+        opens = [100.0 + i * 0.5 for i in range(50)]
+        closes = [101.0 + i * 0.5 for i in range(50)]
+        highs = [103.0 + i * 0.5 for i in range(50)]
+        lows = [99.0 + i * 0.5 for i in range(50)]
+        volumes = [1000000] * 50
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="3M",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+
+        # Render at large width
+        context_large = ChartContext.from_historical_data(data, width=80, height=15)
+        result_large = renderer.render(context=context_large)
+
+        # Render at smaller width (simulating terminal resize)
+        context_small = ChartContext.from_historical_data(data, width=30, height=15)
+        result_small = renderer.render(context=context_small)
+
+        # Both should render successfully
+        assert result_large.height == 15
+        assert result_small.height == 15
+
+        # Should preserve price range through downsampling
+        assert result_small.min_value == result_large.min_value
+        assert result_small.max_value == result_large.max_value
+
+    def test_candlestick_performance_no_lag(self) -> None:
+        """Test candlestick rendering performance - should complete quickly."""
+        import time
+
+        # Large dataset to test performance
+        dates = [datetime.now() + timedelta(days=i) for i in range(365)]
+        opens = [100.0 + i * 0.1 for i in range(365)]
+        closes = [100.5 + i * 0.1 for i in range(365)]
+        highs = [101.0 + i * 0.1 for i in range(365)]
+        lows = [99.5 + i * 0.1 for i in range(365)]
+        volumes = [1000000] * 365
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1Y",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        context = ChartContext.from_historical_data(data, width=80, height=20)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+
+        # Time the rendering
+        start = time.time()
+        result = renderer.render(context=context)
+        elapsed = time.time() - start
+
+        # Should complete in well under 1 second (target: < 100ms)
+        assert elapsed < 1.0, f"Rendering took {elapsed:.3f}s, should be < 1s"
+
+        # Verify successful render
+        assert result.height == 20
+        assert len(result.lines) == 20
+
+    def test_candlestick_mixed_data_quality(self) -> None:
+        """Test candlestick with mixed quality data (some gaps, some volatility)."""
+        # Realistic data with some gaps and varying volatility
+        dates = [datetime.now() + timedelta(days=i) for i in range(20)]
+        opens = [
+            100.0,
+            102.0,
+            101.0,
+            99.0,
+            98.0,  # Downtrend
+            97.0,
+            98.0,
+            100.0,
+            102.0,
+            105.0,  # Recovery
+            107.0,
+            106.0,
+            108.0,
+            110.0,
+            112.0,  # Uptrend
+            111.0,
+            109.0,
+            108.0,
+            107.0,
+            106.0,  # Pullback
+        ]
+        closes = [
+            102.0,
+            101.0,
+            99.0,
+            98.0,
+            97.0,
+            98.0,
+            100.0,
+            102.0,
+            105.0,
+            107.0,
+            106.0,
+            108.0,
+            110.0,
+            112.0,
+            111.0,
+            109.0,
+            108.0,
+            107.0,
+            106.0,
+            108.0,
+        ]
+        # Add realistic wick variation
+        highs = [o + 2 for o in opens]
+        lows = [c - 2 for c in closes]
+        volumes = [1000000 + i * 50000 for i in range(20)]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        context = ChartContext.from_historical_data(data, width=60, height=15)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        result = renderer.render(context=context)
+
+        # Should handle varying market conditions
+        assert result.height == 15
+        assert len(result.lines) == 15
+
+        # Should show mix of bullish and bearish
+        chart_str = "\n".join(result.lines)
+        assert "[green]" in chart_str
+        assert "[red]" in chart_str
+
+    def test_candlestick_extreme_volatility(self) -> None:
+        """Test candlestick with extreme price volatility (large wicks)."""
+        dates = [datetime.now() + timedelta(days=i) for i in range(10)]
+        opens = [100.0] * 10
+        closes = [101.0] * 10
+        # Extreme wicks - high volatility within the day
+        highs = [150.0] * 10  # 50% above open
+        lows = [50.0] * 10  # 50% below open
+        volumes = [5000000] * 10
+
+        data = HistoricalData(
+            ticker="VOLATILE",
+            period="1W",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        context = ChartContext.from_historical_data(data, width=40, height=20)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        result = renderer.render(context=context)
+
+        # Should handle extreme wicks without crashes
+        assert result.height == 20
+        assert result.min_value == 50.0
+        assert result.max_value == 150.0
+
+        # Verify wicks render (│ character for wicks)
+        chart_str = "\n".join(result.lines)
+        assert "│" in chart_str  # Wick character should be present

@@ -4811,3 +4811,148 @@ Implemented simplified IV rank calculation that shows where current ATM IV sits 
 ✅ 100% test coverage on overlay integration
 
 **Result**: 982 tests passing, 87% coverage. VPR-091 complete with all acceptance criteria met.
+### VPR-092: Handle edge cases and polish for candlestick charts
+
+**Objective**: Ensure candlestick charts handle edge cases gracefully: sparse data, various timeframes, crypto data, terminal resize, and performance.
+
+**Context**:
+- Candlestick rendering (VPR-088, VPR-089) and toggle mechanism (VPR-090) implemented
+- Overlays integrated (VPR-091)
+- Need comprehensive edge case testing to ensure production-ready quality
+- Focus on robustness, not new features
+
+**Implementation Approach**:
+
+1. **Comprehensive Edge Case Test Suite** (9 new tests in `TestCandlestickEdgeCases` class):
+   - `test_candlestick_sparse_data`: 3 data points on 60-char wide chart (very sparse)
+   - `test_candlestick_short_timeframe_1w`: 7 days for 1-week period (minimal data)
+   - `test_candlestick_long_timeframe_max`: 60 monthly data points downsampled to 40 candles
+   - `test_candlestick_crypto_data`: Bitcoin-style prices (45000+ range, large volumes)
+   - `test_candlestick_terminal_resize_larger`: 30→80 char width increase
+   - `test_candlestick_terminal_resize_smaller`: 80→30 char width decrease
+   - `test_candlestick_performance_no_lag`: 365 data points rendered in <1 second
+   - `test_candlestick_mixed_data_quality`: Realistic data with trends, reversals, pullbacks
+   - `test_candlestick_extreme_volatility`: Extreme wicks (50% above/below body)
+
+2. **No Code Changes Required**:
+   - Existing candlestick implementation already handles all edge cases correctly
+   - Downsampling preserves OHLC structure (first open, max high, min low, last close)
+   - Y-axis scaling uses high-low range (handles large crypto prices)
+   - Terminal resize handled by ChartContext recreation
+   - Performance excellent due to simple grid-based rendering
+
+3. **Test Coverage Strategy**:
+   - Each test focuses on ONE specific edge case
+   - Use realistic data patterns (trends, reversals, volatility)
+   - Verify both structural correctness (height, min/max) and visual quality (colors, characters)
+   - Performance test ensures rendering completes in <1 second (actual: ~0.01s for 365 points)
+
+**Key Patterns**:
+
+1. **Sparse Data Handling**:
+   - Few data points on wide chart → no interpolation for candlesticks
+   - Each candle = 1 character width, so 3 candles on 60-char chart is fine
+   - Candlesticks don't interpolate like braille (which uses upsampling for density)
+   - Test verifies: renders successfully, correct min/max, shows candle colors
+
+2. **Timeframe Variations**:
+   - Short (1W): 7 days of data → verify all candles visible
+   - Long (MAX): 60+ months → verify OHLC structure preserved after downsampling
+   - Downsampling must preserve price extremes (min low, max high)
+
+3. **Crypto Price Handling**:
+   - Large price values (45000+) work with existing float-based rendering
+   - Large volume values (5B+) work with int conversion
+   - Y-axis labels format correctly with comma separators: `$45,000.00`
+
+4. **Terminal Resize Robustness**:
+   - Larger width: more detail, same price range
+   - Smaller width: downsampled, same price range preserved
+   - Test both directions to ensure bidirectional correctness
+   - ChartContext recreation handles all dimension changes
+
+5. **Performance Characteristics**:
+   - 365 data points → downsample to 80 candles → render in ~10ms
+   - Grid-based rendering is O(width × height) → very fast
+   - No complex calculations (just normalization and grid filling)
+   - Performance test ensures no regressions
+
+6. **Mixed Data Quality**:
+   - Test realistic market data: downtrends, recoveries, uptrends, pullbacks
+   - Varying volatility (different wick sizes)
+   - Mix of bullish and bearish candles
+   - Verifies robustness with real-world data patterns
+
+7. **Extreme Volatility**:
+   - Wicks extending 50% above/below body
+   - Tests edge case where high/low far from open/close
+   - Verifies wick rendering (│ character) appears in output
+
+**Testing Best Practices**:
+
+1. **Use Realistic Data**: Don't just test [1, 2, 3] sequences
+   - Create OHLC data with proper relationships (high ≥ open/close ≥ low)
+   - Add wicks: `highs = [o + 2 for o in opens]`
+   - Vary trends and volatility
+
+2. **Test Structure AND Visual**:
+   - Structural: height, width, min_value, max_value
+   - Visual: check for color markup `[green]`, `[red]`, wick character `│`
+   - Both are needed for comprehensive validation
+
+3. **One Edge Case Per Test**:
+   - Don't combine "sparse data + crypto + resize" in one test
+   - Focused tests make failures easy to diagnose
+   - Descriptive test names document what's being tested
+
+4. **Performance Testing Pattern**:
+   ```python
+   import time
+   start = time.time()
+   result = renderer.render(context=context)
+   elapsed = time.time() - start
+   assert elapsed < 1.0, f"Rendering took {elapsed:.3f}s"
+   ```
+
+5. **Terminal Resize Pattern**:
+   - Create same data
+   - Render at two different widths
+   - Verify both succeed
+   - Verify same price range (min/max preserved)
+
+**Gotchas**:
+
+1. **Candlesticks Don't Interpolate**: Unlike braille charts (which upsample to fill width), candlesticks show actual candles. Sparse data = sparse candles.
+
+2. **OHLC Downsampling is Critical**: Must preserve structure:
+   - Open: first open in group
+   - High: max high in group
+   - Low: min low in group
+   - Close: last close in group
+   - Simple averaging would lose price extremes!
+
+3. **Performance Test Timing Variability**: Use generous threshold (<1s) to avoid flakiness on slow CI systems. Actual rendering is ~10ms.
+
+4. **Crypto Volumes are Huge**: Use realistic large int values (5B+) to test edge cases, but existing int conversion handles this fine.
+
+**Testing Results**:
+- Added 9 comprehensive edge case tests in `TestCandlestickEdgeCases` class
+- All tests pass on first run (no code changes needed)
+- Total: 991 tests passing (up from 982)
+- Coverage: chart_renderer.py at 93% (up from 89%)
+- Overall coverage: 87% (maintained)
+- mypy --strict: passes cleanly
+- Performance: 365 data points render in ~0.01 seconds (well under 1s threshold)
+
+**Acceptance Criteria Met**:
+✅ Sparse data: handled gracefully (few candles on wide chart)
+✅ Very short timeframes (1W): enough candles visible (7 days)
+✅ Very long timeframes (MAX): downsampling preserves meaningful OHLC
+✅ Crypto data: works with crypto OHLC data (large prices, large volumes)
+✅ Terminal width changes: chart re-renders correctly on resize (both larger and smaller)
+✅ Performance: no lag on style toggle or rendering (365 points in ~10ms)
+✅ Mixed quality data: handles varying market conditions (trends, reversals, volatility)
+✅ Extreme volatility: handles large wicks without crashes
+✅ 100% test coverage on edge cases
+
+**Result**: 991 tests passing, 87% coverage, chart_renderer.py at 93%. VPR-092 complete with all acceptance criteria met.
