@@ -857,6 +857,9 @@ class ChartRenderer:
         if price_range == 0:
             return grid  # Can't render overlays on flat chart
 
+        # Number of candles determines how overlays should be distributed
+        num_candles = len(downsampled_closes)
+
         # Process each overlay
         for overlay in overlays:
             overlay_values = overlay.values
@@ -865,16 +868,22 @@ class ChartRenderer:
             color_close = f"[/{overlay.color}]"
             overlay_char = "·"  # Dot marker for overlay points
 
-            # Downsample overlay to match chart width (one value per candle)
-            if len(overlay_values) > chart_width:
-                downsampled_overlay = self._downsample_overlay(overlay_values, chart_width)
+            # Downsample overlay to match number of candles (not chart width)
+            if len(overlay_values) > num_candles:
+                downsampled_overlay = self._downsample_overlay(overlay_values, num_candles)
             else:
                 downsampled_overlay = overlay_values
 
-            # Render overlay points
+            # Render overlay points at same x-positions as candles
             for i, value in enumerate(downsampled_overlay):
-                if value is None or i >= chart_width:
+                if value is None or i >= num_candles:
                     continue  # Skip None values and out-of-bounds
+
+                # Calculate x position to match candle distribution
+                if num_candles > 1:
+                    col = int(i * (chart_width - 1) / (num_candles - 1))
+                else:
+                    col = chart_width // 2
 
                 # Normalize value to 0-1 range
                 normalized = (value - min_price) / price_range
@@ -885,9 +894,9 @@ class ChartRenderer:
                 # Place overlay marker in grid
                 # Only overwrite empty cells (space character)
                 # Each grid cell is a complete unit (e.g., " " or "[green]█[/green]")
-                if 0 <= row < chart_height and 0 <= i < chart_width:
-                    if grid[row][i] == " ":
-                        grid[row][i] = f"{color_open}{overlay_char}{color_close}"
+                if 0 <= row < chart_height and 0 <= col < chart_width:
+                    if grid[row][col] == " ":
+                        grid[row][col] = f"{color_open}{overlay_char}{color_close}"
 
         return grid
 
@@ -1112,10 +1121,17 @@ class ChartRenderer:
         grid = [[" " for _ in range(chart_width)] for _ in range(chart_height)]
 
         price_range = max_price - min_price
+        num_candles = len(opens)
 
-        # Render each candle
+        # Render each candle, distributing evenly across chart width
         for i, (open_price, high, low, close) in enumerate(zip(opens, highs, lows, closes)):
-            if i >= chart_width:
+            # Calculate x position to spread candles across full width
+            if num_candles > 1:
+                col = int(i * (chart_width - 1) / (num_candles - 1))
+            else:
+                col = chart_width // 2  # Single candle goes in center
+
+            if col >= chart_width:
                 break
 
             # Normalize prices to 0-1 range
@@ -1137,13 +1153,13 @@ class ChartRenderer:
             if is_doji:
                 # Doji: show as horizontal line
                 color = "white"
-                self._draw_doji(grid, i, row_close, color)
+                self._draw_doji(grid, col, row_close, color)
             elif is_bullish:
                 # Bullish: green
-                self._draw_candle(grid, i, row_open, row_close, row_high, row_low, "green")
+                self._draw_candle(grid, col, row_open, row_close, row_high, row_low, "green")
             else:
                 # Bearish: red
-                self._draw_candle(grid, i, row_open, row_close, row_high, row_low, "red")
+                self._draw_candle(grid, col, row_open, row_close, row_high, row_low, "red")
 
         return grid
 
@@ -1389,24 +1405,52 @@ class ChartRenderer:
         # Block characters for volume (8 levels)
         block_chars = [" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
 
-        # Build volume bar string with Rich markup colors
-        # Use Rich markup tags instead of ANSI codes for Textual compatibility
-        volume_bars = []
-        for i, vol in enumerate(downsampled_volumes):
-            # Normalize to 0-1
-            normalized = vol / max_volume
-            # Map to block character (0-8)
-            block_idx = min(int(normalized * 8), 8)
-            block_char = block_chars[block_idx]
+        # For candlestick style, distribute bars across full width like candles
+        if style == ChartStyle.CANDLESTICK and len(downsampled_volumes) < width:
+            # Initialize empty volume bar array
+            volume_bars = [" "] * width
+            num_bars = len(downsampled_volumes)
 
-            # Determine color: green if close > open, red otherwise
-            if i < len(downsampled_closes) and i < len(downsampled_opens):
-                if downsampled_closes[i] > downsampled_opens[i]:
-                    volume_bars.append(f"[green]{block_char}[/green]")
+            for i, vol in enumerate(downsampled_volumes):
+                # Calculate x position to match candle distribution
+                if num_bars > 1:
+                    col = int(i * (width - 1) / (num_bars - 1))
                 else:
-                    volume_bars.append(f"[red]{block_char}[/red]")
-            else:
-                volume_bars.append(block_char)
+                    col = width // 2
+
+                # Normalize to 0-1
+                normalized = vol / max_volume
+                # Map to block character (0-8)
+                block_idx = min(int(normalized * 8), 8)
+                block_char = block_chars[block_idx]
+
+                # Determine color: green if close > open, red otherwise
+                if i < len(downsampled_closes) and i < len(downsampled_opens):
+                    if downsampled_closes[i] > downsampled_opens[i]:
+                        volume_bars[col] = f"[green]{block_char}[/green]"
+                    else:
+                        volume_bars[col] = f"[red]{block_char}[/red]"
+                else:
+                    volume_bars[col] = block_char
+        else:
+            # Build volume bar string with Rich markup colors
+            # Use Rich markup tags instead of ANSI codes for Textual compatibility
+            volume_bars = []
+            for i, vol in enumerate(downsampled_volumes):
+                # Normalize to 0-1
+                normalized = vol / max_volume
+                # Map to block character (0-8)
+                block_idx = min(int(normalized * 8), 8)
+                block_char = block_chars[block_idx]
+
+                # Determine color: green if close > open, red otherwise
+                if i < len(downsampled_closes) and i < len(downsampled_opens):
+                    if downsampled_closes[i] > downsampled_opens[i]:
+                        volume_bars.append(f"[green]{block_char}[/green]")
+                    else:
+                        volume_bars.append(f"[red]{block_char}[/red]")
+                else:
+                    volume_bars.append(block_char)
 
         # Create volume bar line
         volume_line = "".join(volume_bars)
