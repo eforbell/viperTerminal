@@ -35,8 +35,8 @@ class Config:
     default_watchlist: list[str] = field(default_factory=list)
 
     # Chart settings
-    default_chart_timeframe: str = "1M"  # Default timeframe for charts
-    chart_style: str = "braille"  # 'braille', 'block', or 'candlestick'
+    default_chart_timeframe: str = "1Y"  # Default timeframe for charts
+    chart_style: str = "candlestick"  # 'braille', 'block', or 'candlestick'
 
     # News settings
     news_enabled: bool = True  # Whether news panel is available
@@ -72,16 +72,16 @@ class Config:
         # Validate chart_style
         if self.chart_style not in ("braille", "block", "candlestick"):
             logger.warning(
-                f"Invalid chart_style '{self.chart_style}', using default 'braille'"
+                f"Invalid chart_style '{self.chart_style}', using default 'candlestick'"
             )
-            self.chart_style = "braille"
+            self.chart_style = "candlestick"
 
         # Validate default_chart_timeframe
         if self.default_chart_timeframe not in VALID_TIMEFRAMES:
             logger.warning(
-                f"Invalid default_chart_timeframe '{self.default_chart_timeframe}', using default '1M'"
+                f"Invalid default_chart_timeframe '{self.default_chart_timeframe}', using default '1Y'"
             )
-            self.default_chart_timeframe = "1M"
+            self.default_chart_timeframe = "1Y"
 
         # Validate news_enabled is bool
         if not isinstance(self.news_enabled, bool):

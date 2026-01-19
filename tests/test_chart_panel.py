@@ -713,13 +713,13 @@ async def test_chart_panel_timeframe_persistence() -> None:
 
 @pytest.mark.asyncio
 async def test_chart_panel_default_timeframe() -> None:
-    """Test that default timeframe is 1M for new charts."""
+    """Test that default timeframe is 1Y for new charts."""
     app = ChartPanelTestApp()
     async with app.run_test():
         panel = app.query_one(ChartPanel)
 
         # Check default period
-        assert panel._current_period == "1M"
+        assert panel._current_period == "1Y"
 
 
 @pytest.mark.asyncio
@@ -2256,13 +2256,13 @@ async def test_chart_panel_macd_with_crypto() -> None:
 
 @pytest.mark.asyncio
 async def test_chart_panel_toggle_chart_style() -> None:
-    """Test that chart style can be toggled between BRAILLE and CANDLESTICK."""
+    """Test that chart style can be toggled between CANDLESTICK and BRAILLE."""
     app = ChartPanelTestApp()
     async with app.run_test() as pilot:
         panel = app.query_one(ChartPanel)
 
-        # Chart should start with BRAILLE style (default)
-        assert panel._chart_style == ChartStyle.BRAILLE
+        # Chart should start with CANDLESTICK style (default)
+        assert panel._chart_style == ChartStyle.CANDLESTICK
 
         # Load chart data
         dates = [datetime(2024, 1, i + 1) for i in range(30)]
@@ -2295,17 +2295,17 @@ async def test_chart_panel_toggle_chart_style() -> None:
         panel.show_chart(data, stats)
         await pilot.pause()
 
-        # Toggle to CANDLESTICK
-        panel.toggle_chart_style()
-        await pilot.pause()
-        assert panel._chart_style == ChartStyle.CANDLESTICK
-        assert panel._renderer.style == ChartStyle.CANDLESTICK
-
-        # Toggle back to BRAILLE
+        # Toggle to BRAILLE
         panel.toggle_chart_style()
         await pilot.pause()
         assert panel._chart_style == ChartStyle.BRAILLE
         assert panel._renderer.style == ChartStyle.BRAILLE
+
+        # Toggle back to CANDLESTICK
+        panel.toggle_chart_style()
+        await pilot.pause()
+        assert panel._chart_style == ChartStyle.CANDLESTICK
+        assert panel._renderer.style == ChartStyle.CANDLESTICK
 
 
 @pytest.mark.asyncio
@@ -2416,20 +2416,20 @@ async def test_chart_panel_candlestick_header_includes_interval() -> None:
         panel.show_chart(data, stats)
         await pilot.pause()
 
+        # Default is now CANDLESTICK mode, header should include interval
+        labels = panel.query(Label)
+        header_labels = [label for label in labels if "Chart" in str(label.render())]
+        assert any("[Candlestick · Daily]" in str(label.render()) for label in header_labels)
+
+        # Toggle to BRAILLE
+        panel.toggle_chart_style()
+        await pilot.pause()
+
         # In BRAILLE mode, header should not have interval
         labels = panel.query(Label)
         header_labels = [label for label in labels if "Chart" in str(label.render())]
         assert any("AAPL - 1M Chart" in str(label.render()) for label in header_labels)
         assert not any("Candlestick" in str(label.render()) for label in header_labels)
-
-        # Toggle to CANDLESTICK
-        panel.toggle_chart_style()
-        await pilot.pause()
-
-        # In CANDLESTICK mode, header should include interval
-        labels = panel.query(Label)
-        header_labels = [label for label in labels if "Chart" in str(label.render())]
-        assert any("[Candlestick · Daily]" in str(label.render()) for label in header_labels)
 
 
 @pytest.mark.asyncio
@@ -2477,7 +2477,7 @@ async def test_chart_panel_style_toggle_preserves_data() -> None:
         assert panel._data == data
         assert panel._stats == stats
 
-        # Toggle to CANDLESTICK
+        # Toggle to BRAILLE (default is now CANDLESTICK)
         panel.toggle_chart_style()
         await pilot.pause()
 
@@ -2487,9 +2487,9 @@ async def test_chart_panel_style_toggle_preserves_data() -> None:
         assert panel._current_period == "1M"
         assert panel._data == data
         assert panel._stats == stats
-        assert panel._chart_style == ChartStyle.CANDLESTICK
+        assert panel._chart_style == ChartStyle.BRAILLE
 
-        # Toggle back to BRAILLE
+        # Toggle back to CANDLESTICK
         panel.toggle_chart_style()
         await pilot.pause()
 
@@ -2499,4 +2499,4 @@ async def test_chart_panel_style_toggle_preserves_data() -> None:
         assert panel._current_period == "1M"
         assert panel._data == data
         assert panel._stats == stats
-        assert panel._chart_style == ChartStyle.BRAILLE
+        assert panel._chart_style == ChartStyle.CANDLESTICK

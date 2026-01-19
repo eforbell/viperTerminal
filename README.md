@@ -89,7 +89,7 @@ default_watchlist = ["AAPL", "MSFT", "BTC-USD"]
 
 # Chart settings
 chart_style = "candlestick"        # 'braille', 'block', or 'candlestick'
-default_chart_timeframe = "1M"     # '1W', '1M', '3M', '6M', '1Y', '5Y', 'MAX'
+default_chart_timeframe = "1Y"     # '1W', '1M', '3M', '6M', '1Y', '5Y', 'MAX'
 
 # News settings
 news_enabled = true
@@ -108,8 +108,8 @@ background = "#000000"
 |---------|---------|-------------|
 | `refresh_interval` | `60` | Watchlist auto-refresh interval in seconds |
 | `default_watchlist` | `[]` | Tickers to load on startup |
-| `chart_style` | `"braille"` | Chart visualization: `braille`, `block`, or `candlestick` |
-| `default_chart_timeframe` | `"1M"` | Initial chart timeframe |
+| `chart_style` | `"candlestick"` | Chart visualization: `braille`, `block`, or `candlestick` |
+| `default_chart_timeframe` | `"1Y"` | Initial chart timeframe |
 | `news_enabled` | `true` | Enable news panel |
 | `news_max_items` | `10` | Max news items to display |
 | `theme_colors.positive` | `"#00ff00"` | Color for positive values |

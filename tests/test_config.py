@@ -248,7 +248,7 @@ class TestConfigChartOptions:
     def test_default_chart_timeframe(self) -> None:
         """Test default chart timeframe value."""
         config = Config()
-        assert config.default_chart_timeframe == "1M"
+        assert config.default_chart_timeframe == "1Y"
 
     def test_custom_chart_timeframe(self) -> None:
         """Test setting custom chart timeframe."""
@@ -258,12 +258,12 @@ class TestConfigChartOptions:
     def test_invalid_chart_timeframe_corrected(self) -> None:
         """Test that invalid timeframe is corrected to default."""
         config = Config(default_chart_timeframe="invalid")
-        assert config.default_chart_timeframe == "1M"
+        assert config.default_chart_timeframe == "1Y"
 
     def test_default_chart_style(self) -> None:
         """Test default chart style."""
         config = Config()
-        assert config.chart_style == "braille"
+        assert config.chart_style == "candlestick"
 
     def test_custom_chart_style_block(self) -> None:
         """Test setting chart style to block."""
@@ -273,7 +273,7 @@ class TestConfigChartOptions:
     def test_invalid_chart_style_corrected(self) -> None:
         """Test that invalid chart style is corrected."""
         config = Config(chart_style="invalid")
-        assert config.chart_style == "braille"
+        assert config.chart_style == "candlestick"
 
     def test_load_chart_options_from_file(self, tmp_path: Path) -> None:
         """Test loading chart options from config file."""

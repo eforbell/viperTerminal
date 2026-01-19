@@ -255,7 +255,7 @@ class ViperApp(App[None]):
                     # Map config chart_style string to ChartStyle enum
                     style_map = {"braille": ChartStyle.BRAILLE, "block": ChartStyle.BLOCK, "candlestick": ChartStyle.CANDLESTICK}
                     chart_style = style_map.get(self.config.chart_style, ChartStyle.BRAILLE)
-                    yield ChartPanel(style=chart_style)
+                    yield ChartPanel(style=chart_style, default_period=self.config.default_chart_timeframe)
                 with Container(id="news-container"):
                     yield NewsPanel()
                 with Container(id="article-reader-container"):
@@ -371,7 +371,7 @@ class ViperApp(App[None]):
 
             # If we have a current ticker, fetch and display chart
             if self._current_ticker:
-                self.run_worker(chart_panel.load_chart(self._current_ticker, "1M"))
+                self.run_worker(chart_panel.load_chart(self._current_ticker, chart_panel._current_period))
 
     def action_toggle_news(self) -> None:
         """Toggle the news panel visibility."""

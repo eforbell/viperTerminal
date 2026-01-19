@@ -114,18 +114,19 @@ class ChartPanel(Widget):
     }
     """
 
-    def __init__(self, style: ChartStyle = ChartStyle.BRAILLE) -> None:
+    def __init__(self, style: ChartStyle = ChartStyle.CANDLESTICK, default_period: str = "1Y") -> None:
         """Initialize the chart panel.
 
         Args:
-            style: Chart rendering style (BRAILLE or BLOCK)
+            style: Chart rendering style (BRAILLE, BLOCK, or CANDLESTICK)
+            default_period: Default timeframe for charts (1W, 1M, 3M, 6M, 1Y, 5Y, MAX)
         """
         super().__init__()
         self._state: str = "empty"
         self._data: HistoricalData | HistoricalDataError | None = None
         self._stats: HistoricalStats | None = None
         self._current_ticker: str | None = None
-        self._current_period: str = "1M"  # Default period
+        self._current_period: str = default_period
         self._chart_style: ChartStyle = style  # Current chart style
         self._renderer = ChartRenderer(style=style)
         # Timeframe mappings
