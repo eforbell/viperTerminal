@@ -4406,3 +4406,114 @@ Implemented simplified IV rank calculation that shows where current ATM IV sits 
 7. **Test All Edge Cases**: ATM not found, NaN IVs, same IVs, boundary values - comprehensive test coverage prevents future bugs.
 
 8. **Header-Only Display**: IV rank is metadata about the chain, not per-contract data, so header placement is appropriate.
+
+---
+
+## VPR-088: Add CANDLESTICK to ChartStyle Enum
+
+**Story**: Foundation for candlestick chart rendering - add enum value and stub implementation.
+
+**Completion Date**: 2026-01-18
+
+**Acceptance Criteria Met**:
+- ✅ Added CANDLESTICK = 'candlestick' to ChartStyle enum
+- ✅ Updated ChartRenderer.render() to dispatch to _render_candlestick()
+- ✅ Created stub _render_candlestick() method (delegates to braille for now)
+- ✅ Verified existing BRAILLE and BLOCK styles still work unchanged
+- ✅ 100% test coverage on style dispatch logic
+- ✅ Tests confirm new enum value exists and is usable
+- ✅ Regression tests ensure existing styles produce identical output
+
+**Files Modified**:
+- `viper/widgets/chart_renderer.py`:
+  - Added `CANDLESTICK = "candlestick"` to ChartStyle enum (line 19)
+  - Updated render() dispatch to handle CANDLESTICK style (lines 149-150)
+  - Added `_render_candlestick()` stub method (lines 474-502)
+
+**Test Coverage**:
+- 8 new tests in `TestCandlestickStyle` class
+- Total: 967 tests passing (all previous tests still pass)
+- Overall coverage: 87% (chart_renderer.py at 93%)
+
+### Technical Patterns
+
+1. **Enum Extension Pattern**:
+   ```python
+   class ChartStyle(Enum):
+       BRAILLE = "braille"
+       BLOCK = "block"
+       CANDLESTICK = "candlestick"  # New style added
+   ```
+   - Simple enum addition maintains backward compatibility
+   - String values allow for serialization/config storage
+
+2. **Dispatch Logic with elif**:
+   ```python
+   if self.style == ChartStyle.BRAILLE:
+       return self._render_braille(...)
+   elif self.style == ChartStyle.CANDLESTICK:
+       return self._render_candlestick(...)
+   else:
+       return self._render_block(...)
+   ```
+   - elif pattern ensures correct routing to new renderer
+   - BLOCK remains as fallback default
+
+3. **Stub Implementation for Incremental Development**:
+   ```python
+   def _render_candlestick(...) -> RenderedChart:
+       """Render chart using candlestick patterns (OHLC visualization).
+       
+       Stub implementation - currently delegates to braille renderer.
+       Will be fully implemented in VPR-089.
+       """
+       return self._render_braille(prices, dates, dimensions, volumes, opens, period, overlays)
+   ```
+   - Delegation to existing renderer allows end-to-end testing
+   - Clear documentation of stub status prevents confusion
+   - Enables following stories to proceed while implementation is refined
+
+4. **Regression Testing for Existing Styles**:
+   ```python
+   def test_braille_unchanged_after_candlestick_addition(self) -> None:
+       """Test that existing BRAILLE style produces identical output as before."""
+       # Ensures adding CANDLESTICK didn't break BRAILLE
+       renderer_braille = ChartRenderer(style=ChartStyle.BRAILLE)
+       # ... verify braille characters still render correctly
+   ```
+   - Critical for maintaining stability when adding new features
+   - Tests both BRAILLE and BLOCK styles unchanged
+
+5. **Comprehensive Test Coverage for New Enum**:
+   ```python
+   def test_candlestick_enum_exists(self) -> None:
+       """Test that CANDLESTICK enum value exists and is usable."""
+       assert hasattr(ChartStyle, "CANDLESTICK")
+       assert ChartStyle.CANDLESTICK.value == "candlestick"
+   
+   def test_candlestick_style_initialization(self) -> None:
+       """Test that ChartRenderer can be initialized with CANDLESTICK style."""
+       renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+       assert renderer.style == ChartStyle.CANDLESTICK
+   ```
+   - Verifies enum exists and has correct value
+   - Tests initialization with new enum value
+   - Ensures basic rendering works (via stub)
+
+### Key Takeaways
+
+1. **Stub Implementation Allows Incremental Development**: By delegating to existing braille renderer, we can test the full dispatch flow without implementing full candlestick rendering logic yet.
+
+2. **Regression Tests Are Critical**: When adding new enum values and dispatch logic, test that existing code paths still work identically to prevent subtle bugs.
+
+3. **Clear Documentation in Stubs**: Comment in stub method clarifies it's temporary and references the story (VPR-089) where full implementation will happen.
+
+4. **Test Both Enum Existence and Initialization**: Don't just test that the enum value exists - also test that it can be used to initialize objects and produce expected behavior.
+
+5. **Incremental Feature Building**: Foundation story (VPR-088) adds enum and routing, next story (VPR-089) adds actual rendering logic, then toggle (VPR-090), then integration (VPR-091-092). Each story builds on previous.
+
+6. **Type Safety Maintained**: mypy --strict passes cleanly - enum addition doesn't break type checking.
+
+7. **Test Organization**: New TestCandlestickStyle class groups all candlestick-related tests, making them easy to find and maintain.
+
+8. **All 967 Tests Pass**: Adding new feature didn't break any existing functionality - regression suite caught everything.

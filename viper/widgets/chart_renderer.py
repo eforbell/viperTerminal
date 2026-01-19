@@ -16,6 +16,7 @@ class ChartStyle(Enum):
 
     BRAILLE = "braille"  # High-resolution using Braille patterns (2x4 dots per char)
     BLOCK = "block"  # Simple block characters (▁▂▃▄▅▆▇█)
+    CANDLESTICK = "candlestick"  # OHLC candlestick chart with bodies and wicks
 
 
 @dataclass
@@ -145,6 +146,8 @@ class ChartRenderer:
         # Delegate to specific renderer
         if self.style == ChartStyle.BRAILLE:
             return self._render_braille(prices, dates, dimensions, volumes, opens, period, overlays)
+        elif self.style == ChartStyle.CANDLESTICK:
+            return self._render_candlestick(prices, dates, dimensions, volumes, opens, period, overlays)
         else:
             return self._render_block(prices, dates, dimensions, volumes, opens, period, overlays)
 
@@ -467,6 +470,36 @@ class ChartRenderer:
             max_value=max_price,
             interpolated_count=0,  # Block style doesn't interpolate
         )
+
+    def _render_candlestick(
+        self,
+        prices: list[float],
+        dates: list[datetime] | None,
+        dimensions: ChartDimensions,
+        volumes: list[int] | None = None,
+        opens: list[float] | None = None,
+        period: str | None = None,
+        overlays: list[OverlayData] | None = None,
+    ) -> RenderedChart:
+        """Render chart using candlestick patterns (OHLC visualization).
+
+        Stub implementation - currently delegates to braille renderer.
+        Will be fully implemented in VPR-089.
+
+        Args:
+            prices: List of close prices
+            dates: Optional list of datetime objects
+            dimensions: Chart dimensions
+            volumes: Optional list of volume values
+            opens: Optional list of open prices (required for candlesticks)
+            period: Optional time period for date formatting
+            overlays: Optional list of overlay data (e.g., moving averages)
+
+        Returns:
+            RenderedChart with candlestick visualization
+        """
+        # Stub: delegate to braille renderer for now
+        return self._render_braille(prices, dates, dimensions, volumes, opens, period, overlays)
 
     @overload
     def _upsample(self, data: list[float], target_size: int) -> list[float]: ...

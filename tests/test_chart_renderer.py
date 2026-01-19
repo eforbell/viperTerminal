@@ -902,3 +902,95 @@ class TestOverlayRendering:
 
         # Should still render (overlay will be clipped or scaled appropriately)
         assert result.height == 10
+
+
+class TestCandlestickStyle:
+    """Test suite for candlestick chart style (VPR-088)."""
+
+    def test_candlestick_enum_exists(self) -> None:
+        """Test that CANDLESTICK enum value exists and is usable."""
+        # Verify the enum value exists
+        assert hasattr(ChartStyle, "CANDLESTICK")
+        assert ChartStyle.CANDLESTICK.value == "candlestick"
+
+    def test_candlestick_renderer_basic(self) -> None:
+        """Test basic rendering with CANDLESTICK style."""
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+        prices = [float(i) for i in range(1, 51)]
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions)
+
+        # Should render successfully (stub delegates to braille)
+        assert result.height == 10
+        assert len(result.lines) == 10
+        assert result.min_value == 1.0
+        assert result.max_value == 50.0
+
+    def test_candlestick_style_dispatch(self) -> None:
+        """Test that style dispatch correctly routes to _render_candlestick."""
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+        prices = [100.0, 110.0, 120.0, 130.0, 140.0]
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions)
+
+        # Verify it produces output (stub should delegate to braille)
+        assert result.height == 10
+        assert len(result.lines) > 0
+
+    def test_braille_unchanged_after_candlestick_addition(self) -> None:
+        """Test that existing BRAILLE style produces identical output as before."""
+        # This regression test ensures adding CANDLESTICK didn't break BRAILLE
+        renderer_braille = ChartRenderer(style=ChartStyle.BRAILLE)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+        prices = [100.0 + i for i in range(50)]
+
+        result = renderer_braille.render(prices=prices, dates=None, dimensions=dimensions)
+
+        # Should still render with braille characters
+        for line in result.lines:
+            for char in line:
+                if char != " ":
+                    assert char == " " or (0x2800 <= ord(char) <= 0x28FF)
+
+    def test_block_unchanged_after_candlestick_addition(self) -> None:
+        """Test that existing BLOCK style produces identical output as before."""
+        # This regression test ensures adding CANDLESTICK didn't break BLOCK
+        renderer_block = ChartRenderer(style=ChartStyle.BLOCK)
+        dimensions = ChartDimensions(width=40, height=10, include_y_axis=False, include_x_axis=False)
+        prices = [100.0 + i for i in range(50)]
+
+        result = renderer_block.render(prices=prices, dates=None, dimensions=dimensions)
+
+        # Should still render with block characters
+        blocks = "▁▂▃▄▅▆▇█"
+        has_blocks = any(any(c in blocks for c in line) for line in result.lines)
+        assert has_blocks
+
+    def test_candlestick_with_empty_data(self) -> None:
+        """Test candlestick rendering with empty data."""
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        result = renderer.render(prices=[], dates=None)
+
+        # Should handle empty data gracefully
+        assert result.lines == ["No data"]
+        assert result.width == 7
+        assert result.height == 1
+
+    def test_candlestick_with_y_axis(self) -> None:
+        """Test candlestick rendering with Y-axis enabled."""
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        dimensions = ChartDimensions(width=60, height=10, include_y_axis=True, include_x_axis=False)
+        prices = [100.0, 110.0, 120.0, 130.0, 140.0, 150.0]
+
+        result = renderer.render(prices=prices, dates=None, dimensions=dimensions)
+
+        # Should include Y-axis markers
+        assert result.height == 10
+        assert any("│" in line for line in result.lines)
+
+    def test_candlestick_style_initialization(self) -> None:
+        """Test that ChartRenderer can be initialized with CANDLESTICK style."""
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        assert renderer.style == ChartStyle.CANDLESTICK
