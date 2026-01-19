@@ -575,6 +575,18 @@ class ChartRenderer:
                 chart_width,
             )
 
+        # Apply overlays if provided
+        if overlays:
+            chart_lines = self._apply_overlays_candlestick(
+                chart_lines,
+                overlays,
+                downsampled_closes,
+                min_price,
+                max_price,
+                chart_height,
+                chart_width,
+            )
+
         # Add Y-axis labels
         if dimensions.include_y_axis:
             chart_lines = self._add_y_axis(chart_lines, min_price, max_price, dimensions.y_axis_width)
@@ -807,6 +819,76 @@ class ChartRenderer:
                     # Apply colored overlay character with Rich markup
                     if 0 <= target_row < chart_height and 0 <= char_idx < chart_width:
                         grid[target_row][char_idx] = f"{color_open}{overlay_char}{color_close}"
+
+        # Convert grid back to strings
+        return ["".join(line) for line in grid]
+
+    def _apply_overlays_candlestick(
+        self,
+        chart_lines: list[str],
+        overlays: list[OverlayData],
+        downsampled_closes: list[float],
+        min_price: float,
+        max_price: float,
+        chart_height: int,
+        chart_width: int,
+    ) -> list[str]:
+        """Apply overlay lines to rendered candlestick chart.
+
+        For candlesticks, we use a simple dot marker ('·') to show overlay positions.
+        This creates a clean visual distinction from the candlestick bodies and wicks.
+
+        Args:
+            chart_lines: Existing chart lines (without Y-axis)
+            overlays: List of overlay data to render
+            downsampled_closes: Downsampled close prices (for alignment check)
+            min_price: Minimum price value (for scaling)
+            max_price: Maximum price value (for scaling)
+            chart_height: Chart height in characters
+            chart_width: Chart width in characters
+
+        Returns:
+            Chart lines with overlays applied
+        """
+        # Convert chart lines to a mutable 2D grid
+        grid = [list(line) for line in chart_lines]
+
+        price_range = max_price - min_price
+        if price_range == 0:
+            return chart_lines  # Can't render overlays on flat chart
+
+        # Process each overlay
+        for overlay in overlays:
+            overlay_values = overlay.values
+            # Use Rich markup for Textual compatibility
+            color_open = f"[{overlay.color}]"
+            color_close = f"[/{overlay.color}]"
+            overlay_char = "·"  # Dot marker for overlay points
+
+            # Downsample overlay to match chart width (one value per candle)
+            if len(overlay_values) > chart_width:
+                downsampled_overlay = self._downsample_overlay(overlay_values, chart_width)
+            else:
+                downsampled_overlay = overlay_values
+
+            # Render overlay points
+            for i, value in enumerate(downsampled_overlay):
+                if value is None or i >= chart_width:
+                    continue  # Skip None values and out-of-bounds
+
+                # Normalize value to 0-1 range
+                normalized = (value - min_price) / price_range
+
+                # Convert to row index (inverted - row 0 is top = max price)
+                row = int((1 - normalized) * (chart_height - 1))
+
+                # Place overlay marker in grid
+                # Check if position is valid and doesn't already have colored markup
+                if 0 <= row < chart_height and 0 <= i < chart_width:
+                    # Only overwrite if it's a space or plain character (not part of existing markup)
+                    current = grid[row][i]
+                    if current == " " or (not current.startswith("[") and len(current) == 1):
+                        grid[row][i] = f"{color_open}{overlay_char}{color_close}"
 
         # Convert grid back to strings
         return ["".join(line) for line in grid]

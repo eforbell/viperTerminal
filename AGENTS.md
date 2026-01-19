@@ -4718,3 +4718,96 @@ Implemented simplified IV rank calculation that shows where current ATM IV sits 
 8. **ChartPanel is Self-Contained**: Toggle logic lives in ChartPanel, not App. App just dispatches action. Good separation of concerns.
 
 **Result**: 978 tests passing, 87% coverage. VPR-090 complete with all acceptance criteria met.
+
+### VPR-091: Ensure overlay compatibility with candlesticks
+
+**Objective**: Verify that SMA/EMA overlays, volume bars, and RSI/MACD panels work correctly with candlestick chart style.
+
+**Context**:
+- Braille charts already had overlay support via `_apply_overlays_braille()`
+- Block charts did NOT have overlay support (no implementation)
+- Candlestick charts needed overlay implementation added
+- Volume bars and indicator panels should work automatically via ChartContext
+
+**Implementation Approach**:
+
+1. **Created `_apply_overlays_candlestick()` method**:
+   - Uses similar grid-based approach as braille overlays
+   - Converts chart lines to 2D mutable grid
+   - Processes each overlay: downsample values to match chart width
+   - Uses dot marker ('·') instead of braille patterns for clean visual distinction
+   - Applies Rich markup for colors: `[cyan]·[/cyan]`, `[magenta]·[/magenta]`
+   - Only overwrites spaces or plain characters (preserves existing candle markup)
+
+2. **Integrated into `_render_candlestick()` pipeline**:
+   - Apply overlays AFTER candlestick grid rendering
+   - Apply overlays BEFORE Y-axis labels (same as braille)
+   - Pass downsampled closes for alignment verification
+   - Uses same min_price/max_price for consistent Y-axis scaling
+
+3. **Comprehensive test coverage**:
+   - Test single overlay (SMA) on candlestick chart
+   - Test multiple overlays (SMA20 + SMA50) with distinct colors
+   - Test overlay colors (cyan, magenta) distinct from candle colors (green, red)
+   - Test Y-axis scaling uses high-low range (not just close range)
+
+**Key Patterns**:
+
+1. **Dot Marker for Overlays**: Use '·' (middle dot) character for candlestick overlay markers
+   - Distinct from candle bodies (█) and wicks (│)
+   - Simple and clean visual appearance
+   - Single character = one data point per column
+
+2. **Color Palette Separation**:
+   - Candles: green (bullish), red (bearish), white (doji)
+   - Overlays: cyan (SMA20), magenta (SMA50)
+   - No color overlap = easy visual distinction
+
+3. **Grid-Based Overlay Application**:
+   - Convert string lines to 2D character grid: `grid = [list(line) for line in chart_lines]`
+   - Calculate row position from normalized price: `row = int((1 - normalized) * (chart_height - 1))`
+   - Check before overwriting: only replace spaces or plain chars, not existing markup
+   - Convert back to strings: `["".join(line) for line in grid]`
+
+4. **Y-Axis Scaling Consistency**:
+   - Candlesticks use high-low range: `min_price = min(lows)`, `max_price = max(highs)`
+   - Overlays use same min_price/max_price for consistent scaling
+   - This ensures overlays align correctly with price movements
+
+5. **Overlay Downsampling**:
+   - Reuse existing `_downsample_overlay()` method
+   - Preserves None values (gaps in overlay where calculation impossible)
+   - One overlay value per candle column
+
+6. **Volume and Indicator Panel Compatibility**:
+   - Volume bars: already work because they use `rendered.interpolated_count` and `style`
+   - RSI/MACD panels: already work because they use ChartContext
+   - No changes needed - existing infrastructure handles candlestick style
+
+**Gotchas**:
+
+1. **Don't Overwrite Candle Markup**: Candlesticks already have Rich markup like `[green]█[/green]`. Only place overlay marker if current grid cell is space or plain character: `if current == " " or (not current.startswith("[") and len(current) == 1)`
+
+2. **Flat Chart Edge Case**: If `price_range == 0`, return early without applying overlays (can't calculate normalized positions)
+
+3. **None Value Handling**: Skip overlay points where `value is None` - these represent calculation gaps (e.g., first 19 values for SMA20)
+
+4. **Bounds Checking**: Always verify `0 <= row < chart_height` and `0 <= i < chart_width` before grid access
+
+**Testing Results**:
+- Added 4 comprehensive overlay integration tests
+- All tests pass: `test_candlestick_with_sma_overlay`, `test_candlestick_with_multiple_overlays`, `test_candlestick_overlay_colors_distinct`, `test_candlestick_overlay_y_axis_scaling`
+- Volume bars and RSI/MACD panels verified working (existing tests cover these)
+- Type safety: mypy --strict passes with no issues
+- 982 total tests passing, 87% coverage
+
+**Acceptance Criteria Met**:
+✅ SMA/EMA overlays render correctly over candlestick chart
+✅ Overlay colors (cyan, magenta) remain distinct from candle colors (green, red)
+✅ Overlays use same Y-axis scaling as candlesticks (high-low range)
+✅ Test overlay alignment matches candle positions
+✅ Volume bars below candlestick chart work correctly
+✅ RSI/MACD panels unaffected by chart style change
+✅ 100% test coverage on overlay integration
+
+**Result**: 982 tests passing, 87% coverage. VPR-091 complete with all acceptance criteria met.

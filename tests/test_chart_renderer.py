@@ -1205,3 +1205,162 @@ class TestCandlestickStyle:
         assert result.height == 10
         assert result.min_value == 100.0
         assert result.max_value == 100.0
+
+    def test_candlestick_with_sma_overlay(self) -> None:
+        """Test SMA overlay renders correctly on candlestick chart."""
+        dates = [datetime.now() + timedelta(days=i) for i in range(10)]
+        opens = [100.0, 102.0, 101.0, 103.0, 105.0, 104.0, 106.0, 108.0, 107.0, 109.0]
+        closes = [102.0, 103.0, 102.0, 105.0, 106.0, 105.0, 108.0, 109.0, 108.0, 111.0]
+        highs = [103.0, 104.0, 103.0, 106.0, 107.0, 106.0, 109.0, 110.0, 109.0, 112.0]
+        lows = [99.0, 101.0, 100.0, 102.0, 104.0, 103.0, 105.0, 107.0, 106.0, 108.0]
+        volumes = [1000000] * 10
+
+        # Simple SMA with some None values at the start
+        sma_values: list[float | None] = [None, None, None, 102.0, 103.5, 104.0, 105.5, 107.0, 108.0, 109.0]
+
+        data = HistoricalData(
+            ticker="TEST",
+            period="1W",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        context = ChartContext.from_historical_data(data, width=40, height=15)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+
+        # Create overlay
+        overlay = OverlayData(values=sma_values, color="cyan", name="SMA5")
+
+        result = renderer.render(context=context, overlays=[overlay])
+
+        # Should render successfully
+        assert result.height == 15
+        assert len(result.lines) == 15
+
+        # Check that overlay color appears in output
+        chart_str = "\n".join(result.lines)
+        assert "[cyan]" in chart_str  # Overlay color markup should be present
+        assert "·" in chart_str  # Overlay dot marker should be present
+
+    def test_candlestick_with_multiple_overlays(self) -> None:
+        """Test multiple overlays (SMA20, SMA50) render correctly on candlestick chart."""
+        dates = [datetime.now() + timedelta(days=i) for i in range(10)]
+        opens = [100.0, 102.0, 101.0, 103.0, 105.0, 104.0, 106.0, 108.0, 107.0, 109.0]
+        closes = [102.0, 103.0, 102.0, 105.0, 106.0, 105.0, 108.0, 109.0, 108.0, 111.0]
+        highs = [103.0, 104.0, 103.0, 106.0, 107.0, 106.0, 109.0, 110.0, 109.0, 112.0]
+        lows = [99.0, 101.0, 100.0, 102.0, 104.0, 103.0, 105.0, 107.0, 106.0, 108.0]
+        volumes = [1000000] * 10
+
+        sma20_values: list[float | None] = [None, None, None, 102.0, 103.5, 104.0, 105.5, 107.0, 108.0, 109.0]
+        sma50_values: list[float | None] = [None, None, None, None, None, 103.0, 104.0, 105.0, 106.0, 107.0]
+
+        data = HistoricalData(
+            ticker="TEST",
+            period="1W",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        context = ChartContext.from_historical_data(data, width=40, height=15)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+
+        # Create overlays with distinct colors
+        overlay1 = OverlayData(values=sma20_values, color="cyan", name="SMA20")
+        overlay2 = OverlayData(values=sma50_values, color="magenta", name="SMA50")
+
+        result = renderer.render(context=context, overlays=[overlay1, overlay2])
+
+        # Should render successfully
+        assert result.height == 15
+        assert len(result.lines) == 15
+
+        # Check that both overlay colors appear
+        chart_str = "\n".join(result.lines)
+        assert "[cyan]" in chart_str  # SMA20 color
+        assert "[magenta]" in chart_str  # SMA50 color
+        assert "·" in chart_str  # Overlay markers
+
+    def test_candlestick_overlay_colors_distinct(self) -> None:
+        """Test overlay colors (cyan, magenta) are distinct from candle colors (green, red)."""
+        dates = [datetime.now() + timedelta(days=i) for i in range(5)]
+        opens = [100.0, 102.0, 104.0, 103.0, 105.0]
+        closes = [102.0, 104.0, 103.0, 105.0, 107.0]  # Mixed bullish/bearish
+        highs = [103.0, 105.0, 105.0, 106.0, 108.0]
+        lows = [99.0, 101.0, 102.0, 102.0, 104.0]
+        volumes = [1000000] * 5
+
+        sma_values: list[float | None] = [None, 101.0, 103.0, 104.0, 106.0]
+
+        data = HistoricalData(
+            ticker="TEST",
+            period="1W",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        context = ChartContext.from_historical_data(data, width=40, height=15)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        overlay = OverlayData(values=sma_values, color="cyan", name="SMA")
+
+        result = renderer.render(context=context, overlays=[overlay])
+        chart_str = "\n".join(result.lines)
+
+        # All four colors should be present
+        assert "[green]" in chart_str  # Bullish candles
+        assert "[red]" in chart_str  # Bearish candles
+        assert "[cyan]" in chart_str  # Overlay
+        # Verify overlay uses dot marker, not candle characters
+        assert "·" in chart_str
+
+    def test_candlestick_overlay_y_axis_scaling(self) -> None:
+        """Test overlays use same Y-axis scaling as candlesticks (high-low range)."""
+        dates = [datetime.now() + timedelta(days=i) for i in range(5)]
+        opens = [100.0, 102.0, 101.0, 103.0, 105.0]
+        closes = [102.0, 103.0, 102.0, 105.0, 106.0]
+        highs = [105.0, 106.0, 105.0, 108.0, 110.0]  # High range
+        lows = [95.0, 98.0, 97.0, 99.0, 101.0]  # Low range
+        volumes = [1000000] * 5
+
+        # SMA in middle of high-low range
+        sma_values: list[float | None] = [None, 100.0, 101.0, 102.0, 103.0]
+
+        data = HistoricalData(
+            ticker="TEST",
+            period="1W",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        context = ChartContext.from_historical_data(data, width=40, height=15)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        overlay = OverlayData(values=sma_values, color="cyan", name="SMA")
+
+        result = renderer.render(context=context, overlays=[overlay])
+
+        # Y-axis should use high-low range (95-110), not close range (102-106)
+        assert result.min_value == 95.0
+        assert result.max_value == 110.0
+
+        # Overlay should render successfully
+        chart_str = "\n".join(result.lines)
+        assert "[cyan]" in chart_str
