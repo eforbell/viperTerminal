@@ -13,7 +13,7 @@ from viper.utils.logger import get_logger
 logger = get_logger()
 
 # Valid chart styles
-ChartStyle = Literal["braille", "block"]
+ChartStyleLiteral = Literal["braille", "block", "candlestick"]
 
 # Valid timeframes
 VALID_TIMEFRAMES = ["1W", "1M", "3M", "6M", "1Y", "5Y", "MAX"]
@@ -36,7 +36,7 @@ class Config:
 
     # Chart settings
     default_chart_timeframe: str = "1M"  # Default timeframe for charts
-    chart_style: str = "braille"  # 'braille' or 'block'
+    chart_style: str = "braille"  # 'braille', 'block', or 'candlestick'
 
     # News settings
     news_enabled: bool = True  # Whether news panel is available
@@ -70,7 +70,7 @@ class Config:
             self.default_watchlist = []
 
         # Validate chart_style
-        if self.chart_style not in ("braille", "block"):
+        if self.chart_style not in ("braille", "block", "candlestick"):
             logger.warning(
                 f"Invalid chart_style '{self.chart_style}', using default 'braille'"
             )

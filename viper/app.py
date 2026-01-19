@@ -6,6 +6,7 @@ from textual.containers import Container, Horizontal
 from textual.widgets import Footer, Header
 
 from viper.config import load_config
+from viper.widgets.chart_renderer import ChartStyle
 from viper.services.crypto import CryptoError, CryptoInfo, CryptoInfoError, CryptoQuote, fetch_crypto_info
 from viper.services.history import HistoryManager
 from viper.services.quote import fetch_quote, is_crypto_quote
@@ -251,7 +252,10 @@ class ViperApp(App[None]):
                 with Container(id="info-container"):
                     yield InfoPanel()
                 with Container(id="chart-container"):
-                    yield ChartPanel()
+                    # Map config chart_style string to ChartStyle enum
+                    style_map = {"braille": ChartStyle.BRAILLE, "block": ChartStyle.BLOCK, "candlestick": ChartStyle.CANDLESTICK}
+                    chart_style = style_map.get(self.config.chart_style, ChartStyle.BRAILLE)
+                    yield ChartPanel(style=chart_style)
                 with Container(id="news-container"):
                     yield NewsPanel()
                 with Container(id="article-reader-container"):

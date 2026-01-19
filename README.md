@@ -52,10 +52,9 @@ viper
 **Chart Controls:**
 | Key | Action |
 |-----|--------|
-| `1-7` | Change timeframe (1W, 1M, 3M, 6M, 1Y, 2Y, 5Y) |
-| `0` | MAX timeframe |
-| `t s` | Toggle SMA |
-| `t e` | Toggle EMA |
+| `1-7` | Change timeframe (1W, 1M, 3M, 6M, 1Y, 5Y, MAX) |
+| `v` | Toggle chart style (line/candlestick) |
+| `t a` | Cycle moving averages (Off → SMA → EMA → Both) |
 | `t r` | Toggle RSI |
 | `t m` | Toggle MACD |
 
@@ -76,6 +75,46 @@ viper
 | `n` | Toggle news panel |
 | `j/k` | Navigate articles |
 | `Enter` | Read article |
+
+## Configuration
+
+Viper can be customized via a config file at `~/.config/viper/config.toml`.
+
+### Example Configuration
+
+```toml
+# Watchlist settings
+refresh_interval = 60              # Auto-refresh interval in seconds
+default_watchlist = ["AAPL", "MSFT", "BTC-USD"]
+
+# Chart settings
+chart_style = "candlestick"        # 'braille', 'block', or 'candlestick'
+default_chart_timeframe = "1M"     # '1W', '1M', '3M', '6M', '1Y', '5Y', 'MAX'
+
+# News settings
+news_enabled = true
+news_max_items = 10
+
+# Theme colors (optional)
+[theme_colors]
+positive = "#00ff00"
+negative = "#ff0000"
+background = "#000000"
+```
+
+### Options
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `refresh_interval` | `60` | Watchlist auto-refresh interval in seconds |
+| `default_watchlist` | `[]` | Tickers to load on startup |
+| `chart_style` | `"braille"` | Chart visualization: `braille`, `block`, or `candlestick` |
+| `default_chart_timeframe` | `"1M"` | Initial chart timeframe |
+| `news_enabled` | `true` | Enable news panel |
+| `news_max_items` | `10` | Max news items to display |
+| `theme_colors.positive` | `"#00ff00"` | Color for positive values |
+| `theme_colors.negative` | `"#ff0000"` | Color for negative values |
+| `theme_colors.background` | `"#000000"` | Background color |
 
 ## Building Distributions
 
