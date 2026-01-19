@@ -4673,3 +4673,48 @@ Implemented simplified IV rank calculation that shows where current ATM IV sits 
 9. **Incremental Implementation**: VPR-088 added stub that delegates to braille. VPR-089 replaces stub with full OHLC logic. Each story builds on previous without breaking tests.
 
 10. **Type Safety Maintained**: mypy --strict passes with no issues. All OHLC downsampling functions have proper type signatures and return types.
+
+### VPR-090: Add chart style toggle keybinding with interval display
+
+**Goal**: Add 'v' keybinding to toggle between line (BRAILLE) and candlestick chart views, with interval display in candlestick mode header.
+
+**Files modified**:
+- viper/widgets/chart_panel.py: Added _chart_style state, toggle_chart_style() method, _get_interval_display() helper
+- viper/app.py: Added 'v' keybinding and action_toggle_chart_style() handler
+- viper/widgets/help_screen.py: Added 'v' keybinding documentation in KEYBINDINGS and CHARTS sections
+- tests/test_chart_panel.py: Added 4 comprehensive tests for toggle functionality
+
+**Implementation details**:
+- _chart_style: ChartStyle state variable tracks current view (initialized to BRAILLE)
+- toggle_chart_style() cycles BRAILLE -> CANDLESTICK -> BRAILLE (skips BLOCK)
+- Updates both _chart_style and _renderer.style for consistency
+- Calls _rebuild_content() to re-render without refetching data
+- _get_interval_display() maps interval codes: "1d"→"Daily", "1wk"→"Weekly", "1mo"→"Monthly"
+- Header format in candlestick mode: "AAPL - 1M Chart [Candlestick · Daily]"
+- Header in line mode: "AAPL - 1M Chart" (no interval indicator)
+- Keybinding only works when chart panel is visible (checked in action handler)
+
+**Testing strategy**:
+- test_chart_panel_toggle_chart_style: Verify toggle cycles between styles correctly
+- test_chart_panel_interval_display: Test interval mapping for all three interval codes
+- test_chart_panel_candlestick_header_includes_interval: Verify header format changes
+- test_chart_panel_style_toggle_preserves_data: Ensure data/state preserved across toggles
+
+**Learnings**:
+1. **State Management**: Store both _chart_style (panel state) and _renderer.style (renderer state). Update both on toggle to prevent desync.
+
+2. **Interval Display Pattern**: Map technical interval codes to human-readable names. Users understand "Daily" better than "1d".
+
+3. **Header Conditional Logic**: Only show style/interval when in candlestick mode. Line chart header stays simple. Helps users understand what they're viewing.
+
+4. **No Data Refetch on Toggle**: Style toggle is purely visual. Data already loaded. Just call _rebuild_content() to re-render with new style.
+
+5. **Keybinding Visibility**: Set show=False for 'v' binding since it's contextual (chart must be visible). Prevents confusion in footer.
+
+6. **Help Screen Structure**: Document keybinding in TWO places: KEYBINDINGS section (brief) and CHARTS section (detailed). Users look in both.
+
+7. **Test Coverage**: Test toggle cycles, interval display, header format, and data preservation separately. Makes failures easy to diagnose.
+
+8. **ChartPanel is Self-Contained**: Toggle logic lives in ChartPanel, not App. App just dispatches action. Good separation of concerns.
+
+**Result**: 978 tests passing, 87% coverage. VPR-090 complete with all acceptance criteria met.

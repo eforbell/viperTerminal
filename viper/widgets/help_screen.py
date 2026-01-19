@@ -121,6 +121,7 @@ class HelpScreen(ModalScreen[None]):
                 yield Static("  t-r                Toggle RSI indicator", classes="help-item")
                 yield Static("  t-m                Toggle MACD indicator", classes="help-item")
                 yield Static("  t-a                Cycle moving averages (Off/SMA20/SMA50/Both)", classes="help-item")
+                yield Static("v                    Toggle chart view (Line/Candlestick)", classes="help-item")
                 yield Static("e                    Expand news item (show summary)", classes="help-item")
                 yield Static("1-7                  Select timeframe (chart)", classes="help-item")
                 yield Static("? / F1               Show this help screen", classes="help-item")
@@ -133,11 +134,19 @@ class HelpScreen(ModalScreen[None]):
                     classes="help-item",
                 )
                 yield Static(
+                    "Press 'v' to toggle between line chart and candlestick view.",
+                    classes="help-item",
+                )
+                yield Static(
                     "Use number keys 1-7 to select timeframe:",
                     classes="help-item",
                 )
                 yield Static(
                     "  1=1W  2=1M  3=3M  4=6M  5=1Y  6=5Y  7=MAX",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Candlestick view shows open/high/low/close (OHLC) data per period.",
                     classes="help-item",
                 )
                 yield Static(

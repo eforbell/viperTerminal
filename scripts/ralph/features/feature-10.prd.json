@@ -154,7 +154,11 @@
       "priority": 3,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-089"],
-      "notes": "Simple toggle - data already loaded, just re-render with different style. No network calls needed. Interval display is especially useful for candlesticks so users know if they're looking at daily, weekly, or monthly candles."
+      "notes": "Simple toggle - data already loaded, just re-render with different style. No network calls needed. Interval display is especially useful for candlesticks so users know if they're looking at daily, weekly, or monthly candles.",
+      "passes": true,
+      "completedAt": "2026-01-18",
+      "testsPassing": 978,
+      "coverage": "87%"
     },
     {
       "id": "VPR-091",

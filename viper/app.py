@@ -178,6 +178,7 @@ class ViperApp(App[None]):
         ("5", "timeframe_5", "1Y"),
         ("6", "timeframe_6", "5Y"),
         ("7", "timeframe_7", "MAX"),
+        Binding("v", "toggle_chart_style", "Chart View", show=False),
         ("question_mark,f1", "show_help", "Help"),
     ]
 
@@ -508,6 +509,13 @@ class ViperApp(App[None]):
         if self._chart_panel_visible:
             chart_panel = self.query_one("#chart-container ChartPanel", ChartPanel)
             chart_panel.toggle_macd()
+
+    def action_toggle_chart_style(self) -> None:
+        """Toggle between line and candlestick chart views."""
+        # Only toggle chart style when chart panel is visible
+        if self._chart_panel_visible:
+            chart_panel = self.query_one("#chart-container ChartPanel", ChartPanel)
+            chart_panel.toggle_chart_style()
 
     def on_key(self, event: object) -> None:
         """Handle key presses for prefix system routing.
