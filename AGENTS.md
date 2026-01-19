@@ -4517,3 +4517,159 @@ Implemented simplified IV rank calculation that shows where current ATM IV sits 
 7. **Test Organization**: New TestCandlestickStyle class groups all candlestick-related tests, making them easy to find and maintain.
 
 8. **All 967 Tests Pass**: Adding new feature didn't break any existing functionality - regression suite caught everything.
+
+---
+
+### VPR-089: Implement Candlestick Rendering Logic
+
+**Story**: Implement the core candlestick rendering algorithm with OHLC visualization, proper color coding, Y-axis scaling, and downsampling.
+
+**Key Implementation Patterns**:
+
+1. **OHLC Data Flow via ChartContext**:
+   ```python
+   # ChartContext contains all OHLC data
+   if context is not None:
+       highs = context.highs
+       lows = context.lows
+       opens = context.opens
+       closes = context.prices  # prices = closes
+   ```
+   - ChartContext is the single source of truth for all chart data
+   - Modern path uses context, legacy path approximates highs/lows from open/close
+   - Always prefer context when available for accurate OHLC data
+
+2. **Y-Axis Scaling Using High-Low Range**:
+   ```python
+   # Critical: candlesticks need full range, not just close prices
+   min_price = min(lows)   # Use lows, not closes
+   max_price = max(highs)  # Use highs, not closes
+   ```
+   - Line charts scale to close price range
+   - Candlesticks must scale to high-low range to show wicks correctly
+   - This ensures wicks are visible and properly positioned
+
+3. **OHLC-Preserving Downsampling**:
+   ```python
+   # Standard downsampling loses OHLC structure
+   # Custom methods preserve representative candle for each group
+   def _downsample_ohlc_opens(opens, closes, highs, lows, target_size):
+       # First open in group
+       return [opens[int(i * step)] for i in range(target_size)]
+
+   def _downsample_ohlc_highs(opens, closes, highs, lows, target_size):
+       # Max high in group
+       return [max(highs[start:end]) for each group]
+   ```
+   - Four separate downsampling functions for O, H, L, C
+   - Opens: first value in group (opening price of period)
+   - Highs: max value in group (preserves price range)
+   - Lows: min value in group (preserves price range)
+   - Closes: last value in group (closing price of period)
+   - Maintains meaningful OHLC structure after downsampling
+
+4. **Candlestick Character Rendering**:
+   ```python
+   # Single-character-per-candle for maximum data density
+   # Vertical positioning shows price levels
+   def _render_candlestick_grid(opens, highs, lows, closes, min_price, max_price, height, width):
+       # Normalize to 0-1 range
+       norm_high = (high - min_price) / price_range
+       # Convert to row index (inverted: row 0 = top = max price)
+       row_high = int((1 - norm_high) * (chart_height - 1))
+
+       # Draw upper wick, body, lower wick
+       for row in range(row_high, body_top):
+           grid[row][col] = f"[{color}]│[/{color}]"  # Upper wick
+       for row in range(body_top, body_bottom + 1):
+           grid[row][col] = f"[{color}]█[/{color}]"  # Body
+       for row in range(body_bottom + 1, row_low + 1):
+           grid[row][col] = f"[{color}]│[/{color}]"  # Lower wick
+   ```
+   - Each candle = 1 character width for density
+   - Wicks use vertical line character `│`
+   - Body uses full block character `█`
+   - Vertical position encodes price level
+   - Row 0 = top = max price, Row N = bottom = min price
+
+5. **Bullish/Bearish/Doji Color Coding**:
+   ```python
+   is_bullish = close > open_price
+   is_doji = abs(close - open_price) < price_range * 0.001
+
+   if is_doji:
+       color = "white"
+       self._draw_doji(grid, col, row_close, color)  # Horizontal line
+   elif is_bullish:
+       self._draw_candle(grid, col, row_open, row_close, row_high, row_low, "green")
+   else:
+       self._draw_candle(grid, col, row_open, row_close, row_high, row_low, "red")
+   ```
+   - Bullish (close > open): green candle with body filled
+   - Bearish (close < open): red candle with body filled
+   - Doji (close ≈ open): white horizontal line (0.1% threshold)
+   - Rich markup syntax: `[green]█[/green]`, `[red]█[/red]`
+
+6. **Flat Price Handling**:
+   ```python
+   if price_range == 0:
+       # All prices identical - show doji candles in middle row
+       chart_lines = self._render_flat_candlesticks(chart_height, chart_width)
+   ```
+   - Edge case: when all OHLC values are identical
+   - Renders horizontal lines in middle of chart
+   - Prevents division by zero in normalization
+
+7. **Testing OHLC Rendering**:
+   ```python
+   def test_candlestick_with_ohlc_data():
+       # Create realistic OHLC data with wicks
+       opens = [100.0, 102.0, 101.0, ...]
+       closes = [102.0, 101.0, 103.0, ...]
+       highs = [103.0, 103.0, 104.0, ...]  # Wicks extend above
+       lows = [99.0, 100.0, 100.0, ...]    # Wicks extend below
+
+       data = HistoricalData(ticker="TEST", ..., opens=opens, highs=highs, lows=lows)
+       context = ChartContext.from_historical_data(data, width=60, height=15)
+       result = renderer.render(context=context)
+
+       assert result.min_value == min(lows)  # Uses low, not close
+       assert result.max_value == max(highs) # Uses high, not close
+   ```
+   - Test with ChartContext for realistic data flow
+   - Verify Y-axis uses high-low range, not close range
+   - Test bullish, bearish, and doji candles separately
+   - Test downsampling preserves OHLC structure
+   - Test flat prices edge case
+
+8. **Comprehensive Test Coverage**:
+   - test_candlestick_with_ohlc_data: Full OHLC rendering via ChartContext
+   - test_candlestick_bullish_candle: Verify green color for close > open
+   - test_candlestick_bearish_candle: Verify red color for close < open
+   - test_candlestick_doji_candle: Verify horizontal line for close == open
+   - test_candlestick_y_axis_uses_high_low_range: Verify wicks visible
+   - test_candlestick_ohlc_downsampling: Verify price structure preserved
+   - test_candlestick_flat_prices: Verify no crash on flat data
+   - Result: 93% coverage on chart_renderer.py, all 974 tests pass
+
+### Key Takeaways
+
+1. **ChartContext is the Single Source of Truth**: Always use context.highs and context.lows for accurate candlestick rendering. Legacy approximation (max/min of open/close) is fallback only.
+
+2. **Y-Axis Scaling is Critical**: Candlesticks MUST use high-low range for scaling, unlike line charts that use close prices. This ensures wicks are visible and properly positioned.
+
+3. **OHLC Downsampling is Non-Trivial**: Cannot use simple even-spaced sampling. Must preserve representative candle structure: first open, max high, min low, last close for each group.
+
+4. **Single Character Per Candle**: Maximizes data density while still showing OHLC structure. Vertical position encodes price, character choice (│ vs █) encodes wick vs body.
+
+5. **Rich Markup for Colors**: Use `[green]█[/green]` not ANSI codes. Apply color to entire character including wicks for visual clarity.
+
+6. **Doji Threshold**: Use 0.1% of price range as threshold for doji detection (abs(close - open) < range * 0.001). Prevents floating-point equality issues.
+
+7. **Grid-Based Rendering**: Build 2D character grid first, then join to strings. Allows easy per-character manipulation and color markup application.
+
+8. **Test with Realistic OHLC Data**: Use HistoricalData + ChartContext in tests to mirror production data flow. Test Y-axis scaling, color coding, downsampling, and edge cases separately.
+
+9. **Incremental Implementation**: VPR-088 added stub that delegates to braille. VPR-089 replaces stub with full OHLC logic. Each story builds on previous without breaking tests.
+
+10. **Type Safety Maintained**: mypy --strict passes with no issues. All OHLC downsampling functions have proper type signatures and return types.

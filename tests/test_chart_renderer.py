@@ -994,3 +994,214 @@ class TestCandlestickStyle:
         """Test that ChartRenderer can be initialized with CANDLESTICK style."""
         renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
         assert renderer.style == ChartStyle.CANDLESTICK
+
+    def test_candlestick_with_ohlc_data(self) -> None:
+        """Test candlestick rendering with full OHLC data via ChartContext."""
+        # Create realistic OHLC data
+        dates = [datetime.now() + timedelta(days=i) for i in range(10)]
+        opens = [100.0, 102.0, 101.0, 103.0, 102.0, 105.0, 104.0, 106.0, 105.0, 107.0]
+        closes = [102.0, 101.0, 103.0, 102.0, 105.0, 104.0, 106.0, 105.0, 107.0, 108.0]
+        highs = [103.0, 103.0, 104.0, 104.0, 106.0, 106.0, 107.0, 107.0, 108.0, 109.0]
+        lows = [99.0, 100.0, 100.0, 101.0, 101.0, 103.0, 103.0, 104.0, 104.0, 106.0]
+        volumes = [1000000] * 10
+
+        data = HistoricalData(
+            ticker="TEST",
+            period="1M",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        context = ChartContext.from_historical_data(data, width=60, height=15)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        result = renderer.render(context=context)
+
+        # Should render successfully
+        assert result.height == 15
+        assert result.min_value == min(lows)
+        assert result.max_value == max(highs)
+        # Should have some content
+        assert len(result.lines) > 0
+
+    def test_candlestick_bullish_candle(self) -> None:
+        """Test that bullish candles (close > open) are rendered."""
+        dates = [datetime.now() + timedelta(days=i) for i in range(3)]
+        opens = [100.0, 100.0, 100.0]
+        closes = [110.0, 110.0, 110.0]  # All bullish
+        highs = [115.0, 115.0, 115.0]
+        lows = [95.0, 95.0, 95.0]
+        volumes = [1000000] * 3
+
+        data = HistoricalData(
+            ticker="TEST",
+            period="1W",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        context = ChartContext.from_historical_data(data, width=40, height=10)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        result = renderer.render(context=context)
+
+        # Check that green color markup exists (bullish)
+        chart_content = "".join(result.lines)
+        assert "[green]" in chart_content
+
+    def test_candlestick_bearish_candle(self) -> None:
+        """Test that bearish candles (close < open) are rendered."""
+        dates = [datetime.now() + timedelta(days=i) for i in range(3)]
+        opens = [110.0, 110.0, 110.0]
+        closes = [100.0, 100.0, 100.0]  # All bearish
+        highs = [115.0, 115.0, 115.0]
+        lows = [95.0, 95.0, 95.0]
+        volumes = [1000000] * 3
+
+        data = HistoricalData(
+            ticker="TEST",
+            period="1W",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        context = ChartContext.from_historical_data(data, width=40, height=10)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        result = renderer.render(context=context)
+
+        # Check that red color markup exists (bearish)
+        chart_content = "".join(result.lines)
+        assert "[red]" in chart_content
+
+    def test_candlestick_doji_candle(self) -> None:
+        """Test that doji candles (close == open) are rendered."""
+        dates = [datetime.now() + timedelta(days=i) for i in range(3)]
+        opens = [100.0, 100.0, 100.0]
+        closes = [100.0, 100.0, 100.0]  # All doji
+        highs = [105.0, 105.0, 105.0]
+        lows = [95.0, 95.0, 95.0]
+        volumes = [1000000] * 3
+
+        data = HistoricalData(
+            ticker="TEST",
+            period="1W",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        context = ChartContext.from_historical_data(data, width=40, height=10)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        result = renderer.render(context=context)
+
+        # Doji should render as horizontal line
+        chart_content = "".join(result.lines)
+        assert "─" in chart_content
+
+    def test_candlestick_y_axis_uses_high_low_range(self) -> None:
+        """Test that Y-axis scaling uses high-low range, not just close prices."""
+        dates = [datetime.now() + timedelta(days=i) for i in range(5)]
+        opens = [100.0, 100.0, 100.0, 100.0, 100.0]
+        closes = [102.0, 102.0, 102.0, 102.0, 102.0]
+        # Wicks extend significantly beyond body
+        highs = [120.0, 120.0, 120.0, 120.0, 120.0]
+        lows = [80.0, 80.0, 80.0, 80.0, 80.0]
+        volumes = [1000000] * 5
+
+        data = HistoricalData(
+            ticker="TEST",
+            period="1W",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        context = ChartContext.from_historical_data(data, width=40, height=10)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        result = renderer.render(context=context)
+
+        # Min/max should reflect high-low range, not open-close
+        assert result.min_value == 80.0
+        assert result.max_value == 120.0
+
+    def test_candlestick_ohlc_downsampling(self) -> None:
+        """Test that OHLC downsampling preserves price structure."""
+        # Create 100 data points with known OHLC pattern
+        dates = [datetime.now() + timedelta(days=i) for i in range(100)]
+        opens = [100.0 + i for i in range(100)]
+        closes = [102.0 + i for i in range(100)]
+        highs = [105.0 + i for i in range(100)]
+        lows = [95.0 + i for i in range(100)]
+        volumes = [1000000] * 100
+
+        data = HistoricalData(
+            ticker="TEST",
+            period="3M",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        # Render to narrow width to force downsampling
+        context = ChartContext.from_historical_data(data, width=30, height=10)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        result = renderer.render(context=context)
+
+        # Should use full high-low range from original data
+        assert result.min_value == 95.0  # First low
+        assert result.max_value == 204.0  # Last high (105 + 99)
+
+    def test_candlestick_flat_prices(self) -> None:
+        """Test candlestick rendering when all prices are identical."""
+        dates = [datetime.now() + timedelta(days=i) for i in range(5)]
+        opens = [100.0] * 5
+        closes = [100.0] * 5
+        highs = [100.0] * 5
+        lows = [100.0] * 5
+        volumes = [1000000] * 5
+
+        data = HistoricalData(
+            ticker="TEST",
+            period="1W",
+            interval="1d",
+            dates=dates,
+            prices=closes,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+        )
+
+        context = ChartContext.from_historical_data(data, width=40, height=10)
+        renderer = ChartRenderer(style=ChartStyle.CANDLESTICK)
+        result = renderer.render(context=context)
+
+        # Should render successfully without crashing
+        assert result.height == 10
+        assert result.min_value == 100.0
+        assert result.max_value == 100.0
