@@ -96,7 +96,11 @@
       "priority": 1,
       "estimatedEffort": "Small",
       "dependencies": [],
-      "notes": "Foundation change. Stub implementation allows incremental development. Must not break existing charts."
+      "notes": "Foundation change. Stub implementation allows incremental development. Must not break existing charts.",
+      "passes": true,
+      "completedAt": "2026-01-18",
+      "testsPassing": 967,
+      "coverage": "87%"
     },
     {
       "id": "VPR-089",

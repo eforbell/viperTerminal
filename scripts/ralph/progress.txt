@@ -1517,3 +1517,22 @@
   - 18 comprehensive tests covering all edge cases: ATM not found, NaN IVs, same IVs, boundary values
   - All 959 tests passing, 87% overall coverage, mypy --strict clean
 ---
+
+## 2026-01-18 - VPR-088
+- **What was implemented**: Added CANDLESTICK to ChartStyle enum with stub implementation
+- **Files changed**:
+  - `viper/widgets/chart_renderer.py`: Added CANDLESTICK enum value, updated dispatch logic, added stub _render_candlestick() method
+  - `tests/test_chart_renderer.py`: Added TestCandlestickStyle class with 8 comprehensive tests
+  - `AGENTS.md`: Added VPR-088 learnings section
+- **Learnings**:
+  - **Stub Implementation Pattern**: Delegate to existing renderer (braille) to enable end-to-end testing while deferring full implementation to next story
+  - **Incremental Feature Building**: Foundation story adds enum/routing → next story adds logic → then toggle → then integration
+  - **Regression Testing Critical**: Test that existing BRAILLE and BLOCK styles produce identical output after adding new enum value
+  - **Dispatch with elif**: Use `elif self.style == ChartStyle.CANDLESTICK:` to ensure correct routing, BLOCK remains fallback
+  - **Test Enum Both Ways**: Test enum exists (`hasattr()`, `.value` check) AND test initialization with new value
+  - **Clear Stub Documentation**: Comment in stub method clarifies temporary status and references next story (VPR-089)
+  - **Test Organization**: Group related tests in dedicated class (TestCandlestickStyle) for easy maintenance
+  - **Type Safety**: mypy --strict passes cleanly - enum addition doesn't break type checking
+  - Achieved 87% overall coverage, chart_renderer.py at 93%
+  - All 967 tests passing - no regressions from adding new feature
+---
