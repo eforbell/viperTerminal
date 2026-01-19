@@ -561,10 +561,10 @@ class ChartRenderer:
         if price_range == 0:
             # Flat line - all prices the same
             # Show as doji candles in the middle
-            chart_lines = self._render_flat_candlesticks(chart_height, chart_width)
+            grid = self._render_flat_candlesticks(chart_height, chart_width)
         else:
             # Render candlesticks
-            chart_lines = self._render_candlestick_grid(
+            grid = self._render_candlestick_grid(
                 downsampled_opens,
                 downsampled_highs,
                 downsampled_lows,
@@ -575,10 +575,10 @@ class ChartRenderer:
                 chart_width,
             )
 
-        # Apply overlays if provided
+        # Apply overlays if provided (before converting grid to strings)
         if overlays:
-            chart_lines = self._apply_overlays_candlestick(
-                chart_lines,
+            grid = self._apply_overlays_candlestick(
+                grid,
                 overlays,
                 downsampled_closes,
                 min_price,
@@ -586,6 +586,9 @@ class ChartRenderer:
                 chart_height,
                 chart_width,
             )
+
+        # Convert grid to strings (join each row's cells)
+        chart_lines = ["".join(row) for row in grid]
 
         # Add Y-axis labels
         if dimensions.include_y_axis:
@@ -825,21 +828,21 @@ class ChartRenderer:
 
     def _apply_overlays_candlestick(
         self,
-        chart_lines: list[str],
+        grid: list[list[str]],
         overlays: list[OverlayData],
         downsampled_closes: list[float],
         min_price: float,
         max_price: float,
         chart_height: int,
         chart_width: int,
-    ) -> list[str]:
-        """Apply overlay lines to rendered candlestick chart.
+    ) -> list[list[str]]:
+        """Apply overlay lines to rendered candlestick grid.
 
         For candlesticks, we use a simple dot marker ('·') to show overlay positions.
         This creates a clean visual distinction from the candlestick bodies and wicks.
 
         Args:
-            chart_lines: Existing chart lines (without Y-axis)
+            grid: 2D grid of cells (each cell may contain Rich markup like "[green]█[/green]")
             overlays: List of overlay data to render
             downsampled_closes: Downsampled close prices (for alignment check)
             min_price: Minimum price value (for scaling)
@@ -848,14 +851,11 @@ class ChartRenderer:
             chart_width: Chart width in characters
 
         Returns:
-            Chart lines with overlays applied
+            Modified grid with overlays applied
         """
-        # Convert chart lines to a mutable 2D grid
-        grid = [list(line) for line in chart_lines]
-
         price_range = max_price - min_price
         if price_range == 0:
-            return chart_lines  # Can't render overlays on flat chart
+            return grid  # Can't render overlays on flat chart
 
         # Process each overlay
         for overlay in overlays:
@@ -883,15 +883,13 @@ class ChartRenderer:
                 row = int((1 - normalized) * (chart_height - 1))
 
                 # Place overlay marker in grid
-                # Check if position is valid and doesn't already have colored markup
+                # Only overwrite empty cells (space character)
+                # Each grid cell is a complete unit (e.g., " " or "[green]█[/green]")
                 if 0 <= row < chart_height and 0 <= i < chart_width:
-                    # Only overwrite if it's a space or plain character (not part of existing markup)
-                    current = grid[row][i]
-                    if current == " " or (not current.startswith("[") and len(current) == 1):
+                    if grid[row][i] == " ":
                         grid[row][i] = f"{color_open}{overlay_char}{color_close}"
 
-        # Convert grid back to strings
-        return ["".join(line) for line in grid]
+        return grid
 
     def _get_overlay_braille_char(
         self, left_row: int | None, left_dot: int | None, right_row: int | None, right_dot: int | None, height: int
@@ -1056,7 +1054,7 @@ class ChartRenderer:
             result.append(min(group_lows) if group_lows else lows[start_idx])
         return result
 
-    def _render_flat_candlesticks(self, chart_height: int, chart_width: int) -> list[str]:
+    def _render_flat_candlesticks(self, chart_height: int, chart_width: int) -> list[list[str]]:
         """Render flat candlesticks when all prices are the same.
 
         Shows doji candles (horizontal lines) in the middle of the chart.
@@ -1066,17 +1064,17 @@ class ChartRenderer:
             chart_width: Chart width in characters
 
         Returns:
-            List of strings representing flat candlestick chart
+            2D grid of cells (each cell may contain Rich markup)
         """
         # Initialize empty grid
-        lines = [[" " for _ in range(chart_width)] for _ in range(chart_height)]
+        grid = [[" " for _ in range(chart_width)] for _ in range(chart_height)]
 
         # Draw doji candles in the middle row
         middle_row = chart_height // 2
         for col in range(chart_width):
-            lines[middle_row][col] = "─"
+            grid[middle_row][col] = "─"
 
-        return ["".join(line) for line in lines]
+        return grid
 
     def _render_candlestick_grid(
         self,
@@ -1088,7 +1086,7 @@ class ChartRenderer:
         max_price: float,
         chart_height: int,
         chart_width: int,
-    ) -> list[str]:
+    ) -> list[list[str]]:
         """Render candlestick grid with bodies and wicks.
 
         Each candle is rendered as a single character column:
@@ -1108,7 +1106,7 @@ class ChartRenderer:
             chart_width: Chart width in characters
 
         Returns:
-            List of strings representing candlestick grid
+            2D grid of cells (each cell may contain Rich markup)
         """
         # Initialize empty grid
         grid = [[" " for _ in range(chart_width)] for _ in range(chart_height)]
@@ -1147,8 +1145,7 @@ class ChartRenderer:
                 # Bearish: red
                 self._draw_candle(grid, i, row_open, row_close, row_high, row_low, "red")
 
-        # Convert grid to strings with Rich markup
-        return ["".join(line) for line in grid]
+        return grid
 
     def _draw_doji(self, grid: list[list[str]], col: int, row: int, color: str) -> None:
         """Draw a doji candle (horizontal line) at the specified position.

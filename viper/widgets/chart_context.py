@@ -17,6 +17,26 @@ from datetime import datetime
 from viper.services.history_data import HistoricalData
 
 
+def _calculate_y_axis_width(max_price: float, min_width: int = 12) -> int:
+    """Calculate the required Y-axis width based on the maximum price.
+
+    The Y-axis needs to accommodate labels like "$126,198.07" plus " │" separator.
+    This function ensures the width is sufficient for the largest price label.
+
+    Args:
+        max_price: Maximum price that will be displayed on the Y-axis
+        min_width: Minimum width to return (default 12 for backwards compatibility)
+
+    Returns:
+        Required width: len("$X,XXX.XX") + 2 for " │" separator
+    """
+    # Format the max price to get its display length
+    formatted = f"${max_price:,.2f}"
+    # Add 2 for the " │" separator used in _add_y_axis
+    required_width = len(formatted) + 2
+    return max(min_width, required_width)
+
+
 @dataclass(frozen=True)
 class ChartContext:
     """Immutable chart context holding all shared dimensions and data.
@@ -102,6 +122,11 @@ class ChartContext:
             >>> context = ChartContext.from_historical_data(data, width=100, height=30)
             >>> render_chart(context)
         """
+        # Calculate y_axis_width dynamically based on max price to avoid label overflow
+        # This handles high-value assets like BTC ($126,198.07 = 11 chars, needs width 13)
+        max_price = max(data.highs) if data.highs else max(data.prices) if data.prices else 0
+        calculated_width = _calculate_y_axis_width(max_price, min_width=y_axis_width)
+
         return cls(
             ticker=data.ticker,
             period=data.period,
@@ -114,5 +139,5 @@ class ChartContext:
             lows=data.lows,
             total_width=width,
             total_height=height,
-            y_axis_width=y_axis_width,
+            y_axis_width=calculated_width,
         )

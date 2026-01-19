@@ -385,10 +385,11 @@ class ChartPanel(Widget):
         )
 
         # Mount each line of the chart
-        # Enable markup when overlays are present (they use Rich markup for colors)
-        has_overlays = bool(overlays)
+        # Enable markup when overlays are present OR when using candlestick style
+        # (both use Rich markup for colors - overlays use cyan/magenta, candlesticks use green/red)
+        needs_markup = bool(overlays) or self._chart_style == ChartStyle.CANDLESTICK
         for line in rendered.lines:
-            container.mount(Label(line, classes="chart-line", markup=has_overlays))
+            container.mount(Label(line, classes="chart-line", markup=needs_markup))
 
         # Cache chart area width for volume and RSI (derived from ChartContext)
         chart_area_width = self._chart_context.chart_area_width
