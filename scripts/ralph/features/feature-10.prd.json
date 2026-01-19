@@ -126,7 +126,11 @@
       "priority": 2,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-088"],
-      "notes": "Core rendering logic. Focus on clarity over density - better to show fewer candles clearly than many candles poorly."
+      "notes": "Core rendering logic. Focus on clarity over density - better to show fewer candles clearly than many candles poorly.",
+      "passes": true,
+      "completedAt": "2026-01-18",
+      "testsPassing": 974,
+      "coverage": "93%"
     },
     {
       "id": "VPR-090",

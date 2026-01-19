@@ -1536,3 +1536,25 @@
   - Achieved 87% overall coverage, chart_renderer.py at 93%
   - All 967 tests passing - no regressions from adding new feature
 ---
+
+## 2026-01-18 - VPR-089
+- **What was implemented**: Full OHLC candlestick rendering with bodies, wicks, and color coding
+- **Files changed**:
+  - `viper/widgets/chart_renderer.py`: Implemented `_render_candlestick()`, `_render_candlestick_grid()`, `_draw_candle()`, `_draw_doji()`, `_render_flat_candlesticks()`, and 4 OHLC downsampling methods
+  - `tests/test_chart_renderer.py`: Added 7 comprehensive candlestick tests
+  - `AGENTS.md`: Added VPR-089 learnings section
+- **Learnings**:
+  - ChartContext is single source of truth for OHLC data (highs, lows, opens, closes)
+  - Y-axis scaling MUST use high-low range for candlesticks (not just close prices like line charts)
+  - OHLC downsampling requires 4 separate functions: first open, max high, min low, last close
+  - Each candle = 1 character width for maximum data density
+  - Wicks use `│` character, bodies use `█` character, doji uses `─` horizontal line
+  - Vertical position encodes price level (row 0 = top = max price)
+  - Bullish (close > open): green color, bearish (close < open): red color
+  - Doji threshold: abs(close - open) < price_range * 0.001 (0.1%)
+  - Grid-based rendering: build 2D character grid, apply colors, join to strings
+  - Rich markup for colors: `[green]█[/green]` not ANSI codes
+  - Test with realistic OHLC data via HistoricalData + ChartContext
+  - Achieved 93% coverage on chart_renderer.py, all 974 tests pass
+  - Type-safe implementation: mypy --strict passes with no issues
+---
