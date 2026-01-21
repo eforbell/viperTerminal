@@ -2712,8 +2712,8 @@ async def test_chart_panel_refresh_timer_resets_on_timeframe_change() -> None:
 
 
 @pytest.mark.asyncio
-async def test_chart_panel_refresh_uses_cached_data() -> None:
-    """Test that refresh timer re-renders using cached data without API calls."""
+async def test_chart_panel_refresh_fetches_new_data() -> None:
+    """Test that refresh timer fetches new data and updates the chart."""
     app = ChartPanelTestApp()
     async with app.run_test() as pilot:
         panel = app.query_one(ChartPanel)
@@ -2721,7 +2721,7 @@ async def test_chart_panel_refresh_uses_cached_data() -> None:
         # Set refresh interval to 1 second for faster testing
         panel._refresh_interval = 1
 
-        # Load chart data
+        # Load initial chart data
         dates = [datetime(2024, 1, i + 1) for i in range(30)]
         prices = [float(100 + i % 10) for i in range(30)]
         volumes = [int(1000000) for _ in range(30)]
@@ -2729,7 +2729,7 @@ async def test_chart_panel_refresh_uses_cached_data() -> None:
         highs = [p + 2.0 for p in prices]
         lows = [p - 2.0 for p in prices]
 
-        data = HistoricalData(
+        initial_data = HistoricalData(
             ticker="AAPL",
             period="1M",
             dates=dates,
@@ -2751,23 +2751,53 @@ async def test_chart_panel_refresh_uses_cached_data() -> None:
 
         # Show chart in candlestick mode
         panel._chart_style = ChartStyle.CANDLESTICK
-        panel.show_chart(data, stats)
+        panel.show_chart(initial_data, stats)
         await pilot.pause()
 
-        # Store original data reference
-        original_data = panel._data
+        # Create new data that will be "fetched" on refresh
+        new_prices = [float(110 + i % 10) for i in range(30)]  # Different prices
+        new_data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=new_prices,
+            volumes=volumes,
+            opens=opens,
+            highs=[p + 2.0 for p in new_prices],
+            lows=[p - 2.0 for p in new_prices],
+            interval="1d",
+        )
 
-        # Mock _rebuild_content to track calls
-        with patch.object(panel, "_rebuild_content", wraps=panel._rebuild_content) as mock_rebuild:
+        # Mock fetch_historical_data to return new data
+        with patch(
+            "viper.widgets.chart_panel.fetch_historical_data",
+            new_callable=AsyncMock,
+            return_value=new_data,
+        ) as mock_fetch:
+            # Verify state is correct for refresh
+            assert panel._state == "success"
+            assert panel._current_ticker == "AAPL"
+
             # Trigger refresh manually
             panel._on_refresh_timer()
-            await pilot.pause()
+            # Wait longer for worker to complete
+            await pilot.pause(1.0)
 
-            # Verify _rebuild_content was called
-            assert mock_rebuild.call_count >= 1
+            # Verify fetch was called (may need to wait for worker)
+            if mock_fetch.call_count == 0:
+                # Worker might still be starting, wait more
+                await pilot.pause(1.0)
 
-            # Verify data is still the same cached data (no fetch)
-            assert panel._data is original_data
+            # Verify fetch was called
+            assert mock_fetch.call_count >= 1, f"fetch not called, state={panel._state}, ticker={panel._current_ticker}"
+
+            # Verify data was updated with new data
+            assert panel._data is new_data
+            # Note: prices are close prices in HistoricalData
+            assert panel._data.prices == new_prices
+
+            # Verify last_refresh timestamp was set
+            assert panel._last_refresh is not None
 
 
 @pytest.mark.asyncio

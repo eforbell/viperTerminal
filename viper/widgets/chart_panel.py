@@ -139,6 +139,7 @@ class ChartPanel(Widget):
         self._renderer = ChartRenderer(style=style)
         self._refresh_interval: int = refresh_interval  # Refresh interval for candlestick mode
         self._refresh_timer: Timer | None = None  # Timer for auto-refresh
+        self._last_refresh: datetime | None = None  # Last refresh timestamp
         # Timeframe mappings
         self._timeframes = {
             "1": "1W",
@@ -285,6 +286,10 @@ class ChartPanel(Widget):
             interval_display = self._get_interval_display()
             if interval_display:
                 header_text += f" [Candlestick · {interval_display}]"
+            # Show last refresh time if available
+            if self._last_refresh and self._refresh_interval > 0:
+                refresh_time = self._last_refresh.strftime("%H:%M:%S")
+                header_text += f" [dim](Updated {refresh_time})[/dim]"
 
         # Add MA legend if MAs are displayed
         if self._ma_mode != "off":
@@ -302,7 +307,7 @@ class ChartPanel(Widget):
             if ma_legend_parts:
                 header_text += "  " + "  ".join(ma_legend_parts)
 
-        container.mount(Label(header_text, classes="chart-header"))
+        container.mount(Label(header_text, classes="chart-header", markup=True))
 
         # Timeframe selector bar with active indicator
         timeframe_parts = []
@@ -691,8 +696,43 @@ class ChartPanel(Widget):
             self._refresh_timer = None
 
     def _on_refresh_timer(self) -> None:
-        """Handle refresh timer tick - re-render chart with cached data."""
-        # Only refresh if still in success state with data
-        if self._state == "success" and isinstance(self._data, HistoricalData):
-            # Re-render using existing cached data (no new API calls)
+        """Handle refresh timer tick - fetch fresh data and update chart."""
+        # Only refresh if we have a ticker and in success state
+        if self._state == "success" and self._current_ticker:
+            # Use worker to fetch new data asynchronously
+            self._refresh_chart_data()
+
+    @work(exclusive=True, group="chart_refresh")
+    async def _refresh_chart_data(self) -> None:
+        """Fetch fresh chart data and update display without visual flicker.
+
+        Updates data in place and only refreshes the chart content,
+        avoiding a full remount for a smoother visual experience.
+        """
+        if not self._current_ticker or not self._current_period:
+            return
+
+        ticker = self._current_ticker
+        period = self._current_period
+
+        # Fetch fresh data (no loading state to avoid flicker)
+        result = await fetch_historical_data(ticker, period)
+
+        # Check if ticker/period hasn't changed during fetch
+        if self._current_ticker != ticker or self._current_period != period:
+            return
+
+        # Update chart if we got valid data
+        if isinstance(result, HistoricalData):
+            stats = calculate_stats(result)
+            # Update data without triggering full rebuild
+            self._data = result
+            self._stats = stats
+            # Recalculate indicators with new data
+            self._calculate_moving_averages(result.prices)
+            self._calculate_rsi(result.prices)
+            self._calculate_macd(result.prices)
+            # Mark refresh timestamp
+            self._last_refresh = datetime.now()
+            # Smooth update - just rebuild content (same as initial render)
             self._rebuild_content()
