@@ -4956,3 +4956,88 @@ Implemented simplified IV rank calculation that shows where current ATM IV sits 
 ✅ 100% test coverage on edge cases
 
 **Result**: 991 tests passing, 87% coverage, chart_renderer.py at 93%. VPR-092 complete with all acceptance criteria met.
+
+### VPR-093: Configurable chart refresh for candlestick mode
+
+**Goal**: Add configurable chart refresh interval for candlestick mode to keep chart visual updated with latest cached data.
+
+**Key Decisions**:
+- Refresh interval is configurable via `chart_refresh_interval` in config (default 30s, 0 to disable)
+- Timer only active when: chart in candlestick mode AND interval > 0 AND chart in success state
+- Refresh uses existing cached data - no new API calls (watchlist already refreshes data)
+- Timer resets on manual timeframe change or style toggle
+- Timer cleans up on widget unmount
+
+**Implementation**:
+
+1. **Config Changes**:
+   - Added `chart_refresh_interval: int = 30` to Config dataclass
+   - Added validation: must be non-negative integer (0 disables, negative corrects to default 30)
+   - Added to `load_config()` to read from TOML file
+   - Updated README.md with new config option documentation
+
+2. **ChartPanel Changes**:
+   - Added `refresh_interval` parameter to `__init__()` (passed from app.py via config)
+   - Added `_refresh_timer: Timer | None` instance variable
+   - Added `on_unmount()` to clean up timer on widget unmount
+   - Modified `show_chart()` to call `_update_refresh_timer()` after rendering
+   - Modified `toggle_chart_style()` to call `_update_refresh_timer()` after style change
+   - Modified `change_timeframe()` to stop timer before loading new data
+   - Added `_update_refresh_timer()`: starts timer if conditions met (candlestick + interval > 0 + success state)
+   - Added `_stop_refresh_timer()`: safely stops timer if running
+   - Added `_on_refresh_timer()`: callback that calls `_rebuild_content()` to re-render with cached data
+
+3. **App Changes**:
+   - Updated ChartPanel instantiation in app.py to pass `refresh_interval=self.config.chart_refresh_interval`
+
+4. **Testing**:
+   - Added 5 config tests for `chart_refresh_interval` validation
+   - Added 8 chart panel tests for refresh timer behavior
+   - All 1002 tests passing
+
+**Key Learnings**:
+
+**Textual Timers**:
+- Use `self.set_interval(seconds, callback)` to create periodic timer
+- Returns `Timer` object that can be stopped with `.stop()`
+- Timer callback is a regular method (not async) - use `_rebuild_content()` directly
+- Always clean up timers in `on_unmount()` to prevent leaks
+
+**Conditional Timer Activation**:
+- Timer should only run when specific conditions are met (candlestick mode, interval > 0, success state)
+- Check all conditions in `_update_refresh_timer()` before starting timer
+- Stop existing timer before starting new one to avoid multiple active timers
+- Reset timer on state changes (style toggle, timeframe change)
+
+**Config Validation**:
+- Zero is a valid value for "disable" semantics - validate >= 0, not > 0
+- Negative values should fall back to default, not zero (user probably meant to enable)
+- Type validation: check `isinstance(value, int)` before range validation
+- Add config option to all three places: dataclass field, `__post_init__()` validation, `load_config()` parser
+
+**Testing Timers**:
+- Can test timer existence with `assert panel._refresh_timer is not None`
+- Can trigger timer callback manually with `panel._on_refresh_timer()`
+- Use `patch.object(panel, "_rebuild_content", wraps=...)` to verify callback was called
+- Test timer cleanup on unmount with `panel.on_unmount()`
+
+**Documentation**:
+- Config options need documentation in both example TOML and table in README.md
+- Include default value, valid range, and "disable" semantics in comments
+
+**Acceptance Criteria Met**:
+✅ Added `chart_refresh_interval` to Config dataclass (default 30s)
+✅ Validation: must be non-negative integer, 0 disables refresh
+✅ Refresh timer triggers re-render at configured interval when candlestick mode active
+✅ Re-render uses existing cached data (no new API calls)
+✅ Timer only active when candlestick mode enabled AND interval > 0
+✅ Timer resets on manual timeframe change or style toggle
+✅ No visual flicker during refresh - smooth update via `_rebuild_content()`
+✅ Updated README.md with new config option documentation
+✅ Test: refresh triggers at correct interval
+✅ Test: refresh uses cached data, no network calls
+✅ Test: timer stops when switching away from candlestick
+✅ Test: interval=0 disables refresh
+✅ Test: config validation handles invalid values
+
+**Result**: 1002 tests passing (8 new tests added). VPR-093 complete with all acceptance criteria met.

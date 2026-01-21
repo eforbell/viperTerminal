@@ -255,7 +255,11 @@ class ViperApp(App[None]):
                     # Map config chart_style string to ChartStyle enum
                     style_map = {"braille": ChartStyle.BRAILLE, "block": ChartStyle.BLOCK, "candlestick": ChartStyle.CANDLESTICK}
                     chart_style = style_map.get(self.config.chart_style, ChartStyle.BRAILLE)
-                    yield ChartPanel(style=chart_style, default_period=self.config.default_chart_timeframe)
+                    yield ChartPanel(
+                        style=chart_style,
+                        default_period=self.config.default_chart_timeframe,
+                        refresh_interval=self.config.chart_refresh_interval,
+                    )
                 with Container(id="news-container"):
                     yield NewsPanel()
                 with Container(id="article-reader-container"):

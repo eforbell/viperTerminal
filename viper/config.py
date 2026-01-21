@@ -37,6 +37,7 @@ class Config:
     # Chart settings
     default_chart_timeframe: str = "1Y"  # Default timeframe for charts
     chart_style: str = "candlestick"  # 'braille', 'block', or 'candlestick'
+    chart_refresh_interval: int = 30  # Chart refresh interval in seconds for candlestick mode (0 to disable)
 
     # News settings
     news_enabled: bool = True  # Whether news panel is available
@@ -97,6 +98,13 @@ class Config:
             )
             self.news_max_items = 10
 
+        # Validate chart_refresh_interval is non-negative
+        if not isinstance(self.chart_refresh_interval, int) or self.chart_refresh_interval < 0:
+            logger.warning(
+                f"Invalid chart_refresh_interval '{self.chart_refresh_interval}', using default 30"
+            )
+            self.chart_refresh_interval = 30
+
 
 def get_config_path() -> Path:
     """Get the path to the config file."""
@@ -146,6 +154,9 @@ def load_config() -> Config:
 
         if "news_max_items" in data:
             config_dict["news_max_items"] = data["news_max_items"]
+
+        if "chart_refresh_interval" in data:
+            config_dict["chart_refresh_interval"] = data["chart_refresh_interval"]
 
         logger.info(f"Loaded config from {config_path}")
         return Config(**config_dict)
