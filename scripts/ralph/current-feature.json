@@ -1,10 +1,23 @@
 {
-  "currentFeature": "feature-10",
-  "featureName": "Candlestick Chart View",
-  "prdPath": "features/feature-10.prd.json",
-  "branch": "viper/feature-10-candlestick-chart",
+  "currentFeature": "feature-11",
+  "featureName": "Odds and Ends",
+  "prdPath": "features/feature-11.prd.json",
+  "branch": "viper/feature-11-odds-and-ends",
   "status": "planning",
   "completedFeatures": [
+    {
+      "feature": "feature-10",
+      "featureName": "Candlestick Chart View",
+      "prdPath": "features/feature-10.prd.json",
+      "branch": "viper/feature-10-candlestick-chart",
+      "status": "complete",
+      "completedAt": "2026-01-21",
+      "stories": 5,
+      "testsPassing": 991,
+      "coverage": "87%",
+      "notes": "Implemented candlestick rendering with OHLC display, 'v' key toggle, interval display in header, overlay compatibility. Fixed Rich markup rendering, dynamic Y-axis width for high prices, overlay corruption bug, x-axis scaling for sparse data.",
+      "description": "Add alternative price chart visualization using candlestick patterns. Toggle between line chart and candlestick view with 'v' key. Shows open, high, low, close with green/red color coding."
+    },
     {
       "feature": "feature-9",
       "featureName": "Enhanced Options Explorer",
@@ -173,8 +186,8 @@
       "priority": "Medium",
       "relatedFeature": "feature-1",
       "effort": "Large",
-      "notes": "Feature 8 implemented basic options chain. Feature 9 extends with filtering, IV analysis, and volume highlighting.",
-      "status": "IN_PROGRESS_FEATURE_9"
+      "notes": "Feature 8 implemented basic options chain. Feature 9 extended with filtering, IV analysis, and volume highlighting.",
+      "status": "COMPLETED_FEATURES_8_AND_9"
     },
     {
       "id": "FE-008",

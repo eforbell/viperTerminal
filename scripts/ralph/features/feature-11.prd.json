@@ -1,0 +1,201 @@
+{
+  "branchName": "viper/feature-11-odds-and-ends",
+  "projectName": "Viper Terminal - Feature 11",
+  "description": "Odds and Ends: A collection of small UX improvements to tighten up the app. Includes chart refresh for candlestick mode, multi-ticker watchlist operations, command mode for escaping input focus, and page navigation in options panel.",
+  "principles": [
+    "STABILITY AND PERFORMANCE ARE PARAMOUNT - Recent gains must be preserved",
+    "Rock-solid quality over speed - every change must be bulletproof",
+    "Comprehensive test coverage - unit tests, integration tests, edge cases",
+    "All tests must pass before a story is marked complete",
+    "Minimal changes - surgical fixes, not rewrites",
+    "No regressions - existing functionality must remain intact",
+    "If in doubt, keep it simple"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "tui": "Textual (built on Rich)",
+    "testing": "pytest + pytest-asyncio + pytest-cov",
+    "mocking": "pytest-mock",
+    "typecheck": "mypy --strict",
+    "linting": "ruff"
+  },
+  "userStories": [
+    {
+      "id": "VPR-093",
+      "title": "Configurable chart refresh for candlestick mode",
+      "acceptanceCriteria": [
+        "Add 'chart_refresh_interval' to Config dataclass (default: 30 seconds)",
+        "Add validation: must be positive integer, 0 disables refresh",
+        "When chart is in candlestick mode, trigger re-render at configured interval",
+        "Re-render uses existing cached data (watchlist already refreshes data)",
+        "No new API calls - just re-render with latest cached price data",
+        "Refresh timer only active when candlestick mode is enabled AND interval > 0",
+        "Timer resets on manual timeframe change or style toggle",
+        "No visual flicker during refresh - smooth update",
+        "Update README.md with new config option documentation",
+        "Test: refresh triggers at correct interval",
+        "Test: refresh uses cached data, no network calls",
+        "Test: timer stops when switching away from candlestick",
+        "Test: interval=0 disables refresh",
+        "Test: config validation handles invalid values"
+      ],
+      "priority": 1,
+      "estimatedEffort": "Small",
+      "dependencies": [],
+      "notes": "Watchlist already refreshes data periodically. This just ensures the chart visual updates to reflect that refreshed data. Configurable interval allows users to tune for their needs or disable entirely."
+    },
+    {
+      "id": "VPR-094",
+      "title": "Multi-ticker watchlist add/delete with space-delimited input",
+      "acceptanceCriteria": [
+        "Add command accepts space-delimited tickers: 'w AAPL MSFT GOOGL BTC-USD'",
+        "Delete command accepts space-delimited tickers: 'd AAPL MSFT'",
+        "All valid tickers in input are processed in single operation",
+        "Invalid tickers show error but valid ones still get processed",
+        "No mixing add/delete in same command - prefix determines operation",
+        "Existing single-ticker behavior remains unchanged: 'w AAPL' still works",
+        "Clear feedback on what was added/removed: 'Added: AAPL, MSFT. Failed: INVALID'",
+        "Handles tickers with dashes correctly (BTC-USD, ETH-USD)",
+        "Test: 'w AAPL MSFT GOOGL' adds all three",
+        "Test: 'd AAPL MSFT' removes both",
+        "Test: partial success (some valid, some invalid)",
+        "Test: single ticker still works as before",
+        "Test: tickers with dashes handled correctly"
+      ],
+      "priority": 2,
+      "estimatedEffort": "Small",
+      "dependencies": [],
+      "notes": "Quality-of-life improvement for managing watchlists. Keep existing w/d prefix pattern - just allow multiple tickers after the command. No '-TICKER' syntax to avoid confusion with tickers like BTC-USD."
+    },
+    {
+      "id": "VPR-095",
+      "title": "Command mode - global key to exit input focus",
+      "acceptanceCriteria": [
+        "Escape key exits input bar focus when input bar has focus",
+        "After exiting input focus, chart/news/options keybindings become active",
+        "User can access 'o' (options), 'n' (news), 'v' (chart toggle) without tabbing",
+        "Status bar or visual indicator shows current mode (input vs command)",
+        "Tab still works for panel navigation as before",
+        "Pressing '/' re-enters input/search mode",
+        "No disruption to existing tab-based navigation",
+        "No conflict with news panel Escape (different focus context)",
+        "Test: Escape exits input focus correctly",
+        "Test: global keys work after exiting input mode",
+        "Test: '/' returns to input mode",
+        "Test: existing Tab navigation unaffected",
+        "Test: news panel Escape (reader -> listing) still works"
+      ],
+      "priority": 3,
+      "estimatedEffort": "Medium",
+      "dependencies": [],
+      "notes": "Currently after submitting to watchlist, user is stuck in input mode and must Tab to another panel before using chart/news/options keys. Escape is context-dependent: in input bar it exits to command mode, in news reader it goes back to listing. No conflict since different widgets handle their own focus."
+    },
+    {
+      "id": "VPR-096",
+      "title": "Page Up/Down navigation in options panel",
+      "acceptanceCriteria": [
+        "PgUp/PgDn keybindings in options panel for fast navigation",
+        "Page size: jump 10 items (or visible page height) at a time",
+        "j/k single-item navigation continues to work",
+        "Bounds checking: don't scroll past first/last item",
+        "Selection highlight follows after page jump",
+        "Update help_screen.py with PgUp/PgDn documentation",
+        "Test: PgUp moves up correct number of items",
+        "Test: PgDn moves down correct number of items",
+        "Test: bounds checking at top and bottom",
+        "Test: j/k still work as before"
+      ],
+      "priority": 4,
+      "estimatedEffort": "Small",
+      "dependencies": [],
+      "notes": "Options strike lists can be very long. Single-item navigation with j/k is tedious. Page-based navigation is standard in list UIs."
+    }
+  ],
+  "technicalNotes": {
+    "chartRefresh": {
+      "approach": "Add timer in ChartPanel that triggers re-render when candlestick mode active",
+      "dataSource": "Use existing cached HistoricalData - no new fetches",
+      "configOption": {
+        "name": "chart_refresh_interval",
+        "type": "int",
+        "default": 30,
+        "description": "Chart refresh interval in seconds for candlestick mode (0 to disable)",
+        "validation": "Must be non-negative integer"
+      },
+      "implementation": "Textual's set_timer() or asyncio timer, read interval from config"
+    },
+    "multiTickerInput": {
+      "parsing": "After w/d prefix, split remaining input by spaces",
+      "validation": "Validate each ticker, collect successes and failures",
+      "feedback": "Show summary: 'Added: AAPL, MSFT. Failed: INVALID'",
+      "syntax": {
+        "add": "w AAPL MSFT GOOGL BTC-USD",
+        "delete": "d AAPL MSFT",
+        "single": "w AAPL (unchanged)"
+      },
+      "notes": "No '-TICKER' syntax - avoids confusion with tickers containing dashes"
+    },
+    "commandMode": {
+      "approach": "Track focus state - 'input' vs 'command' mode",
+      "escapeKey": "Escape is standard for exiting input/modal",
+      "contextDependent": {
+        "inputBar": "Escape exits to command mode (new)",
+        "newsReader": "Escape goes back to listing (existing, unchanged)",
+        "noConflict": "Different widgets handle their own Escape when focused"
+      },
+      "globalKeys": "o, n, v, number keys should work in command mode",
+      "visualFeedback": "Could show mode in status bar or change input bar appearance"
+    },
+    "pageNavigation": {
+      "keybindings": "PgUp/PgDn are standard, could also support Ctrl+u/Ctrl+d vim-style",
+      "pageSize": "Either fixed (10 items) or dynamic (visible height)",
+      "implementation": "Modify existing j/k handler to accept larger jumps"
+    },
+    "filesToModify": [
+      "viper/config.py - add chart_refresh_interval option with validation",
+      "viper/widgets/chart_panel.py - add refresh timer for candlestick mode",
+      "viper/widgets/ticker_input.py - parse multi-ticker input",
+      "viper/widgets/watchlist_panel.py - handle batch add/delete",
+      "viper/app.py - command mode focus handling, pass config to ChartPanel",
+      "viper/widgets/options_panel.py - add PgUp/PgDn handlers",
+      "viper/widgets/help_screen.py - document new keybindings",
+      "README.md - document chart_refresh_interval config option"
+    ]
+  },
+  "outOfScope": [
+    "Vim-style command line (:w, :q style) - keep it simple",
+    "Drag-and-drop watchlist reordering",
+    "Options panel filtering by Greeks",
+    "Batch operations on options (multi-select)"
+  ],
+  "successMetrics": [
+    "Chart refreshes at configured interval in candlestick mode without flicker",
+    "chart_refresh_interval config option works (default 30s, 0 disables)",
+    "User can add multiple tickers: 'w AAPL MSFT GOOGL BTC-USD'",
+    "User can delete multiple tickers: 'd AAPL MSFT'",
+    "Escape key exits input mode, enabling chart/news/options keys",
+    "PgUp/PgDn navigates options list efficiently",
+    "All existing functionality continues to work",
+    "All tests pass with >= 90% coverage",
+    "mypy --strict passes with no errors"
+  ],
+  "storyDependencyGraph": {
+    "description": "All stories are independent - can be done in any order or parallel",
+    "flow": "VPR-093, VPR-094, VPR-095, VPR-096 are independent",
+    "parallelization": "All stories can be developed in parallel"
+  },
+  "riskAssessment": {
+    "level": "LOW",
+    "reasons": [
+      "Small, surgical changes - not touching core functionality",
+      "Each story is isolated - no cascading dependencies",
+      "Well-tested existing codebase to build on",
+      "Easy rollback - changes are additive"
+    ],
+    "mitigations": [
+      "Comprehensive testing for each story",
+      "Manual verification before merge",
+      "Feature flags if needed (though probably not necessary)"
+    ]
+  }
+}
