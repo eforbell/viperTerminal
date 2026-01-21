@@ -220,6 +220,10 @@ class HelpScreen(ModalScreen[None]):
                     classes="help-item",
                 )
                 yield Static(
+                    "Use PgUp/PgDn to jump 10 items at a time.",
+                    classes="help-item",
+                )
+                yield Static(
                     "Use [ / ] to cycle through expiration dates.",
                     classes="help-item",
                 )

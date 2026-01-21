@@ -67,6 +67,10 @@ class ViperApp(App[None]):
         border: solid $accent;
     }
 
+    TickerInput:focus {
+        border: double $accent;
+    }
+
     TickerInput.error {
         border: solid red;
     }
@@ -211,6 +215,7 @@ class ViperApp(App[None]):
         self._options_panel_visible = False
         self._current_ticker: str | None = None
         self._technical_prefix_active = False
+        self._input_mode = True  # Track input mode (True) vs command mode (False)
 
     def on_resize(self, event: object) -> None:
         """Handle terminal resize to show/hide watchlist on narrow screens.
@@ -255,7 +260,11 @@ class ViperApp(App[None]):
                     # Map config chart_style string to ChartStyle enum
                     style_map = {"braille": ChartStyle.BRAILLE, "block": ChartStyle.BLOCK, "candlestick": ChartStyle.CANDLESTICK}
                     chart_style = style_map.get(self.config.chart_style, ChartStyle.BRAILLE)
-                    yield ChartPanel(style=chart_style, default_period=self.config.default_chart_timeframe)
+                    yield ChartPanel(
+                        style=chart_style,
+                        default_period=self.config.default_chart_timeframe,
+                        refresh_interval=self.config.chart_refresh_interval,
+                    )
                 with Container(id="news-container"):
                     yield NewsPanel()
                 with Container(id="article-reader-container"):
@@ -270,16 +279,37 @@ class ViperApp(App[None]):
         """Called when app is first mounted."""
         # Set initial focus to the ticker input
         self.query_one(TickerInput).focus()
-        
+
+        # Initialize mode indicator
+        self._input_mode = True
+        self._update_mode_indicator()
+
         # Check if this is the first run and show welcome screen
         if is_first_run():
             self.push_screen(HelpScreen(is_welcome=True))
             mark_first_run_complete()
 
+    def _update_mode_indicator(self) -> None:
+        """Update the status bar to show current mode (input vs command)."""
+        try:
+            status_bar = self.query_one(StatusBar)
+            # Only show mode indicator when in command mode
+            if not self._input_mode:
+                status_bar.set_message("COMMAND MODE (/ to search)")
+            else:
+                # Clear mode indicator when in input mode
+                if not self._technical_prefix_active:
+                    status_bar.set_message("")
+        except Exception:
+            # StatusBar not yet mounted
+            pass
+
     def action_focus_input(self) -> None:
-        """Focus the ticker input bar."""
+        """Focus the ticker input bar and enter input mode."""
         ticker_input = self.query_one(TickerInput)
         ticker_input.focus()
+        self._input_mode = True
+        self._update_mode_indicator()
 
     def action_clear_or_close(self) -> None:
         """Clear input or close overlays when Escape is pressed."""
@@ -677,6 +707,16 @@ class ViperApp(App[None]):
             current_price = self._get_current_price()
             self.run_worker(options_panel.load_options(self._current_ticker, current_price))
 
+    def on_ticker_input_input_blurred(self, event: TickerInput.InputBlurred) -> None:
+        """Handle input blur event when user exits input mode with Escape.
+
+        Args:
+            event: The input blurred event.
+        """
+        # Enter command mode
+        self._input_mode = False
+        self._update_mode_indicator()
+
     async def on_ticker_input_ticker_lookup(self, event: TickerInput.TickerLookup) -> None:
         """Handle ticker lookup events.
 
@@ -685,25 +725,60 @@ class ViperApp(App[None]):
         """
         ticker = event.ticker
 
-        # Check for watchlist commands: 'w TICKER' to add, 'd TICKER' to remove
+        # Check for watchlist commands: 'w TICKER(s)' to add, 'd TICKER(s)' to remove
         if ticker.startswith("W "):
-            # Add to watchlist
-            ticker_to_add = ticker[2:].strip()
-            if ticker_to_add:
-                self.watchlist_manager.add(ticker_to_add)
-                # Notify watchlist panel to refresh
+            # Add to watchlist - supports multiple space-delimited tickers
+            tickers_input = ticker[2:].strip()
+            if tickers_input:
+                # Split by whitespace to support multiple tickers
+                tickers_to_add = tickers_input.split()
+                added: list[str] = []
+                failed_add: list[str] = []
+
                 watchlist_panel = self.query_one(WatchlistPanel)
-                watchlist_panel.on_ticker_added(ticker_to_add)
+
+                for ticker_symbol in tickers_to_add:
+                    ticker_symbol = ticker_symbol.strip().upper()
+                    if ticker_symbol:
+                        # Basic validation: non-empty and reasonable length
+                        if len(ticker_symbol) > 0 and len(ticker_symbol) <= 10:
+                            self.watchlist_manager.add(ticker_symbol)
+                            added.append(ticker_symbol)
+                        else:
+                            failed_add.append(ticker_symbol)
+
+                # Notify watchlist panel to refresh (once for all additions)
+                if added:
+                    for ticker_symbol in added:
+                        watchlist_panel.on_ticker_added(ticker_symbol)
+
+                # Show feedback message
+                self._show_watchlist_feedback(added, failed_add, "Added")
             return
 
         if ticker.startswith("D "):
-            # Remove from watchlist
-            ticker_to_remove = ticker[2:].strip()
-            if ticker_to_remove:
-                self.watchlist_manager.remove(ticker_to_remove)
-                # Notify watchlist panel to refresh
+            # Remove from watchlist - supports multiple space-delimited tickers
+            tickers_input = ticker[2:].strip()
+            if tickers_input:
+                # Split by whitespace to support multiple tickers
+                tickers_to_remove = tickers_input.split()
+                removed: list[str] = []
+                failed_remove: list[str] = []
+
                 watchlist_panel = self.query_one(WatchlistPanel)
-                watchlist_panel.on_ticker_removed(ticker_to_remove)
+
+                for ticker_symbol in tickers_to_remove:
+                    ticker_symbol = ticker_symbol.strip().upper()
+                    if ticker_symbol:
+                        # Try to remove - returns True if found
+                        if self.watchlist_manager.remove(ticker_symbol):
+                            removed.append(ticker_symbol)
+                            watchlist_panel.on_ticker_removed(ticker_symbol)
+                        else:
+                            failed_remove.append(ticker_symbol)
+
+                # Show feedback message
+                self._show_watchlist_feedback(removed, failed_remove, "Removed")
             return
 
         # Regular quote lookup
@@ -720,6 +795,28 @@ class ViperApp(App[None]):
             options_panel = self.query_one(OptionsChainPanel)
             current_price = self._get_current_price()
             self.run_worker(options_panel.load_options(self._current_ticker, current_price))
+
+    def _show_watchlist_feedback(
+        self, success: list[str], failed: list[str], operation: str
+    ) -> None:
+        """Show feedback message for watchlist operations.
+
+        Args:
+            success: List of tickers that succeeded.
+            failed: List of tickers that failed.
+            operation: Operation name ("Added" or "Removed").
+        """
+        parts: list[str] = []
+
+        if success:
+            parts.append(f"{operation}: {', '.join(success)}")
+
+        if failed:
+            parts.append(f"Failed: {', '.join(failed)}")
+
+        if parts:
+            message = ". ".join(parts)
+            self.notify(message, severity="information" if not failed else "warning")
 
     def _get_current_price(self) -> float | None:
         """Get the current price from the quote panel.

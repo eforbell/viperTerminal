@@ -2,8 +2,10 @@
 
 from datetime import datetime
 
+from textual import work
 from textual.app import ComposeResult
 from textual.containers import Container
+from textual.timer import Timer
 from textual.widget import Widget
 from textual.widgets import Label, LoadingIndicator
 
@@ -114,12 +116,18 @@ class ChartPanel(Widget):
     }
     """
 
-    def __init__(self, style: ChartStyle = ChartStyle.CANDLESTICK, default_period: str = "1Y") -> None:
+    def __init__(
+        self,
+        style: ChartStyle = ChartStyle.CANDLESTICK,
+        default_period: str = "1Y",
+        refresh_interval: int = 30,
+    ) -> None:
         """Initialize the chart panel.
 
         Args:
             style: Chart rendering style (BRAILLE, BLOCK, or CANDLESTICK)
             default_period: Default timeframe for charts (1W, 1M, 3M, 6M, 1Y, 5Y, MAX)
+            refresh_interval: Chart refresh interval in seconds for candlestick mode (0 to disable)
         """
         super().__init__()
         self._state: str = "empty"
@@ -129,6 +137,8 @@ class ChartPanel(Widget):
         self._current_period: str = default_period
         self._chart_style: ChartStyle = style  # Current chart style
         self._renderer = ChartRenderer(style=style)
+        self._refresh_interval: int = refresh_interval  # Refresh interval for candlestick mode
+        self._refresh_timer: Timer | None = None  # Timer for auto-refresh
         # Timeframe mappings
         self._timeframes = {
             "1": "1W",
@@ -173,6 +183,10 @@ class ChartPanel(Widget):
         """Initialize content when mounted."""
         self._rebuild_content()
 
+    def on_unmount(self) -> None:
+        """Clean up timer when unmounted."""
+        self._stop_refresh_timer()
+
     def show_loading(self, ticker: str, period: str) -> None:
         """Display loading state with spinner.
 
@@ -204,6 +218,8 @@ class ChartPanel(Widget):
         # Calculate MACD when chart loads (cache for toggles)
         self._calculate_macd(data.prices)
         self._rebuild_content()
+        # Start refresh timer if in candlestick mode
+        self._update_refresh_timer()
 
     def show_error(self, error: HistoricalDataError) -> None:
         """Display an error state.
@@ -494,6 +510,8 @@ class ChartPanel(Widget):
         """
         # Only change if we have a ticker and it's different from current
         if self._current_ticker and period != self._current_period:
+            # Reset refresh timer on manual timeframe change
+            self._stop_refresh_timer()
             await self.load_chart(self._current_ticker, period)
 
     def get_timeframe_for_key(self, key: str) -> str | None:
@@ -624,6 +642,9 @@ class ChartPanel(Widget):
         # Re-render chart with new style (no refetch needed)
         self._rebuild_content()
 
+        # Update refresh timer based on new style
+        self._update_refresh_timer()
+
     def _get_interval_display(self) -> str:
         """Get human-readable interval name for current chart data.
 
@@ -641,3 +662,37 @@ class ChartPanel(Widget):
         }
 
         return interval_map.get(self._data.interval, self._data.interval)
+
+    def _update_refresh_timer(self) -> None:
+        """Update the refresh timer based on current chart state.
+
+        Timer is active when:
+        - Chart is in candlestick mode
+        - Refresh interval > 0
+        - Chart is in success state
+        """
+        # Stop existing timer first
+        self._stop_refresh_timer()
+
+        # Start timer if conditions are met
+        if (
+            self._chart_style == ChartStyle.CANDLESTICK
+            and self._refresh_interval > 0
+            and self._state == "success"
+        ):
+            self._refresh_timer = self.set_interval(
+                self._refresh_interval, self._on_refresh_timer
+            )
+
+    def _stop_refresh_timer(self) -> None:
+        """Stop the refresh timer if it's running."""
+        if self._refresh_timer:
+            self._refresh_timer.stop()
+            self._refresh_timer = None
+
+    def _on_refresh_timer(self) -> None:
+        """Handle refresh timer tick - re-render chart with cached data."""
+        # Only refresh if still in success state with data
+        if self._state == "success" and isinstance(self._data, HistoricalData):
+            # Re-render using existing cached data (no new API calls)
+            self._rebuild_content()

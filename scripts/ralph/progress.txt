@@ -1633,3 +1633,87 @@
   - All 991 tests passing (up from 982), chart_renderer.py at 93% coverage (up from 89%)
   - Overall coverage 87%, mypy --strict clean
 ---
+
+## 2026-01-21 - VPR-093
+- **What was implemented**: Configurable chart refresh interval for candlestick mode to keep visuals updated with cached data
+- **Files changed**:
+  - `viper/config.py`: Added `chart_refresh_interval: int = 30` field with validation (>= 0, default 30)
+  - `viper/widgets/chart_panel.py`: Added refresh timer logic (_refresh_timer, _update_refresh_timer(), _stop_refresh_timer(), _on_refresh_timer()), updated __init__, on_unmount, show_chart, toggle_chart_style, change_timeframe
+  - `viper/app.py`: Pass refresh_interval from config to ChartPanel constructor
+  - `README.md`: Documented new chart_refresh_interval config option
+  - `tests/test_config.py`: Added 5 new tests for chart_refresh_interval validation
+  - `tests/test_chart_panel.py`: Added 8 new tests for refresh timer behavior
+  - `AGENTS.md`: Added VPR-093 learnings section
+- **Learnings**:
+  - **Textual Timers**: Use `self.set_interval(seconds, callback)` for periodic timers, returns `Timer` object with `.stop()` method
+  - **Timer Callback**: Regular method (not async), directly calls `_rebuild_content()` to re-render with cached data
+  - **Timer Cleanup**: Always stop timers in `on_unmount()` to prevent memory leaks when widget is removed
+  - **Conditional Timer Activation**: Only start timer when ALL conditions met: candlestick mode + interval > 0 + success state
+  - **Timer Reset Logic**: Stop existing timer before starting new one to avoid multiple active timers
+  - **State Change Handling**: Reset timer on style toggle (to/from candlestick) and timeframe change (manual refresh)
+  - **Config Validation**: Zero is valid for "disable" semantics - validate >= 0 not > 0, negatives fall back to default 30
+  - **Config Triple Update**: Add to dataclass field, `__post_init__()` validation, and `load_config()` parser
+  - **Type Validation First**: Check `isinstance(value, int)` before range validation to handle invalid types
+  - **Testing Timer Existence**: `assert panel._refresh_timer is not None` to verify timer is active
+  - **Testing Timer Behavior**: Trigger callback manually with `panel._on_refresh_timer()`, use `patch.object(..., wraps=...)` to verify calls
+  - **Testing Timer Cleanup**: Call `panel.on_unmount()` and verify `_refresh_timer is None`
+  - **Documentation Pattern**: Config options need both example in TOML and table row in README with default/range/semantics
+  - **No Network Calls**: Refresh re-renders using cached data from existing `self._data` - watchlist already refreshes API data
+  - **Smooth Updates**: No visual flicker because `_rebuild_content()` efficiently reuses cached calculations (MAs, RSI, MACD)
+  - All 1002 tests passing (13 new tests: 5 config, 8 chart panel), mypy --strict clean
+  - VPR-093 complete with all acceptance criteria met
+---
+
+## 2026-01-21 - VPR-094
+- Implemented multi-ticker watchlist add/delete with space-delimited input
+- Users can now batch add/remove tickers: 'w AAPL MSFT GOOGL' or 'd AAPL MSFT'
+- Added user feedback notifications showing which tickers succeeded/failed
+- Files changed: viper/app.py (updated on_ticker_input_ticker_lookup and added _show_watchlist_feedback helper)
+- Tests added: 7 new tests in tests/test_app.py covering all multi-ticker scenarios
+- **Learnings:**
+  - When defining similar variables in separate if blocks, use unique names (failed_add vs failed_remove) to avoid mypy no-redef errors
+  - Batch UI refresh after all operations complete, not after each ticker
+  - Test isolation: Clear watchlist state in tests to avoid interference from real config files
+  - User feedback pattern: Clear, concise messages like "Added: AAPL, MSFT. Failed: INVALID"
+---
+
+## 2026-01-21 - VPR-095
+- **What was implemented**: Command mode with Escape to exit input focus
+- **Files changed**:
+  - `viper/widgets/ticker_input.py`: Added `InputBlurred` event, Escape binding with `action_blur_input()`
+  - `viper/app.py`: Added `_input_mode` tracking, `on_ticker_input_input_blurred()` handler, `_update_mode_indicator()`, CSS focus styling
+  - `tests/test_ticker_input.py`: Added 4 new tests for Escape/blur functionality
+  - `tests/test_app.py`: Added 6 new command mode tests, updated 3 existing tests for new behavior
+  - `AGENTS.md`: Added comprehensive VPR-095 learnings section
+- **Learnings**:
+  - Widget bindings with `priority=True` handle keys before app-level bindings
+  - When input has focus, its Escape binding fires first; when input lacks focus, app-level Escape fires
+  - No conflict between different focus contexts - each widget handles its own keys
+  - Custom `InputBlurred` Message enables explicit widget-to-app communication
+  - CSS `TickerInput:focus { border: double $accent; }` provides visual feedback
+  - Status bar shows "COMMAND MODE (/ to search)" when not in input mode
+  - UX improvement: Escape now blurs input (preserves value) instead of clearing
+  - Test migration: Updated 3 existing tests that relied on old Escape-clears-input behavior
+  - Context-dependent testing: Different test scenarios for input focused vs not focused
+  - All 1019 tests passing with 87% coverage
+
+---
+
+## 2026-01-21 - VPR-096
+- **What was implemented**: Page Up/Down navigation in options panel for fast strike list navigation
+- **Files changed**:
+  - `viper/widgets/options_panel.py`: Added pageup/pagedown bindings and action methods (jump 10 items)
+  - `viper/widgets/help_screen.py`: Documented PgUp/PgDn in options section
+  - `tests/test_options_panel.py`: Added 6 page navigation tests, fixed `create_options_chain()` helper
+  - `scripts/ralph/features/feature-11.prd.json`: Marked VPR-096 complete
+- **Learnings**:
+  - Use lowercase Textual key names: "pagedown", "pageup" (not "PageDown" or "PgDn")
+  - Page navigation pattern: `min(index + page_size, max_index)` and `max(index - page_size, 0)`
+  - Works seamlessly in dual modes: normal mode (contracts) and summary mode (expirations)
+  - Page navigation respects filter mode automatically (operates on filtered contract list)
+  - Test helper gotcha: `create_options_chain(num_calls=25)` was only creating 3 contracts (hardcoded list slice)
+  - Fixed by generating contracts in loop instead of slicing: `for i in range(num_calls): ...append(create_option_contract())`
+  - Dynamic generation enables realistic page navigation tests with 25+ contracts
+  - 1025 tests passing, 87% coverage, all acceptance criteria met
+---
+

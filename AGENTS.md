@@ -36,6 +36,36 @@ This applies to: volume bars, moving average overlays, RSI indicators, any color
 
 ---
 
+## ⚠️ CRITICAL: Test Isolation from User Environment ⚠️
+
+**TESTS MUST NEVER ACCESS THE REAL USER'S HOME DIRECTORY OR CONFIG FILES!**
+
+This project uses `~/.config/viper/` for persistent data (watchlist, history, config). Tests that create `WatchlistManager()`, `ViperApp()`, or any service without proper isolation can:
+
+1. **READ** the user's real config - causing flaky tests based on user state
+2. **WRITE** to the user's real config - **DELETING USER DATA!**
+
+**The `tests/conftest.py` file provides automatic isolation** via the `isolate_home_directory` fixture which patches `Path.home()` to return a temp directory. This runs automatically for ALL tests.
+
+**NEVER DO THIS:**
+```python
+# ❌ DANGEROUS - uses real home directory!
+manager = WatchlistManager()
+app = ViperApp()
+```
+
+**If you need explicit isolation (the conftest.py handles this automatically):**
+```python
+# ✅ SAFE - explicitly use temp directory
+def test_something(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    manager = WatchlistManager()  # Now safe - uses tmp_path
+```
+
+**DO NOT use `app.watchlist_manager._items = []` as a workaround** - this only protects reading, NOT writing. The proper fix is to isolate `Path.home()`.
+
+---
+
 ## Codebase Patterns
 
 ### Python Project Setup
@@ -4956,3 +4986,302 @@ Implemented simplified IV rank calculation that shows where current ATM IV sits 
 ✅ 100% test coverage on edge cases
 
 **Result**: 991 tests passing, 87% coverage, chart_renderer.py at 93%. VPR-092 complete with all acceptance criteria met.
+
+### VPR-093: Configurable chart refresh for candlestick mode
+
+**Goal**: Add configurable chart refresh interval for candlestick mode to keep chart visual updated with latest cached data.
+
+**Key Decisions**:
+- Refresh interval is configurable via `chart_refresh_interval` in config (default 30s, 0 to disable)
+- Timer only active when: chart in candlestick mode AND interval > 0 AND chart in success state
+- Refresh uses existing cached data - no new API calls (watchlist already refreshes data)
+- Timer resets on manual timeframe change or style toggle
+- Timer cleans up on widget unmount
+
+**Implementation**:
+
+1. **Config Changes**:
+   - Added `chart_refresh_interval: int = 30` to Config dataclass
+   - Added validation: must be non-negative integer (0 disables, negative corrects to default 30)
+   - Added to `load_config()` to read from TOML file
+   - Updated README.md with new config option documentation
+
+2. **ChartPanel Changes**:
+   - Added `refresh_interval` parameter to `__init__()` (passed from app.py via config)
+   - Added `_refresh_timer: Timer | None` instance variable
+   - Added `on_unmount()` to clean up timer on widget unmount
+   - Modified `show_chart()` to call `_update_refresh_timer()` after rendering
+   - Modified `toggle_chart_style()` to call `_update_refresh_timer()` after style change
+   - Modified `change_timeframe()` to stop timer before loading new data
+   - Added `_update_refresh_timer()`: starts timer if conditions met (candlestick + interval > 0 + success state)
+   - Added `_stop_refresh_timer()`: safely stops timer if running
+   - Added `_on_refresh_timer()`: callback that calls `_rebuild_content()` to re-render with cached data
+
+3. **App Changes**:
+   - Updated ChartPanel instantiation in app.py to pass `refresh_interval=self.config.chart_refresh_interval`
+
+4. **Testing**:
+   - Added 5 config tests for `chart_refresh_interval` validation
+   - Added 8 chart panel tests for refresh timer behavior
+   - All 1002 tests passing
+
+**Key Learnings**:
+
+**Textual Timers**:
+- Use `self.set_interval(seconds, callback)` to create periodic timer
+- Returns `Timer` object that can be stopped with `.stop()`
+- Timer callback is a regular method (not async) - use `_rebuild_content()` directly
+- Always clean up timers in `on_unmount()` to prevent leaks
+
+**Conditional Timer Activation**:
+- Timer should only run when specific conditions are met (candlestick mode, interval > 0, success state)
+- Check all conditions in `_update_refresh_timer()` before starting timer
+- Stop existing timer before starting new one to avoid multiple active timers
+- Reset timer on state changes (style toggle, timeframe change)
+
+**Config Validation**:
+- Zero is a valid value for "disable" semantics - validate >= 0, not > 0
+- Negative values should fall back to default, not zero (user probably meant to enable)
+- Type validation: check `isinstance(value, int)` before range validation
+- Add config option to all three places: dataclass field, `__post_init__()` validation, `load_config()` parser
+
+**Testing Timers**:
+- Can test timer existence with `assert panel._refresh_timer is not None`
+- Can trigger timer callback manually with `panel._on_refresh_timer()`
+- Use `patch.object(panel, "_rebuild_content", wraps=...)` to verify callback was called
+- Test timer cleanup on unmount with `panel.on_unmount()`
+
+**Documentation**:
+- Config options need documentation in both example TOML and table in README.md
+- Include default value, valid range, and "disable" semantics in comments
+
+**Acceptance Criteria Met**:
+✅ Added `chart_refresh_interval` to Config dataclass (default 30s)
+✅ Validation: must be non-negative integer, 0 disables refresh
+✅ Refresh timer triggers re-render at configured interval when candlestick mode active
+✅ Re-render uses existing cached data (no new API calls)
+✅ Timer only active when candlestick mode enabled AND interval > 0
+✅ Timer resets on manual timeframe change or style toggle
+✅ No visual flicker during refresh - smooth update via `_rebuild_content()`
+✅ Updated README.md with new config option documentation
+✅ Test: refresh triggers at correct interval
+✅ Test: refresh uses cached data, no network calls
+✅ Test: timer stops when switching away from candlestick
+✅ Test: interval=0 disables refresh
+✅ Test: config validation handles invalid values
+
+**Result**: 1002 tests passing (8 new tests added). VPR-093 complete with all acceptance criteria met.
+
+---
+
+## VPR-094: Multi-ticker Watchlist Add/Delete (2026-01-21)
+
+**Feature**: Space-delimited ticker input for batch watchlist operations.
+
+**Implementation Pattern**:
+```python
+# Parse space-delimited input
+tickers_to_add = input_string.split()
+
+# Track successes and failures separately
+added: list[str] = []
+failed_add: list[str] = []
+
+# Process each ticker
+for ticker in tickers_to_add:
+    if validate(ticker):
+        manager.add(ticker)
+        added.append(ticker)
+    else:
+        failed_add.append(ticker)
+
+# Provide user feedback
+show_feedback(added, failed_add, "Added")
+```
+
+**Key Learnings**:
+- **Variable Scoping**: When defining similar variables in separate `if` blocks (add vs delete), use unique names like `failed_add` and `failed_remove` to avoid mypy `no-redef` errors
+- **Batch Notifications**: Refresh UI once after all operations complete, not after each individual ticker
+- **User Feedback**: Clear, concise messages: "Added: AAPL, MSFT. Failed: INVALID"
+- **Test Isolation**: Clear watchlist state in tests (`app.watchlist_manager._items = []`) to avoid interference from real config files
+
+**Testing Pattern**:
+```python
+# Clear state for isolated tests
+app.watchlist_manager._items = []
+
+# Test multi-ticker add
+ticker_input.value = "w AAPL MSFT GOOGL"
+await pilot.press("enter")
+await pilot.pause()
+
+# Verify results
+assert all(t in watchlist for t in ["AAPL", "MSFT", "GOOGL"])
+```
+
+**Acceptance Criteria Met**:
+✅ Add command accepts space-delimited tickers: 'w AAPL MSFT GOOGL BTC-USD'
+✅ Delete command accepts space-delimited tickers: 'd AAPL MSFT'
+✅ All valid tickers processed in single operation
+✅ Invalid tickers show error but valid ones still get processed
+✅ Existing single-ticker behavior remains unchanged: 'w AAPL' still works
+✅ Clear feedback: 'Added: AAPL, MSFT. Failed: INVALID'
+✅ Handles tickers with dashes correctly (BTC-USD, ETH-USD)
+✅ Test: 'w AAPL MSFT GOOGL' adds all three
+✅ Test: 'd AAPL MSFT' removes both
+✅ Test: partial success (some valid, some invalid)
+✅ Test: single ticker still works as before
+✅ Test: tickers with dashes handled correctly
+
+**Files Modified**:
+- `viper/app.py`: Updated `on_ticker_input_ticker_lookup()` to parse multi-ticker input, added `_show_watchlist_feedback()` helper
+- `tests/test_app.py`: Added 7 new tests for multi-ticker functionality
+
+**Result**: 1009 tests passing (7 new tests added). Coverage: 88%. VPR-094 complete.
+
+
+---
+
+## VPR-095: Command Mode - Global Key to Exit Input Focus (2026-01-21)
+
+**Feature**: Escape key exits input focus, enabling chart/news/options keys without tabbing. '/' re-enters input mode.
+
+**Implementation Pattern**:
+```python
+# In TickerInput widget - add Escape binding
+class TickerInput(Input):
+    BINDINGS = [
+        Binding("escape", "blur_input", "Exit Input", show=False, priority=True),
+    ]
+
+    def action_blur_input(self) -> None:
+        """Blur the input to exit input mode."""
+        self.remove_class("error")
+        self.blur()
+        self.post_message(self.InputBlurred())
+
+# In ViperApp - track mode and handle event
+def __init__(self) -> None:
+    self._input_mode = True  # Track input vs command mode
+
+def on_ticker_input_input_blurred(self, event: TickerInput.InputBlurred) -> None:
+    """Handle input blur - enter command mode."""
+    self._input_mode = False
+    self._update_mode_indicator()
+
+def action_focus_input(self) -> None:
+    """'/' key re-enters input mode."""
+    ticker_input.focus()
+    self._input_mode = True
+    self._update_mode_indicator()
+```
+
+**Key Learnings**:
+
+**Widget Binding Priority**:
+- Use `priority=True` on widget bindings to ensure they handle keys first
+- When input has focus, its Escape binding fires BEFORE app-level binding
+- When input lacks focus, app-level Escape binding fires (e.g., to clear technical prefix)
+- No conflict: different focus contexts = different handlers
+
+**CSS Focus Indicator**:
+- Added `TickerInput:focus { border: double $accent; }` for visual feedback
+- Double border when focused, single border when blurred
+
+**Mode Indicator**:
+- Only show "COMMAND MODE (/ to search)" when NOT in input mode
+- Clear message when returning to input mode (unless technical prefix active)
+- Status bar provides clear visual feedback of current mode
+
+**Event-Driven State Management**:
+- Custom `InputBlurred` Message for explicit communication between widget and app
+- App tracks mode with `_input_mode` boolean
+- '/' key already bound to `action_focus_input` - just needed to set mode flag
+
+**Behavior Change**:
+- OLD: Escape cleared input value
+- NEW: Escape blurs input (value preserved), enters command mode
+- This is a UX improvement - users can type, Escape to use global keys, then '/' to resume typing
+
+**Testing Context-Dependent Behavior**:
+```python
+# Test 1: Escape with input focused -> blurs input
+ticker_input.focus()
+await pilot.press("escape")
+assert not ticker_input.has_focus  # Blurred
+assert app._input_mode is False    # Command mode
+
+# Test 2: Escape without input focused -> clears technical prefix
+ticker_input.blur()
+await pilot.press("t")  # Activate prefix
+await pilot.press("escape")
+assert app._technical_prefix_active is False  # Cleared
+```
+
+**Test Migration**:
+- Updated 3 existing tests that relied on old Escape-clears-input behavior
+- `test_escape_blurs_input`: Changed from "clears input" to "blurs input, preserves value"
+- `test_escape_clears_error_state`: Now expects value preserved, just error class removed
+- `test_escape_clears_technical_prefix`: Must blur input first for test to work correctly
+
+**Acceptance Criteria Met**:
+✅ Escape key exits input bar focus when input bar has focus
+✅ After exiting input focus, chart/news/options keybindings become active
+✅ User can access 'o' (options), 'n' (news), 'v' (chart toggle) without tabbing
+✅ Status bar shows current mode ("COMMAND MODE (/ to search)" indicator)
+✅ Tab still works for panel navigation as before
+✅ Pressing '/' re-enters input/search mode
+✅ No disruption to existing tab-based navigation
+✅ No conflict with news panel Escape (different focus context)
+✅ Test: Escape exits input focus correctly
+✅ Test: global keys work after exiting input mode
+✅ Test: '/' returns to input mode
+✅ Test: existing Tab navigation unaffected
+✅ Test: input blur event updates mode state
+
+**Files Modified**:
+- `viper/widgets/ticker_input.py`: Added `InputBlurred` event, Escape binding with `action_blur_input()`
+- `viper/app.py`: Added `_input_mode` tracking, `on_ticker_input_input_blurred()` handler, `_update_mode_indicator()`, CSS focus styling
+- `tests/test_ticker_input.py`: Added 4 new tests for Escape/blur functionality
+- `tests/test_app.py`: Added 6 new command mode tests, updated 3 existing tests for new behavior
+
+**Result**: 1019 tests passing (10 new tests added, 3 updated). Coverage: 87%. VPR-095 complete.
+
+## VPR-096: Page Up/Down Navigation in Options Panel (2026-01-21)
+
+**Goal**: Add PgUp/PgDn keybindings to options panel for fast navigation through long strike lists.
+
+**Key Implementation Details**:
+1. **Keybindings**: Added `Binding("pagedown", "page_down", ...)` and `Binding("pageup", "page_up", ...)` to OptionsChainPanel BINDINGS
+2. **Action Methods**: `action_page_down()` and `action_page_up()` jump 10 items at a time
+3. **Bounds Checking**: Use `min(index + 10, max_index)` and `max(index - 10, 0)` to prevent out-of-bounds
+4. **Dual Mode Support**: Page navigation works in both normal mode (contracts) and summary mode (expirations)
+5. **Filter Compatibility**: Page navigation respects current filter mode (all/ITM/OTM)
+6. **Help Documentation**: Updated help_screen.py with "Use PgUp/PgDn to jump 10 items at a time"
+
+**Testing Learnings**:
+- **Test Helper Limitation**: The `create_options_chain()` helper was hardcoded to max 3 contracts (slicing from 3-item list)
+- **Fix**: Modified helper to dynamically generate contracts in a loop instead of slicing from hardcoded list
+- **Pattern**: `for i in range(num_calls): calls.append(create_option_contract(strike=base + i*5.0, ...))`
+- **Benefit**: Tests can now request 25+ contracts and actually get them, enabling realistic page navigation tests
+- **6 New Tests Added**:
+  ✅ `test_page_down_logic`: Verify +10 jump forward
+  ✅ `test_page_down_at_bottom`: Bounds checking at end of list
+  ✅ `test_page_up_logic`: Verify +10 jump backward
+  ✅ `test_page_up_at_top`: Bounds checking at start of list
+  ✅ `test_page_navigation_with_filter`: Page nav respects filter mode
+  ✅ `test_page_navigation_in_summary_mode`: Page nav works in summary view
+
+**Textual Keybinding Notes**:
+- Use lowercase key names: `"pagedown"`, `"pageup"` (not "PageDown" or "PgDn")
+- These are standard Textual key names that map to physical keys
+- Works seamlessly with existing j/k navigation - no conflicts
+
+**Files Modified**:
+- `viper/widgets/options_panel.py`: Added pageup/pagedown bindings and action methods
+- `viper/widgets/help_screen.py`: Documented PgUp/PgDn in options section
+- `tests/test_options_panel.py`: Added 6 page navigation tests, fixed contract generator
+- `scripts/ralph/features/feature-11.prd.json`: Marked VPR-096 complete
+
+**Result**: 1025 tests passing (6 new tests added, 1 test helper improved). Coverage: 87%. VPR-096 complete.
+

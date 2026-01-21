@@ -275,12 +275,38 @@ class TestConfigChartOptions:
         config = Config(chart_style="invalid")
         assert config.chart_style == "candlestick"
 
+    def test_default_chart_refresh_interval(self) -> None:
+        """Test default chart refresh interval."""
+        config = Config()
+        assert config.chart_refresh_interval == 30
+
+    def test_custom_chart_refresh_interval(self) -> None:
+        """Test setting custom chart refresh interval."""
+        config = Config(chart_refresh_interval=60)
+        assert config.chart_refresh_interval == 60
+
+    def test_chart_refresh_interval_zero_allowed(self) -> None:
+        """Test that zero chart refresh interval is allowed (disables refresh)."""
+        config = Config(chart_refresh_interval=0)
+        assert config.chart_refresh_interval == 0
+
+    def test_invalid_chart_refresh_interval_negative(self) -> None:
+        """Test that negative chart refresh interval is corrected."""
+        config = Config(chart_refresh_interval=-10)
+        assert config.chart_refresh_interval == 30
+
+    def test_invalid_chart_refresh_interval_type(self) -> None:
+        """Test that invalid chart refresh interval type is corrected."""
+        config = Config(chart_refresh_interval="not an int")  # type: ignore[arg-type]
+        assert config.chart_refresh_interval == 30
+
     def test_load_chart_options_from_file(self, tmp_path: Path) -> None:
         """Test loading chart options from config file."""
         config_file = tmp_path / "config.toml"
         config_file.write_text("""
 default_chart_timeframe = "6M"
 chart_style = "block"
+chart_refresh_interval = 45
 """)
 
         with patch("viper.config.get_config_path", return_value=config_file):
@@ -288,6 +314,7 @@ chart_style = "block"
 
         assert config.default_chart_timeframe == "6M"
         assert config.chart_style == "block"
+        assert config.chart_refresh_interval == 45
 
 
 class TestConfigNewsOptions:
@@ -355,6 +382,7 @@ refresh_interval = 120
 default_watchlist = ["AAPL", "MSFT"]
 default_chart_timeframe = "1Y"
 chart_style = "block"
+chart_refresh_interval = 45
 news_enabled = true
 news_max_items = 5
 
@@ -373,5 +401,6 @@ background = "#111111"
         assert config.theme_colors["positive"] == "#00aa00"
         assert config.default_chart_timeframe == "1Y"
         assert config.chart_style == "block"
+        assert config.chart_refresh_interval == 45
         assert config.news_enabled is True
         assert config.news_max_items == 5

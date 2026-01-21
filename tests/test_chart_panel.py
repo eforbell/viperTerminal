@@ -2500,3 +2500,324 @@ async def test_chart_panel_style_toggle_preserves_data() -> None:
         assert panel._data == data
         assert panel._stats == stats
         assert panel._chart_style == ChartStyle.CANDLESTICK
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_refresh_timer_starts_in_candlestick_mode() -> None:
+    """Test that refresh timer starts when chart is in candlestick mode."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Set refresh interval to 5 seconds for testing
+        panel._refresh_interval = 5
+
+        # Load chart data
+        dates = [datetime(2024, 1, i + 1) for i in range(30)]
+        prices = [float(100 + i % 10) for i in range(30)]
+        volumes = [int(1000000) for _ in range(30)]
+        opens = [float(100) for _ in range(30)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        # Show chart in candlestick mode
+        panel._chart_style = ChartStyle.CANDLESTICK
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Verify timer is active
+        assert panel._refresh_timer is not None
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_refresh_timer_disabled_when_interval_zero() -> None:
+    """Test that refresh timer is disabled when interval is 0."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Set refresh interval to 0 to disable
+        panel._refresh_interval = 0
+
+        # Load chart data
+        dates = [datetime(2024, 1, i + 1) for i in range(30)]
+        prices = [float(100 + i % 10) for i in range(30)]
+        volumes = [int(1000000) for _ in range(30)]
+        opens = [float(100) for _ in range(30)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        # Show chart in candlestick mode
+        panel._chart_style = ChartStyle.CANDLESTICK
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Verify timer is not active
+        assert panel._refresh_timer is None
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_refresh_timer_stops_in_braille_mode() -> None:
+    """Test that refresh timer stops when switching to braille mode."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Set refresh interval to 5 seconds for testing
+        panel._refresh_interval = 5
+
+        # Load chart data
+        dates = [datetime(2024, 1, i + 1) for i in range(30)]
+        prices = [float(100 + i % 10) for i in range(30)]
+        volumes = [int(1000000) for _ in range(30)]
+        opens = [float(100) for _ in range(30)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        # Show chart in candlestick mode
+        panel._chart_style = ChartStyle.CANDLESTICK
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Verify timer is active
+        assert panel._refresh_timer is not None
+
+        # Toggle to braille mode
+        panel.toggle_chart_style()
+        await pilot.pause()
+
+        # Verify timer is stopped
+        assert panel._refresh_timer is None
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_refresh_timer_resets_on_timeframe_change() -> None:
+    """Test that refresh timer resets when changing timeframe."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Set refresh interval to 5 seconds for testing
+        panel._refresh_interval = 5
+
+        # Load chart data
+        dates = [datetime(2024, 1, i + 1) for i in range(30)]
+        prices = [float(100 + i % 10) for i in range(30)]
+        volumes = [int(1000000) for _ in range(30)]
+        opens = [float(100) for _ in range(30)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        # Show chart in candlestick mode
+        panel._chart_style = ChartStyle.CANDLESTICK
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Verify timer is active
+        assert panel._refresh_timer is not None
+        first_timer = panel._refresh_timer
+
+        # Mock the fetch to prevent actual API call
+        with patch("viper.widgets.chart_panel.fetch_historical_data") as mock_fetch:
+            mock_fetch.return_value = data
+
+            # Change timeframe
+            await panel.change_timeframe("3M")
+            await pilot.pause()
+
+            # Verify a new timer was created
+            assert panel._refresh_timer is not None
+            # Note: we can't easily check if it's a different timer object
+            # but we verified the timer is still active after timeframe change
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_refresh_uses_cached_data() -> None:
+    """Test that refresh timer re-renders using cached data without API calls."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Set refresh interval to 1 second for faster testing
+        panel._refresh_interval = 1
+
+        # Load chart data
+        dates = [datetime(2024, 1, i + 1) for i in range(30)]
+        prices = [float(100 + i % 10) for i in range(30)]
+        volumes = [int(1000000) for _ in range(30)]
+        opens = [float(100) for _ in range(30)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        # Show chart in candlestick mode
+        panel._chart_style = ChartStyle.CANDLESTICK
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Store original data reference
+        original_data = panel._data
+
+        # Mock _rebuild_content to track calls
+        with patch.object(panel, "_rebuild_content", wraps=panel._rebuild_content) as mock_rebuild:
+            # Trigger refresh manually
+            panel._on_refresh_timer()
+            await pilot.pause()
+
+            # Verify _rebuild_content was called
+            assert mock_rebuild.call_count >= 1
+
+            # Verify data is still the same cached data (no fetch)
+            assert panel._data is original_data
+
+
+@pytest.mark.asyncio
+async def test_chart_panel_refresh_timer_cleans_up_on_unmount() -> None:
+    """Test that refresh timer is stopped when panel is unmounted."""
+    app = ChartPanelTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(ChartPanel)
+
+        # Set refresh interval to 5 seconds for testing
+        panel._refresh_interval = 5
+
+        # Load chart data
+        dates = [datetime(2024, 1, i + 1) for i in range(30)]
+        prices = [float(100 + i % 10) for i in range(30)]
+        volumes = [int(1000000) for _ in range(30)]
+        opens = [float(100) for _ in range(30)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        # Show chart in candlestick mode
+        panel._chart_style = ChartStyle.CANDLESTICK
+        panel.show_chart(data, stats)
+        await pilot.pause()
+
+        # Verify timer is active
+        assert panel._refresh_timer is not None
+
+        # Trigger unmount cleanup
+        panel.on_unmount()
+
+        # Verify timer is stopped
+        assert panel._refresh_timer is None

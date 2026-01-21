@@ -42,7 +42,11 @@
       "priority": 1,
       "estimatedEffort": "Small",
       "dependencies": [],
-      "notes": "Watchlist already refreshes data periodically. This just ensures the chart visual updates to reflect that refreshed data. Configurable interval allows users to tune for their needs or disable entirely."
+      "notes": "Watchlist already refreshes data periodically. This just ensures the chart visual updates to reflect that refreshed data. Configurable interval allows users to tune for their needs or disable entirely.",
+      "passes": true,
+      "completedAt": "2026-01-21",
+      "testsPassing": 1002,
+      "coverage": "87%"
     },
     {
       "id": "VPR-094",
@@ -65,7 +69,11 @@
       "priority": 2,
       "estimatedEffort": "Small",
       "dependencies": [],
-      "notes": "Quality-of-life improvement for managing watchlists. Keep existing w/d prefix pattern - just allow multiple tickers after the command. No '-TICKER' syntax to avoid confusion with tickers like BTC-USD."
+      "notes": "Quality-of-life improvement for managing watchlists. Keep existing w/d prefix pattern - just allow multiple tickers after the command. No '-TICKER' syntax to avoid confusion with tickers like BTC-USD.",
+      "passes": true,
+      "completedAt": "2026-01-21",
+      "testsPassing": 1009,
+      "coverage": "88%"
     },
     {
       "id": "VPR-095",
@@ -88,7 +96,11 @@
       "priority": 3,
       "estimatedEffort": "Medium",
       "dependencies": [],
-      "notes": "Currently after submitting to watchlist, user is stuck in input mode and must Tab to another panel before using chart/news/options keys. Escape is context-dependent: in input bar it exits to command mode, in news reader it goes back to listing. No conflict since different widgets handle their own focus."
+      "notes": "Currently after submitting to watchlist, user is stuck in input mode and must Tab to another panel before using chart/news/options keys. Escape is context-dependent: in input bar it exits to command mode, in news reader it goes back to listing. No conflict since different widgets handle their own focus.",
+      "passes": true,
+      "completedAt": "2026-01-21",
+      "testsPassing": 1019,
+      "coverage": "87%"
     },
     {
       "id": "VPR-096",
@@ -108,7 +120,11 @@
       "priority": 4,
       "estimatedEffort": "Small",
       "dependencies": [],
-      "notes": "Options strike lists can be very long. Single-item navigation with j/k is tedious. Page-based navigation is standard in list UIs."
+      "notes": "Options strike lists can be very long. Single-item navigation with j/k is tedious. Page-based navigation is standard in list UIs.",
+      "passes": true,
+      "completedAt": "2026-01-21",
+      "testsPassing": 1025,
+      "coverage": "87%"
     }
   ],
   "technicalNotes": {

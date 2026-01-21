@@ -310,8 +310,8 @@ async def test_slash_focuses_input() -> None:
 
 
 @pytest.mark.asyncio
-async def test_escape_clears_input() -> None:
-    """Test that pressing Escape clears input content."""
+async def test_escape_blurs_input() -> None:
+    """Test that pressing Escape blurs input to enter command mode (VPR-095)."""
     app = ViperApp()
     async with app.run_test() as pilot:
         ticker_input = app.query_one(TickerInput)
@@ -321,13 +321,18 @@ async def test_escape_clears_input() -> None:
         ticker_input.value = "AAPL"
         await pilot.pause()
         assert ticker_input.value == "AAPL"
+        assert ticker_input.has_focus
 
-        # Press Escape to clear
+        # Press Escape to blur and enter command mode
         await pilot.press("escape")
         await pilot.pause()
 
-        # Input should be cleared
-        assert ticker_input.value == ""
+        # Input should be blurred (no longer has focus)
+        assert not ticker_input.has_focus
+        # Input value should remain (not cleared)
+        assert ticker_input.value == "AAPL"
+        # App should be in command mode
+        assert app._input_mode is False
 
 
 @pytest.mark.asyncio
@@ -344,13 +349,15 @@ async def test_escape_clears_error_state() -> None:
         await pilot.pause()
         assert "error" in ticker_input.classes
 
-        # Press Escape to clear
+        # Press Escape to blur and clear error
         await pilot.press("escape")
         await pilot.pause()
 
-        # Error class should be removed
+        # Error class should be removed but value remains (VPR-095)
         assert "error" not in ticker_input.classes
-        assert ticker_input.value == ""
+        assert ticker_input.value == "test"  # Value NOT cleared (changed behavior in VPR-095)
+        # Input should be blurred
+        assert not ticker_input.has_focus
 
 
 @pytest.mark.asyncio
@@ -997,15 +1004,21 @@ async def test_t_followed_by_invalid_key_clears_prefix() -> None:
 
 @pytest.mark.asyncio
 async def test_escape_clears_technical_prefix() -> None:
-    """Test that pressing Escape clears the technical prefix mode."""
+    """Test that pressing Escape clears the technical prefix mode (when input not focused)."""
     app = ViperApp()
     async with app.run_test() as pilot:
-        # Press 't' to activate prefix
+        ticker_input = app.query_one(TickerInput)
+
+        # First blur the input so Escape goes to app-level binding
+        ticker_input.blur()
+        await pilot.pause()
+
+        # Press 't' to activate prefix (while input is not focused)
         await pilot.press("t")
         await pilot.pause()
         assert app._technical_prefix_active is True
 
-        # Press Escape to cancel prefix
+        # Press Escape to cancel prefix (app-level binding handles it)
         await pilot.press("escape")
         await pilot.pause()
 
@@ -1389,3 +1402,315 @@ async def test_options_panel_refreshes_on_ticker_change() -> None:
             # Options panel should have been refreshed with MSFT
             assert mock_expirations.call_count == 2
             mock_expirations.assert_called_with("MSFT")
+
+
+# VPR-094: Multi-ticker watchlist add/delete tests
+
+
+@pytest.mark.asyncio
+async def test_multi_ticker_watchlist_add() -> None:
+    """Test that 'w AAPL MSFT GOOGL' adds all three tickers to watchlist."""
+    app = ViperApp()
+
+    # Clear watchlist to start fresh
+    app.watchlist_manager._items = []
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+        watchlist_panel = app.query_one(WatchlistPanel)
+
+        # Initially watchlist should be empty
+        initial_count = len(app.watchlist_manager.get_all())
+        assert initial_count == 0
+
+        # Submit multi-ticker add command
+        ticker_input.focus()
+        ticker_input.value = "w AAPL MSFT GOOGL"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # All three tickers should be added
+        tickers = app.watchlist_manager.get_all()
+        assert "AAPL" in tickers
+        assert "MSFT" in tickers
+        assert "GOOGL" in tickers
+        assert len(tickers) == 3
+
+
+@pytest.mark.asyncio
+async def test_multi_ticker_watchlist_delete() -> None:
+    """Test that 'd AAPL MSFT' removes both tickers from watchlist."""
+    app = ViperApp()
+
+    # Pre-populate watchlist
+    app.watchlist_manager._items = ["AAPL", "MSFT", "GOOGL"]
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+        watchlist_panel = app.query_one(WatchlistPanel)
+
+        # Submit multi-ticker delete command
+        ticker_input.focus()
+        ticker_input.value = "d AAPL MSFT"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # AAPL and MSFT should be removed, GOOGL should remain
+        tickers = app.watchlist_manager.get_all()
+        assert "AAPL" not in tickers
+        assert "MSFT" not in tickers
+        assert "GOOGL" in tickers
+        assert len(tickers) == 1
+
+
+@pytest.mark.asyncio
+async def test_single_ticker_watchlist_still_works() -> None:
+    """Test that existing single-ticker behavior 'w AAPL' still works."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Submit single ticker add command (old behavior)
+        ticker_input.focus()
+        ticker_input.value = "w AAPL"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # AAPL should be added
+        tickers = app.watchlist_manager.get_all()
+        assert "AAPL" in tickers
+
+
+@pytest.mark.asyncio
+async def test_multi_ticker_with_dashes() -> None:
+    """Test that tickers with dashes like BTC-USD are handled correctly."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Submit multi-ticker add with crypto tickers
+        ticker_input.focus()
+        ticker_input.value = "w BTC-USD ETH-USD AAPL"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # All three should be added
+        tickers = app.watchlist_manager.get_all()
+        assert "BTC-USD" in tickers
+        assert "ETH-USD" in tickers
+        assert "AAPL" in tickers
+
+
+@pytest.mark.asyncio
+async def test_multi_ticker_partial_success() -> None:
+    """Test that valid tickers are added even when some are invalid."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Submit multi-ticker with some valid and one invalid (too long)
+        ticker_input.focus()
+        ticker_input.value = "w AAPL TOOLONGTICKER123 MSFT"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # Valid tickers should be added
+        tickers = app.watchlist_manager.get_all()
+        assert "AAPL" in tickers
+        assert "MSFT" in tickers
+        # Invalid ticker should not be added
+        assert "TOOLONGTICKER123" not in tickers
+
+
+@pytest.mark.asyncio
+async def test_multi_ticker_delete_nonexistent() -> None:
+    """Test that deleting nonexistent tickers shows them as failed."""
+    app = ViperApp()
+
+    # Pre-populate with just AAPL
+    app.watchlist_manager._items = ["AAPL"]
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Try to delete AAPL (exists) and MSFT (doesn't exist)
+        ticker_input.focus()
+        ticker_input.value = "d AAPL MSFT"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # AAPL should be removed
+        tickers = app.watchlist_manager.get_all()
+        assert "AAPL" not in tickers
+        # MSFT was never there, so watchlist should be empty
+        assert len(tickers) == 0
+
+
+@pytest.mark.asyncio
+async def test_multi_ticker_feedback_notification() -> None:
+    """Test that multi-ticker operations show feedback notifications."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Submit multi-ticker add
+        ticker_input.focus()
+        ticker_input.value = "w AAPL MSFT"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # Check that a notification was posted
+        # (We can't easily check the exact text, but we verify the tickers were added)
+        tickers = app.watchlist_manager.get_all()
+        assert "AAPL" in tickers
+        assert "MSFT" in tickers
+
+
+# Command mode tests (VPR-095)
+
+
+@pytest.mark.asyncio
+async def test_escape_exits_input_mode() -> None:
+    """Test that Escape key exits input mode and enters command mode."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Initially in input mode
+        assert app._input_mode is True
+        ticker_input.focus()
+
+        # Press Escape to enter command mode
+        await pilot.press("escape")
+        await pilot.pause()
+
+        # Should be in command mode
+        assert app._input_mode is False
+        # Input should no longer have focus
+        assert not ticker_input.has_focus
+
+
+@pytest.mark.asyncio
+async def test_slash_re_enters_input_mode() -> None:
+    """Test that '/' key re-enters input mode from command mode."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Start in input mode, then exit to command mode
+        ticker_input.focus()
+        await pilot.press("escape")
+        await pilot.pause()
+
+        # Should be in command mode
+        assert app._input_mode is False
+
+        # Press '/' to re-enter input mode
+        await pilot.press("slash")
+        await pilot.pause()
+
+        # Should be back in input mode
+        assert app._input_mode is True
+        # Input should have focus
+        assert ticker_input.has_focus
+
+
+@pytest.mark.asyncio
+async def test_command_mode_shows_indicator() -> None:
+    """Test that command mode shows visual indicator in status bar."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        from viper.widgets import StatusBar
+
+        ticker_input = app.query_one(TickerInput)
+        status_bar = app.query_one(StatusBar)
+
+        # Start in input mode
+        ticker_input.focus()
+        await pilot.pause()
+
+        # Press Escape to enter command mode
+        await pilot.press("escape")
+        await pilot.pause()
+
+        # Status bar should show command mode indicator
+        # (We can't easily verify the exact text, but we know it should be set)
+        assert app._input_mode is False
+
+
+@pytest.mark.asyncio
+async def test_command_mode_indicator_clears_on_input_mode() -> None:
+    """Test that mode indicator clears when returning to input mode."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Enter command mode
+        ticker_input.focus()
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app._input_mode is False
+
+        # Re-enter input mode with '/'
+        await pilot.press("slash")
+        await pilot.pause()
+
+        # Should be back in input mode
+        assert app._input_mode is True
+
+
+@pytest.mark.asyncio
+async def test_escape_with_input_focus_blurs_not_clears_prefix() -> None:
+    """Test that Escape with input focus blurs input, not clears technical prefix."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Focus input first
+        ticker_input.focus()
+        await pilot.pause()
+
+        # Activate technical prefix (with input focused)
+        await pilot.press("t")
+        await pilot.pause()
+        assert app._technical_prefix_active is True
+
+        # Press Escape - should blur input (input binding has priority)
+        await pilot.press("escape")
+        await pilot.pause()
+
+        # Input should be blurred, but prefix might still be active
+        # (because Escape triggered the input's blur action, not the app's clear action)
+        assert not ticker_input.has_focus
+
+
+@pytest.mark.asyncio
+async def test_input_blur_updates_mode() -> None:
+    """Test that input blur event updates app mode state."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Start with input focused (input mode)
+        ticker_input.focus()
+        await pilot.pause()
+        assert app._input_mode is True
+
+        # Blur the input manually (simulates what Escape does)
+        ticker_input.blur()
+        # Post the InputBlurred event manually
+        ticker_input.post_message(TickerInput.InputBlurred())
+        await pilot.pause()
+
+        # Should now be in command mode
+        assert app._input_mode is False

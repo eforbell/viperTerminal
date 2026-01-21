@@ -28,6 +28,8 @@ class OptionsChainPanel(Widget):
     BINDINGS = [
         Binding("j", "navigate_down", "Next", show=False, priority=True),
         Binding("k", "navigate_up", "Previous", show=False, priority=True),
+        Binding("pagedown", "page_down", "Page Down", show=False, priority=True),
+        Binding("pageup", "page_up", "Page Up", show=False, priority=True),
         Binding("[", "prev_expiration", "Prev Expiry", show=False, priority=True),
         Binding("]", "next_expiration", "Next Expiry", show=False, priority=True),
         Binding("c", "show_calls", "Calls", show=False, priority=True),
@@ -800,6 +802,43 @@ class OptionsChainPanel(Widget):
             if not contracts:
                 return
             self._selected_index = max(self._selected_index - 1, 0)
+
+        self._rebuild_content()
+
+    def action_page_down(self) -> None:
+        """Navigate down 10 items (PageDown key)."""
+        if self._state != "success" or not self._chain:
+            return
+
+        if self._summary_mode:
+            # In summary mode, navigate between expirations (up to 8 shown)
+            max_index = min(len(self._expirations), 8) - 1
+            self._selected_index = min(self._selected_index + 10, max_index)
+        else:
+            # In normal mode, navigate between contracts
+            all_contracts = self._chain.calls if self._show_calls else self._chain.puts
+            contracts = self._apply_filter(all_contracts)
+            if not contracts:
+                return
+            self._selected_index = min(self._selected_index + 10, len(contracts) - 1)
+
+        self._rebuild_content()
+
+    def action_page_up(self) -> None:
+        """Navigate up 10 items (PageUp key)."""
+        if self._state != "success" or not self._chain:
+            return
+
+        if self._summary_mode:
+            # In summary mode, navigate between expirations
+            self._selected_index = max(self._selected_index - 10, 0)
+        else:
+            # In normal mode, navigate between contracts
+            all_contracts = self._chain.calls if self._show_calls else self._chain.puts
+            contracts = self._apply_filter(all_contracts)
+            if not contracts:
+                return
+            self._selected_index = max(self._selected_index - 10, 0)
 
         self._rebuild_content()
 
