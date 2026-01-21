@@ -36,6 +36,36 @@ This applies to: volume bars, moving average overlays, RSI indicators, any color
 
 ---
 
+## ⚠️ CRITICAL: Test Isolation from User Environment ⚠️
+
+**TESTS MUST NEVER ACCESS THE REAL USER'S HOME DIRECTORY OR CONFIG FILES!**
+
+This project uses `~/.config/viper/` for persistent data (watchlist, history, config). Tests that create `WatchlistManager()`, `ViperApp()`, or any service without proper isolation can:
+
+1. **READ** the user's real config - causing flaky tests based on user state
+2. **WRITE** to the user's real config - **DELETING USER DATA!**
+
+**The `tests/conftest.py` file provides automatic isolation** via the `isolate_home_directory` fixture which patches `Path.home()` to return a temp directory. This runs automatically for ALL tests.
+
+**NEVER DO THIS:**
+```python
+# ❌ DANGEROUS - uses real home directory!
+manager = WatchlistManager()
+app = ViperApp()
+```
+
+**If you need explicit isolation (the conftest.py handles this automatically):**
+```python
+# ✅ SAFE - explicitly use temp directory
+def test_something(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    manager = WatchlistManager()  # Now safe - uses tmp_path
+```
+
+**DO NOT use `app.watchlist_manager._items = []` as a workaround** - this only protects reading, NOT writing. The proper fix is to isolate `Path.home()`.
+
+---
+
 ## Codebase Patterns
 
 ### Python Project Setup
