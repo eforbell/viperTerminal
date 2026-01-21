@@ -1633,3 +1633,33 @@
   - All 991 tests passing (up from 982), chart_renderer.py at 93% coverage (up from 89%)
   - Overall coverage 87%, mypy --strict clean
 ---
+
+## 2026-01-21 - VPR-093
+- **What was implemented**: Configurable chart refresh interval for candlestick mode to keep visuals updated with cached data
+- **Files changed**:
+  - `viper/config.py`: Added `chart_refresh_interval: int = 30` field with validation (>= 0, default 30)
+  - `viper/widgets/chart_panel.py`: Added refresh timer logic (_refresh_timer, _update_refresh_timer(), _stop_refresh_timer(), _on_refresh_timer()), updated __init__, on_unmount, show_chart, toggle_chart_style, change_timeframe
+  - `viper/app.py`: Pass refresh_interval from config to ChartPanel constructor
+  - `README.md`: Documented new chart_refresh_interval config option
+  - `tests/test_config.py`: Added 5 new tests for chart_refresh_interval validation
+  - `tests/test_chart_panel.py`: Added 8 new tests for refresh timer behavior
+  - `AGENTS.md`: Added VPR-093 learnings section
+- **Learnings**:
+  - **Textual Timers**: Use `self.set_interval(seconds, callback)` for periodic timers, returns `Timer` object with `.stop()` method
+  - **Timer Callback**: Regular method (not async), directly calls `_rebuild_content()` to re-render with cached data
+  - **Timer Cleanup**: Always stop timers in `on_unmount()` to prevent memory leaks when widget is removed
+  - **Conditional Timer Activation**: Only start timer when ALL conditions met: candlestick mode + interval > 0 + success state
+  - **Timer Reset Logic**: Stop existing timer before starting new one to avoid multiple active timers
+  - **State Change Handling**: Reset timer on style toggle (to/from candlestick) and timeframe change (manual refresh)
+  - **Config Validation**: Zero is valid for "disable" semantics - validate >= 0 not > 0, negatives fall back to default 30
+  - **Config Triple Update**: Add to dataclass field, `__post_init__()` validation, and `load_config()` parser
+  - **Type Validation First**: Check `isinstance(value, int)` before range validation to handle invalid types
+  - **Testing Timer Existence**: `assert panel._refresh_timer is not None` to verify timer is active
+  - **Testing Timer Behavior**: Trigger callback manually with `panel._on_refresh_timer()`, use `patch.object(..., wraps=...)` to verify calls
+  - **Testing Timer Cleanup**: Call `panel.on_unmount()` and verify `_refresh_timer is None`
+  - **Documentation Pattern**: Config options need both example in TOML and table row in README with default/range/semantics
+  - **No Network Calls**: Refresh re-renders using cached data from existing `self._data` - watchlist already refreshes API data
+  - **Smooth Updates**: No visual flicker because `_rebuild_content()` efficiently reuses cached calculations (MAs, RSI, MACD)
+  - All 1002 tests passing (13 new tests: 5 config, 8 chart panel), mypy --strict clean
+  - VPR-093 complete with all acceptance criteria met
+---

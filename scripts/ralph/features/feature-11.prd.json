@@ -42,7 +42,11 @@
       "priority": 1,
       "estimatedEffort": "Small",
       "dependencies": [],
-      "notes": "Watchlist already refreshes data periodically. This just ensures the chart visual updates to reflect that refreshed data. Configurable interval allows users to tune for their needs or disable entirely."
+      "notes": "Watchlist already refreshes data periodically. This just ensures the chart visual updates to reflect that refreshed data. Configurable interval allows users to tune for their needs or disable entirely.",
+      "passes": true,
+      "completedAt": "2026-01-21",
+      "testsPassing": 1002,
+      "coverage": "87%"
     },
     {
       "id": "VPR-094",
