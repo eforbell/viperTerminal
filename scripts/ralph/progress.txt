@@ -1676,3 +1676,25 @@
   - Test isolation: Clear watchlist state in tests to avoid interference from real config files
   - User feedback pattern: Clear, concise messages like "Added: AAPL, MSFT. Failed: INVALID"
 ---
+
+## 2026-01-21 - VPR-095
+- **What was implemented**: Command mode with Escape to exit input focus
+- **Files changed**:
+  - `viper/widgets/ticker_input.py`: Added `InputBlurred` event, Escape binding with `action_blur_input()`
+  - `viper/app.py`: Added `_input_mode` tracking, `on_ticker_input_input_blurred()` handler, `_update_mode_indicator()`, CSS focus styling
+  - `tests/test_ticker_input.py`: Added 4 new tests for Escape/blur functionality
+  - `tests/test_app.py`: Added 6 new command mode tests, updated 3 existing tests for new behavior
+  - `AGENTS.md`: Added comprehensive VPR-095 learnings section
+- **Learnings**:
+  - Widget bindings with `priority=True` handle keys before app-level bindings
+  - When input has focus, its Escape binding fires first; when input lacks focus, app-level Escape fires
+  - No conflict between different focus contexts - each widget handles its own keys
+  - Custom `InputBlurred` Message enables explicit widget-to-app communication
+  - CSS `TickerInput:focus { border: double $accent; }` provides visual feedback
+  - Status bar shows "COMMAND MODE (/ to search)" when not in input mode
+  - UX improvement: Escape now blurs input (preserves value) instead of clearing
+  - Test migration: Updated 3 existing tests that relied on old Escape-clears-input behavior
+  - Context-dependent testing: Different test scenarios for input focused vs not focused
+  - All 1019 tests passing with 87% coverage
+
+---

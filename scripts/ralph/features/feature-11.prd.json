@@ -96,7 +96,11 @@
       "priority": 3,
       "estimatedEffort": "Medium",
       "dependencies": [],
-      "notes": "Currently after submitting to watchlist, user is stuck in input mode and must Tab to another panel before using chart/news/options keys. Escape is context-dependent: in input bar it exits to command mode, in news reader it goes back to listing. No conflict since different widgets handle their own focus."
+      "notes": "Currently after submitting to watchlist, user is stuck in input mode and must Tab to another panel before using chart/news/options keys. Escape is context-dependent: in input bar it exits to command mode, in news reader it goes back to listing. No conflict since different widgets handle their own focus.",
+      "passes": true,
+      "completedAt": "2026-01-21",
+      "testsPassing": 1019,
+      "coverage": "87%"
     },
     {
       "id": "VPR-096",
