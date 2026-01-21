@@ -5217,3 +5217,41 @@ assert app._technical_prefix_active is False  # Cleared
 
 **Result**: 1019 tests passing (10 new tests added, 3 updated). Coverage: 87%. VPR-095 complete.
 
+## VPR-096: Page Up/Down Navigation in Options Panel (2026-01-21)
+
+**Goal**: Add PgUp/PgDn keybindings to options panel for fast navigation through long strike lists.
+
+**Key Implementation Details**:
+1. **Keybindings**: Added `Binding("pagedown", "page_down", ...)` and `Binding("pageup", "page_up", ...)` to OptionsChainPanel BINDINGS
+2. **Action Methods**: `action_page_down()` and `action_page_up()` jump 10 items at a time
+3. **Bounds Checking**: Use `min(index + 10, max_index)` and `max(index - 10, 0)` to prevent out-of-bounds
+4. **Dual Mode Support**: Page navigation works in both normal mode (contracts) and summary mode (expirations)
+5. **Filter Compatibility**: Page navigation respects current filter mode (all/ITM/OTM)
+6. **Help Documentation**: Updated help_screen.py with "Use PgUp/PgDn to jump 10 items at a time"
+
+**Testing Learnings**:
+- **Test Helper Limitation**: The `create_options_chain()` helper was hardcoded to max 3 contracts (slicing from 3-item list)
+- **Fix**: Modified helper to dynamically generate contracts in a loop instead of slicing from hardcoded list
+- **Pattern**: `for i in range(num_calls): calls.append(create_option_contract(strike=base + i*5.0, ...))`
+- **Benefit**: Tests can now request 25+ contracts and actually get them, enabling realistic page navigation tests
+- **6 New Tests Added**:
+  ✅ `test_page_down_logic`: Verify +10 jump forward
+  ✅ `test_page_down_at_bottom`: Bounds checking at end of list
+  ✅ `test_page_up_logic`: Verify +10 jump backward
+  ✅ `test_page_up_at_top`: Bounds checking at start of list
+  ✅ `test_page_navigation_with_filter`: Page nav respects filter mode
+  ✅ `test_page_navigation_in_summary_mode`: Page nav works in summary view
+
+**Textual Keybinding Notes**:
+- Use lowercase key names: `"pagedown"`, `"pageup"` (not "PageDown" or "PgDn")
+- These are standard Textual key names that map to physical keys
+- Works seamlessly with existing j/k navigation - no conflicts
+
+**Files Modified**:
+- `viper/widgets/options_panel.py`: Added pageup/pagedown bindings and action methods
+- `viper/widgets/help_screen.py`: Documented PgUp/PgDn in options section
+- `tests/test_options_panel.py`: Added 6 page navigation tests, fixed contract generator
+- `scripts/ralph/features/feature-11.prd.json`: Marked VPR-096 complete
+
+**Result**: 1025 tests passing (6 new tests added, 1 test helper improved). Coverage: 87%. VPR-096 complete.
+

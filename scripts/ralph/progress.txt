@@ -1698,3 +1698,22 @@
   - All 1019 tests passing with 87% coverage
 
 ---
+
+## 2026-01-21 - VPR-096
+- **What was implemented**: Page Up/Down navigation in options panel for fast strike list navigation
+- **Files changed**:
+  - `viper/widgets/options_panel.py`: Added pageup/pagedown bindings and action methods (jump 10 items)
+  - `viper/widgets/help_screen.py`: Documented PgUp/PgDn in options section
+  - `tests/test_options_panel.py`: Added 6 page navigation tests, fixed `create_options_chain()` helper
+  - `scripts/ralph/features/feature-11.prd.json`: Marked VPR-096 complete
+- **Learnings**:
+  - Use lowercase Textual key names: "pagedown", "pageup" (not "PageDown" or "PgDn")
+  - Page navigation pattern: `min(index + page_size, max_index)` and `max(index - page_size, 0)`
+  - Works seamlessly in dual modes: normal mode (contracts) and summary mode (expirations)
+  - Page navigation respects filter mode automatically (operates on filtered contract list)
+  - Test helper gotcha: `create_options_chain(num_calls=25)` was only creating 3 contracts (hardcoded list slice)
+  - Fixed by generating contracts in loop instead of slicing: `for i in range(num_calls): ...append(create_option_contract())`
+  - Dynamic generation enables realistic page navigation tests with 25+ contracts
+  - 1025 tests passing, 87% coverage, all acceptance criteria met
+---
+
