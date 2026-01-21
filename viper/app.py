@@ -1,7 +1,10 @@
 """Main Textual application for Viper Terminal."""
 
-from textual.app import App, ComposeResult
+from functools import partial
+
+from textual.app import App, ComposeResult, get_system_commands_provider
 from textual.binding import Binding
+from textual.command import Hit, Hits, Provider
 from textual.containers import Container, Horizontal
 from textual.widgets import Footer, Header
 
@@ -21,6 +24,100 @@ from viper.utils import (
     setup_logging,
 )
 from viper.widgets import ArticleReaderPanel, ChartPanel, HelpScreen, InfoPanel, NewsPanel, OptionsChainPanel, QuotePanel, StatusBar, TickerInput, WatchlistPanel
+
+
+class ViperCommands(Provider):
+    """Command palette provider for Viper Terminal commands."""
+
+    async def search(self, query: str) -> Hits:
+        """Search for commands matching the query."""
+        matcher = self.matcher(query)
+        app = self.app
+
+        # Define all commands organized by category
+        commands = [
+            # Panel Navigation
+            ("Panel: Toggle Chart", "c", "toggle_chart", "Show/hide chart panel"),
+            ("Panel: Toggle Info", "i", "toggle_info", "Show/hide info panel"),
+            ("Panel: Toggle News", "n", "toggle_news", "Show/hide news panel"),
+            ("Panel: Toggle Options", "o", "toggle_options", "Show/hide options chain"),
+            ("Panel: Focus Input", "/", "focus_input", "Focus the search/input bar"),
+            ("Panel: Next Panel", "Tab", "focus_next", "Cycle to next panel"),
+            ("Panel: Show Help", "?", "show_help", "Show help screen"),
+            # Navigation (works in lists: watchlist, news, options)
+            ("Navigate: Move Down", "j", "nav_info", "Move down in list (vim-style)"),
+            ("Navigate: Move Up", "k", "nav_info", "Move up in list (vim-style)"),
+            ("Navigate: Page Down", "PgDn", "nav_info", "Jump down 10 items"),
+            ("Navigate: Page Up", "PgUp", "nav_info", "Jump up 10 items"),
+            # Chart Commands
+            ("Chart: Toggle Style (Line/Candlestick)", "v", "toggle_chart_style", "Switch between line and candlestick"),
+            ("Chart: Refresh Data", "r", "refresh_chart", "Fetch fresh chart data"),
+            ("Chart: Timeframe 1W", "1", "timeframe_1", "Set chart to 1 week"),
+            ("Chart: Timeframe 1M", "2", "timeframe_2", "Set chart to 1 month"),
+            ("Chart: Timeframe 3M", "3", "timeframe_3", "Set chart to 3 months"),
+            ("Chart: Timeframe 6M", "4", "timeframe_4", "Set chart to 6 months"),
+            ("Chart: Timeframe 1Y", "5", "timeframe_5", "Set chart to 1 year"),
+            ("Chart: Timeframe 5Y", "6", "timeframe_6", "Set chart to 5 years"),
+            ("Chart: Timeframe MAX", "7", "timeframe_7", "Set chart to maximum"),
+            # Technical Indicators
+            ("Technical: Toggle RSI", "t-r", "toggle_rsi", "Show/hide RSI indicator"),
+            ("Technical: Toggle MACD", "t-m", "toggle_macd", "Show/hide MACD indicator"),
+            ("Technical: Cycle Moving Averages", "t-a", "cycle_ma", "Cycle SMA20/SMA50/Both/Off"),
+            # Options Panel
+            ("Options: Show Calls", "c", "options_show_calls", "View call options"),
+            ("Options: Show Puts", "p", "options_show_puts", "View put options"),
+            ("Options: Cycle Filter (All/ITM/OTM)", "f", "options_cycle_filter", "Filter by moneyness"),
+            ("Options: Jump to ATM", "a", "options_jump_atm", "Jump to at-the-money strike"),
+            ("Options: Toggle Summary View", "s", "options_toggle_summary", "Toggle summary/detail view"),
+            ("Options: Previous Expiration", "[", "options_prev_exp", "Select earlier expiration"),
+            ("Options: Next Expiration", "]", "options_next_exp", "Select later expiration"),
+            # Watchlist Commands
+            ("Watchlist: Add Ticker(s)", "w ...", "wl_info", "Add tickers: w AAPL MSFT"),
+            ("Watchlist: Remove Ticker(s)", "d ...", "wl_info", "Remove tickers: d AAPL MSFT"),
+            # Application
+            ("App: Quit", "q", "quit", "Exit the application"),
+            ("App: Clear Input", "Esc", "clear_or_close", "Clear input or close overlay"),
+        ]
+
+        for name, key, action, help_text in commands:
+            score = matcher.match(name)
+            if score > 0:
+                yield Hit(
+                    score,
+                    matcher.highlight(name),
+                    partial(self._run_action, action),
+                    help=f"[dim]{key}[/dim] {help_text}",
+                )
+
+    def _run_action(self, action: str) -> None:
+        """Run an action on the app."""
+        app = self.app
+        # Info-only commands (no action, just documentation)
+        if action in ("nav_info", "wl_info"):
+            return
+        # Handle options panel actions specially (need to forward to panel)
+        if action.startswith("options_"):
+            try:
+                options_panel = app.query_one(OptionsChainPanel)
+                if action == "options_show_calls":
+                    options_panel.action_show_calls()
+                elif action == "options_show_puts":
+                    options_panel.action_show_puts()
+                elif action == "options_cycle_filter":
+                    options_panel.action_cycle_filter()
+                elif action == "options_jump_atm":
+                    options_panel.action_jump_to_atm()
+                elif action == "options_toggle_summary":
+                    options_panel.action_toggle_summary()
+                elif action == "options_prev_exp":
+                    options_panel.action_prev_expiration()
+                elif action == "options_next_exp":
+                    options_panel.action_next_expiration()
+            except Exception:
+                pass
+        else:
+            # Run as app action - schedule the coroutine
+            app.call_later(lambda: app.run_action(action))
 
 
 class ViperApp(App[None]):
@@ -167,6 +264,9 @@ class ViperApp(App[None]):
         "surface": "#111111",
     }
 
+    # Command palette providers (Textual defaults + ViperCommands)
+    COMMANDS = {get_system_commands_provider, ViperCommands}
+
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("tab", "focus_next", "Next Panel"),
@@ -185,6 +285,7 @@ class ViperApp(App[None]):
         ("7", "timeframe_7", "MAX"),
         Binding("v", "toggle_chart_style", "Chart View", show=False),
         Binding("r", "refresh_chart", "Refresh Chart", show=False),
+        Binding("t", "technical_prefix", "Technical (t+r/m/a)", show=False),
         ("question_mark,f1", "show_help", "Help"),
     ]
 
@@ -561,6 +662,14 @@ class ViperApp(App[None]):
             # Show brief feedback in status bar
             status_bar = self.query_one(StatusBar)
             status_bar.set_message("Refreshing chart...")
+
+    def action_technical_prefix(self) -> None:
+        """Placeholder for technical indicator prefix key (t).
+
+        Actual handling is in on_key() - this exists for Keys panel display.
+        Press t, then r (RSI), m (MACD), or a (MA) to toggle indicators.
+        """
+        pass
 
     def on_key(self, event: object) -> None:
         """Handle key presses for prefix system routing.
