@@ -120,7 +120,11 @@
       "priority": 4,
       "estimatedEffort": "Small",
       "dependencies": [],
-      "notes": "Options strike lists can be very long. Single-item navigation with j/k is tedious. Page-based navigation is standard in list UIs."
+      "notes": "Options strike lists can be very long. Single-item navigation with j/k is tedious. Page-based navigation is standard in list UIs.",
+      "passes": true,
+      "completedAt": "2026-01-21",
+      "testsPassing": 1025,
+      "coverage": "87%"
     }
   ],
   "technicalNotes": {

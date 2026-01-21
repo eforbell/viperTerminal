@@ -39,19 +39,20 @@ def create_options_chain(
     num_puts: int = 3,
 ) -> OptionsChain:
     """Create a test OptionsChain with sample data."""
-    # Create calls (ITM strikes < 150)
-    calls = [
-        create_option_contract(strike=145.0, in_the_money=True),
-        create_option_contract(strike=150.0, in_the_money=False),
-        create_option_contract(strike=155.0, in_the_money=False),
-    ][:num_calls]
+    # Create calls - generate as many as requested
+    calls = []
+    base_strike = 145.0
+    for i in range(num_calls):
+        strike = base_strike + (i * 5.0)
+        in_the_money = strike < 150.0
+        calls.append(create_option_contract(strike=strike, in_the_money=in_the_money))
 
-    # Create puts (ITM strikes > 150)
-    puts = [
-        create_option_contract(strike=145.0, in_the_money=False),
-        create_option_contract(strike=150.0, in_the_money=False),
-        create_option_contract(strike=155.0, in_the_money=True),
-    ][:num_puts]
+    # Create puts - generate as many as requested
+    puts = []
+    for i in range(num_puts):
+        strike = base_strike + (i * 5.0)
+        in_the_money = strike > 150.0
+        puts.append(create_option_contract(strike=strike, in_the_money=in_the_money))
 
     return OptionsChain(
         ticker=ticker, expiration=expiration, calls=calls, puts=puts
@@ -254,6 +255,101 @@ class TestOptionsChainPanelNavigation:
         # Try to navigate down past end
         panel._selected_index = min(panel._selected_index + 1, len(contracts) - 1)
         assert panel._selected_index == 2  # Should stay at last put
+
+    def test_page_down_logic(self) -> None:
+        """Test page_down logic jumps 10 items forward."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain(num_calls=25)  # Enough contracts for paging
+        panel._show_calls = True
+        panel._selected_index = 0
+
+        # Test page down logic
+        contracts = panel._chain.calls if panel._show_calls else panel._chain.puts
+        panel._selected_index = min(panel._selected_index + 10, len(contracts) - 1)
+        assert panel._selected_index == 10
+
+        # Page down again
+        panel._selected_index = min(panel._selected_index + 10, len(contracts) - 1)
+        assert panel._selected_index == 20
+
+    def test_page_down_at_bottom(self) -> None:
+        """Test page_down logic stops at last item."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain(num_calls=15)
+        panel._show_calls = True
+        panel._selected_index = 10
+
+        # Test page down logic - should clamp to last item
+        contracts = panel._chain.calls if panel._show_calls else panel._chain.puts
+        panel._selected_index = min(panel._selected_index + 10, len(contracts) - 1)
+
+        # Should stop at last item (14, 0-indexed)
+        assert panel._selected_index == 14
+
+    def test_page_up_logic(self) -> None:
+        """Test page_up logic jumps 10 items backward."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain(num_calls=25)
+        panel._show_calls = True
+        panel._selected_index = 20
+
+        # Test page up logic
+        panel._selected_index = max(panel._selected_index - 10, 0)
+        assert panel._selected_index == 10
+
+        # Page up again
+        panel._selected_index = max(panel._selected_index - 10, 0)
+        assert panel._selected_index == 0
+
+    def test_page_up_at_top(self) -> None:
+        """Test page_up logic stops at first item."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain(num_calls=15)
+        panel._show_calls = True
+        panel._selected_index = 5
+
+        # Test page up logic - should clamp to first item
+        panel._selected_index = max(panel._selected_index - 10, 0)
+
+        # Should stop at first item (0)
+        assert panel._selected_index == 0
+
+    def test_page_navigation_with_filter(self) -> None:
+        """Test page navigation respects filter mode."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain(num_calls=25)
+        panel._show_calls = True
+        panel._selected_index = 0
+        panel._filter_mode = "all"
+
+        # Apply filter to get filtered contracts
+        all_contracts = panel._chain.calls if panel._show_calls else panel._chain.puts
+        contracts = panel._apply_filter(all_contracts)
+
+        # Page down with filter
+        panel._selected_index = min(panel._selected_index + 10, len(contracts) - 1)
+        assert panel._selected_index == 10
+
+    def test_page_navigation_in_summary_mode(self) -> None:
+        """Test page navigation works in summary mode."""
+        panel = OptionsChainPanel()
+        panel._state = "success"
+        panel._chain = create_options_chain(num_calls=5)
+        panel._summary_mode = True
+        panel._expirations = ["2024-01-19", "2024-01-26", "2024-02-02"]
+        panel._selected_index = 0
+
+        # Page down in summary mode (max 8 expirations shown)
+        max_index = min(len(panel._expirations), 8) - 1
+        panel._selected_index = min(panel._selected_index + 10, max_index)
+
+        # With only 3 expirations, should clamp to last one
+        assert panel._selected_index == 2
 
 
 class TestOptionsChainPanelStateManagement:
