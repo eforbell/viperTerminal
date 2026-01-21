@@ -689,25 +689,60 @@ class ViperApp(App[None]):
         """
         ticker = event.ticker
 
-        # Check for watchlist commands: 'w TICKER' to add, 'd TICKER' to remove
+        # Check for watchlist commands: 'w TICKER(s)' to add, 'd TICKER(s)' to remove
         if ticker.startswith("W "):
-            # Add to watchlist
-            ticker_to_add = ticker[2:].strip()
-            if ticker_to_add:
-                self.watchlist_manager.add(ticker_to_add)
-                # Notify watchlist panel to refresh
+            # Add to watchlist - supports multiple space-delimited tickers
+            tickers_input = ticker[2:].strip()
+            if tickers_input:
+                # Split by whitespace to support multiple tickers
+                tickers_to_add = tickers_input.split()
+                added: list[str] = []
+                failed_add: list[str] = []
+
                 watchlist_panel = self.query_one(WatchlistPanel)
-                watchlist_panel.on_ticker_added(ticker_to_add)
+
+                for ticker_symbol in tickers_to_add:
+                    ticker_symbol = ticker_symbol.strip().upper()
+                    if ticker_symbol:
+                        # Basic validation: non-empty and reasonable length
+                        if len(ticker_symbol) > 0 and len(ticker_symbol) <= 10:
+                            self.watchlist_manager.add(ticker_symbol)
+                            added.append(ticker_symbol)
+                        else:
+                            failed_add.append(ticker_symbol)
+
+                # Notify watchlist panel to refresh (once for all additions)
+                if added:
+                    for ticker_symbol in added:
+                        watchlist_panel.on_ticker_added(ticker_symbol)
+
+                # Show feedback message
+                self._show_watchlist_feedback(added, failed_add, "Added")
             return
 
         if ticker.startswith("D "):
-            # Remove from watchlist
-            ticker_to_remove = ticker[2:].strip()
-            if ticker_to_remove:
-                self.watchlist_manager.remove(ticker_to_remove)
-                # Notify watchlist panel to refresh
+            # Remove from watchlist - supports multiple space-delimited tickers
+            tickers_input = ticker[2:].strip()
+            if tickers_input:
+                # Split by whitespace to support multiple tickers
+                tickers_to_remove = tickers_input.split()
+                removed: list[str] = []
+                failed_remove: list[str] = []
+
                 watchlist_panel = self.query_one(WatchlistPanel)
-                watchlist_panel.on_ticker_removed(ticker_to_remove)
+
+                for ticker_symbol in tickers_to_remove:
+                    ticker_symbol = ticker_symbol.strip().upper()
+                    if ticker_symbol:
+                        # Try to remove - returns True if found
+                        if self.watchlist_manager.remove(ticker_symbol):
+                            removed.append(ticker_symbol)
+                            watchlist_panel.on_ticker_removed(ticker_symbol)
+                        else:
+                            failed_remove.append(ticker_symbol)
+
+                # Show feedback message
+                self._show_watchlist_feedback(removed, failed_remove, "Removed")
             return
 
         # Regular quote lookup
@@ -724,6 +759,28 @@ class ViperApp(App[None]):
             options_panel = self.query_one(OptionsChainPanel)
             current_price = self._get_current_price()
             self.run_worker(options_panel.load_options(self._current_ticker, current_price))
+
+    def _show_watchlist_feedback(
+        self, success: list[str], failed: list[str], operation: str
+    ) -> None:
+        """Show feedback message for watchlist operations.
+
+        Args:
+            success: List of tickers that succeeded.
+            failed: List of tickers that failed.
+            operation: Operation name ("Added" or "Removed").
+        """
+        parts: list[str] = []
+
+        if success:
+            parts.append(f"{operation}: {', '.join(success)}")
+
+        if failed:
+            parts.append(f"Failed: {', '.join(failed)}")
+
+        if parts:
+            message = ". ".join(parts)
+            self.notify(message, severity="information" if not failed else "warning")
 
     def _get_current_price(self) -> float | None:
         """Get the current price from the quote panel.

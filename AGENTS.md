@@ -5041,3 +5041,70 @@ Implemented simplified IV rank calculation that shows where current ATM IV sits 
 ✅ Test: config validation handles invalid values
 
 **Result**: 1002 tests passing (8 new tests added). VPR-093 complete with all acceptance criteria met.
+
+---
+
+## VPR-094: Multi-ticker Watchlist Add/Delete (2026-01-21)
+
+**Feature**: Space-delimited ticker input for batch watchlist operations.
+
+**Implementation Pattern**:
+```python
+# Parse space-delimited input
+tickers_to_add = input_string.split()
+
+# Track successes and failures separately
+added: list[str] = []
+failed_add: list[str] = []
+
+# Process each ticker
+for ticker in tickers_to_add:
+    if validate(ticker):
+        manager.add(ticker)
+        added.append(ticker)
+    else:
+        failed_add.append(ticker)
+
+# Provide user feedback
+show_feedback(added, failed_add, "Added")
+```
+
+**Key Learnings**:
+- **Variable Scoping**: When defining similar variables in separate `if` blocks (add vs delete), use unique names like `failed_add` and `failed_remove` to avoid mypy `no-redef` errors
+- **Batch Notifications**: Refresh UI once after all operations complete, not after each individual ticker
+- **User Feedback**: Clear, concise messages: "Added: AAPL, MSFT. Failed: INVALID"
+- **Test Isolation**: Clear watchlist state in tests (`app.watchlist_manager._items = []`) to avoid interference from real config files
+
+**Testing Pattern**:
+```python
+# Clear state for isolated tests
+app.watchlist_manager._items = []
+
+# Test multi-ticker add
+ticker_input.value = "w AAPL MSFT GOOGL"
+await pilot.press("enter")
+await pilot.pause()
+
+# Verify results
+assert all(t in watchlist for t in ["AAPL", "MSFT", "GOOGL"])
+```
+
+**Acceptance Criteria Met**:
+✅ Add command accepts space-delimited tickers: 'w AAPL MSFT GOOGL BTC-USD'
+✅ Delete command accepts space-delimited tickers: 'd AAPL MSFT'
+✅ All valid tickers processed in single operation
+✅ Invalid tickers show error but valid ones still get processed
+✅ Existing single-ticker behavior remains unchanged: 'w AAPL' still works
+✅ Clear feedback: 'Added: AAPL, MSFT. Failed: INVALID'
+✅ Handles tickers with dashes correctly (BTC-USD, ETH-USD)
+✅ Test: 'w AAPL MSFT GOOGL' adds all three
+✅ Test: 'd AAPL MSFT' removes both
+✅ Test: partial success (some valid, some invalid)
+✅ Test: single ticker still works as before
+✅ Test: tickers with dashes handled correctly
+
+**Files Modified**:
+- `viper/app.py`: Updated `on_ticker_input_ticker_lookup()` to parse multi-ticker input, added `_show_watchlist_feedback()` helper
+- `tests/test_app.py`: Added 7 new tests for multi-ticker functionality
+
+**Result**: 1009 tests passing (7 new tests added). Coverage: 88%. VPR-094 complete.

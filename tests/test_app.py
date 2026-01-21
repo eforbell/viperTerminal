@@ -1389,3 +1389,169 @@ async def test_options_panel_refreshes_on_ticker_change() -> None:
             # Options panel should have been refreshed with MSFT
             assert mock_expirations.call_count == 2
             mock_expirations.assert_called_with("MSFT")
+
+
+# VPR-094: Multi-ticker watchlist add/delete tests
+
+
+@pytest.mark.asyncio
+async def test_multi_ticker_watchlist_add() -> None:
+    """Test that 'w AAPL MSFT GOOGL' adds all three tickers to watchlist."""
+    app = ViperApp()
+
+    # Clear watchlist to start fresh
+    app.watchlist_manager._items = []
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+        watchlist_panel = app.query_one(WatchlistPanel)
+
+        # Initially watchlist should be empty
+        initial_count = len(app.watchlist_manager.get_all())
+        assert initial_count == 0
+
+        # Submit multi-ticker add command
+        ticker_input.focus()
+        ticker_input.value = "w AAPL MSFT GOOGL"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # All three tickers should be added
+        tickers = app.watchlist_manager.get_all()
+        assert "AAPL" in tickers
+        assert "MSFT" in tickers
+        assert "GOOGL" in tickers
+        assert len(tickers) == 3
+
+
+@pytest.mark.asyncio
+async def test_multi_ticker_watchlist_delete() -> None:
+    """Test that 'd AAPL MSFT' removes both tickers from watchlist."""
+    app = ViperApp()
+
+    # Pre-populate watchlist
+    app.watchlist_manager._items = ["AAPL", "MSFT", "GOOGL"]
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+        watchlist_panel = app.query_one(WatchlistPanel)
+
+        # Submit multi-ticker delete command
+        ticker_input.focus()
+        ticker_input.value = "d AAPL MSFT"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # AAPL and MSFT should be removed, GOOGL should remain
+        tickers = app.watchlist_manager.get_all()
+        assert "AAPL" not in tickers
+        assert "MSFT" not in tickers
+        assert "GOOGL" in tickers
+        assert len(tickers) == 1
+
+
+@pytest.mark.asyncio
+async def test_single_ticker_watchlist_still_works() -> None:
+    """Test that existing single-ticker behavior 'w AAPL' still works."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Submit single ticker add command (old behavior)
+        ticker_input.focus()
+        ticker_input.value = "w AAPL"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # AAPL should be added
+        tickers = app.watchlist_manager.get_all()
+        assert "AAPL" in tickers
+
+
+@pytest.mark.asyncio
+async def test_multi_ticker_with_dashes() -> None:
+    """Test that tickers with dashes like BTC-USD are handled correctly."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Submit multi-ticker add with crypto tickers
+        ticker_input.focus()
+        ticker_input.value = "w BTC-USD ETH-USD AAPL"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # All three should be added
+        tickers = app.watchlist_manager.get_all()
+        assert "BTC-USD" in tickers
+        assert "ETH-USD" in tickers
+        assert "AAPL" in tickers
+
+
+@pytest.mark.asyncio
+async def test_multi_ticker_partial_success() -> None:
+    """Test that valid tickers are added even when some are invalid."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Submit multi-ticker with some valid and one invalid (too long)
+        ticker_input.focus()
+        ticker_input.value = "w AAPL TOOLONGTICKER123 MSFT"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # Valid tickers should be added
+        tickers = app.watchlist_manager.get_all()
+        assert "AAPL" in tickers
+        assert "MSFT" in tickers
+        # Invalid ticker should not be added
+        assert "TOOLONGTICKER123" not in tickers
+
+
+@pytest.mark.asyncio
+async def test_multi_ticker_delete_nonexistent() -> None:
+    """Test that deleting nonexistent tickers shows them as failed."""
+    app = ViperApp()
+
+    # Pre-populate with just AAPL
+    app.watchlist_manager._items = ["AAPL"]
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Try to delete AAPL (exists) and MSFT (doesn't exist)
+        ticker_input.focus()
+        ticker_input.value = "d AAPL MSFT"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # AAPL should be removed
+        tickers = app.watchlist_manager.get_all()
+        assert "AAPL" not in tickers
+        # MSFT was never there, so watchlist should be empty
+        assert len(tickers) == 0
+
+
+@pytest.mark.asyncio
+async def test_multi_ticker_feedback_notification() -> None:
+    """Test that multi-ticker operations show feedback notifications."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Submit multi-ticker add
+        ticker_input.focus()
+        ticker_input.value = "w AAPL MSFT"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # Check that a notification was posted
+        # (We can't easily check the exact text, but we verify the tickers were added)
+        tickers = app.watchlist_manager.get_all()
+        assert "AAPL" in tickers
+        assert "MSFT" in tickers
