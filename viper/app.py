@@ -184,6 +184,7 @@ class ViperApp(App[None]):
         ("6", "timeframe_6", "5Y"),
         ("7", "timeframe_7", "MAX"),
         Binding("v", "toggle_chart_style", "Chart View", show=False),
+        Binding("r", "refresh_chart", "Refresh Chart", show=False),
         ("question_mark,f1", "show_help", "Help"),
     ]
 
@@ -550,6 +551,16 @@ class ViperApp(App[None]):
         if self._chart_panel_visible:
             chart_panel = self.query_one("#chart-container ChartPanel", ChartPanel)
             chart_panel.toggle_chart_style()
+
+    def action_refresh_chart(self) -> None:
+        """Manually refresh the chart with fresh data."""
+        # Only refresh when chart panel is visible
+        if self._chart_panel_visible:
+            chart_panel = self.query_one("#chart-container ChartPanel", ChartPanel)
+            chart_panel.refresh_chart()
+            # Show brief feedback in status bar
+            status_bar = self.query_one(StatusBar)
+            status_bar.set_message("Refreshing chart...")
 
     def on_key(self, event: object) -> None:
         """Handle key presses for prefix system routing.

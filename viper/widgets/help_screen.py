@@ -122,6 +122,7 @@ class HelpScreen(ModalScreen[None]):
                 yield Static("  t-m                Toggle MACD indicator", classes="help-item")
                 yield Static("  t-a                Cycle moving averages (Off/SMA20/SMA50/Both)", classes="help-item")
                 yield Static("v                    Toggle chart view (Line/Candlestick)", classes="help-item")
+                yield Static("r                    Refresh chart data (manual refresh)", classes="help-item")
                 yield Static("e                    Expand news item (show summary)", classes="help-item")
                 yield Static("1-7                  Select timeframe (chart)", classes="help-item")
                 yield Static("? / F1               Show this help screen", classes="help-item")
@@ -179,6 +180,10 @@ class HelpScreen(ModalScreen[None]):
                 )
                 yield Static(
                     "Both RSI and MACD can be visible simultaneously (stacked vertically).",
+                    classes="help-item",
+                )
+                yield Static(
+                    "Press 'r' to manually refresh chart data (useful after resize or sleep).",
                     classes="help-item",
                 )
                 yield Static(

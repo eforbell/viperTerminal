@@ -198,6 +198,8 @@ class ChartPanel(Widget):
         self._state = "loading"
         self._current_ticker = ticker
         self._current_period = period
+        # Clear refresh timestamp when loading new chart to avoid stale indicator
+        self._last_refresh = None
         self._rebuild_content()
 
     def show_chart(self, data: HistoricalData, stats: HistoricalStats) -> None:
@@ -736,3 +738,12 @@ class ChartPanel(Widget):
             self._last_refresh = datetime.now()
             # Smooth update - just rebuild content (same as initial render)
             self._rebuild_content()
+
+    def refresh_chart(self) -> None:
+        """Trigger a manual chart refresh.
+
+        Fetches fresh data and updates the display. This is the public method
+        for on-demand refresh (e.g., after console resize or wake from sleep).
+        """
+        if self._state == "success" and self._current_ticker:
+            self._refresh_chart_data()
