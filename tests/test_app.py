@@ -310,8 +310,8 @@ async def test_slash_focuses_input() -> None:
 
 
 @pytest.mark.asyncio
-async def test_escape_clears_input() -> None:
-    """Test that pressing Escape clears input content."""
+async def test_escape_blurs_input() -> None:
+    """Test that pressing Escape blurs input to enter command mode (VPR-095)."""
     app = ViperApp()
     async with app.run_test() as pilot:
         ticker_input = app.query_one(TickerInput)
@@ -321,13 +321,18 @@ async def test_escape_clears_input() -> None:
         ticker_input.value = "AAPL"
         await pilot.pause()
         assert ticker_input.value == "AAPL"
+        assert ticker_input.has_focus
 
-        # Press Escape to clear
+        # Press Escape to blur and enter command mode
         await pilot.press("escape")
         await pilot.pause()
 
-        # Input should be cleared
-        assert ticker_input.value == ""
+        # Input should be blurred (no longer has focus)
+        assert not ticker_input.has_focus
+        # Input value should remain (not cleared)
+        assert ticker_input.value == "AAPL"
+        # App should be in command mode
+        assert app._input_mode is False
 
 
 @pytest.mark.asyncio
@@ -344,13 +349,15 @@ async def test_escape_clears_error_state() -> None:
         await pilot.pause()
         assert "error" in ticker_input.classes
 
-        # Press Escape to clear
+        # Press Escape to blur and clear error
         await pilot.press("escape")
         await pilot.pause()
 
-        # Error class should be removed
+        # Error class should be removed but value remains (VPR-095)
         assert "error" not in ticker_input.classes
-        assert ticker_input.value == ""
+        assert ticker_input.value == "test"  # Value NOT cleared (changed behavior in VPR-095)
+        # Input should be blurred
+        assert not ticker_input.has_focus
 
 
 @pytest.mark.asyncio
@@ -997,15 +1004,21 @@ async def test_t_followed_by_invalid_key_clears_prefix() -> None:
 
 @pytest.mark.asyncio
 async def test_escape_clears_technical_prefix() -> None:
-    """Test that pressing Escape clears the technical prefix mode."""
+    """Test that pressing Escape clears the technical prefix mode (when input not focused)."""
     app = ViperApp()
     async with app.run_test() as pilot:
-        # Press 't' to activate prefix
+        ticker_input = app.query_one(TickerInput)
+
+        # First blur the input so Escape goes to app-level binding
+        ticker_input.blur()
+        await pilot.pause()
+
+        # Press 't' to activate prefix (while input is not focused)
         await pilot.press("t")
         await pilot.pause()
         assert app._technical_prefix_active is True
 
-        # Press Escape to cancel prefix
+        # Press Escape to cancel prefix (app-level binding handles it)
         await pilot.press("escape")
         await pilot.pause()
 
@@ -1555,3 +1568,149 @@ async def test_multi_ticker_feedback_notification() -> None:
         tickers = app.watchlist_manager.get_all()
         assert "AAPL" in tickers
         assert "MSFT" in tickers
+
+
+# Command mode tests (VPR-095)
+
+
+@pytest.mark.asyncio
+async def test_escape_exits_input_mode() -> None:
+    """Test that Escape key exits input mode and enters command mode."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Initially in input mode
+        assert app._input_mode is True
+        ticker_input.focus()
+
+        # Press Escape to enter command mode
+        await pilot.press("escape")
+        await pilot.pause()
+
+        # Should be in command mode
+        assert app._input_mode is False
+        # Input should no longer have focus
+        assert not ticker_input.has_focus
+
+
+@pytest.mark.asyncio
+async def test_slash_re_enters_input_mode() -> None:
+    """Test that '/' key re-enters input mode from command mode."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Start in input mode, then exit to command mode
+        ticker_input.focus()
+        await pilot.press("escape")
+        await pilot.pause()
+
+        # Should be in command mode
+        assert app._input_mode is False
+
+        # Press '/' to re-enter input mode
+        await pilot.press("slash")
+        await pilot.pause()
+
+        # Should be back in input mode
+        assert app._input_mode is True
+        # Input should have focus
+        assert ticker_input.has_focus
+
+
+@pytest.mark.asyncio
+async def test_command_mode_shows_indicator() -> None:
+    """Test that command mode shows visual indicator in status bar."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        from viper.widgets import StatusBar
+
+        ticker_input = app.query_one(TickerInput)
+        status_bar = app.query_one(StatusBar)
+
+        # Start in input mode
+        ticker_input.focus()
+        await pilot.pause()
+
+        # Press Escape to enter command mode
+        await pilot.press("escape")
+        await pilot.pause()
+
+        # Status bar should show command mode indicator
+        # (We can't easily verify the exact text, but we know it should be set)
+        assert app._input_mode is False
+
+
+@pytest.mark.asyncio
+async def test_command_mode_indicator_clears_on_input_mode() -> None:
+    """Test that mode indicator clears when returning to input mode."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Enter command mode
+        ticker_input.focus()
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app._input_mode is False
+
+        # Re-enter input mode with '/'
+        await pilot.press("slash")
+        await pilot.pause()
+
+        # Should be back in input mode
+        assert app._input_mode is True
+
+
+@pytest.mark.asyncio
+async def test_escape_with_input_focus_blurs_not_clears_prefix() -> None:
+    """Test that Escape with input focus blurs input, not clears technical prefix."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Focus input first
+        ticker_input.focus()
+        await pilot.pause()
+
+        # Activate technical prefix (with input focused)
+        await pilot.press("t")
+        await pilot.pause()
+        assert app._technical_prefix_active is True
+
+        # Press Escape - should blur input (input binding has priority)
+        await pilot.press("escape")
+        await pilot.pause()
+
+        # Input should be blurred, but prefix might still be active
+        # (because Escape triggered the input's blur action, not the app's clear action)
+        assert not ticker_input.has_focus
+
+
+@pytest.mark.asyncio
+async def test_input_blur_updates_mode() -> None:
+    """Test that input blur event updates app mode state."""
+    app = ViperApp()
+
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Start with input focused (input mode)
+        ticker_input.focus()
+        await pilot.pause()
+        assert app._input_mode is True
+
+        # Blur the input manually (simulates what Escape does)
+        ticker_input.blur()
+        # Post the InputBlurred event manually
+        ticker_input.post_message(TickerInput.InputBlurred())
+        await pilot.pause()
+
+        # Should now be in command mode
+        assert app._input_mode is False

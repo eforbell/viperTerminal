@@ -16,6 +16,7 @@ class TickerInputTestApp(App[None]):
         """Initialize test app."""
         super().__init__()
         self.received_events: list[TickerInput.TickerLookup] = []
+        self.received_blur_events: list[TickerInput.InputBlurred] = []
         self.history_manager = history_manager
 
     def compose(self) -> ComposeResult:
@@ -25,6 +26,10 @@ class TickerInputTestApp(App[None]):
     def on_ticker_input_ticker_lookup(self, event: TickerInput.TickerLookup) -> None:
         """Handle ticker lookup events."""
         self.received_events.append(event)
+
+    def on_ticker_input_input_blurred(self, event: TickerInput.InputBlurred) -> None:
+        """Handle input blurred events."""
+        self.received_blur_events.append(event)
 
 
 @pytest.mark.asyncio
@@ -362,3 +367,82 @@ async def test_empty_history_navigation(tmp_path: Path) -> None:
 
         await pilot.press("down")
         assert ticker_input.value == ""
+
+
+# Command mode tests (VPR-095)
+
+
+@pytest.mark.asyncio
+async def test_escape_blurs_input() -> None:
+    """Test that Escape key blurs the input widget."""
+    app = TickerInputTestApp()
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Focus the input
+        ticker_input.focus()
+        assert ticker_input.has_focus
+
+        # Press Escape
+        await pilot.press("escape")
+
+        # Input should no longer have focus
+        assert not ticker_input.has_focus
+
+
+@pytest.mark.asyncio
+async def test_escape_emits_input_blurred_event() -> None:
+    """Test that Escape key emits InputBlurred event."""
+    app = TickerInputTestApp()
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Focus the input
+        ticker_input.focus()
+
+        # Press Escape
+        await pilot.press("escape")
+
+        # Should have received InputBlurred event
+        assert len(app.received_blur_events) == 1
+        assert isinstance(app.received_blur_events[0], TickerInput.InputBlurred)
+
+
+@pytest.mark.asyncio
+async def test_escape_clears_error_state() -> None:
+    """Test that Escape key clears error state on input."""
+    app = TickerInputTestApp()
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Focus and submit empty to get error state
+        ticker_input.focus()
+        await pilot.press("enter")
+        assert ticker_input.has_class("error")
+
+        # Press Escape
+        await pilot.press("escape")
+
+        # Error class should be removed
+        assert not ticker_input.has_class("error")
+
+
+@pytest.mark.asyncio
+async def test_escape_with_text_in_input() -> None:
+    """Test that Escape blurs input even when it contains text."""
+    app = TickerInputTestApp()
+    async with app.run_test() as pilot:
+        ticker_input = app.query_one(TickerInput)
+
+        # Focus and type some text
+        ticker_input.focus()
+        ticker_input.value = "AAPL"
+
+        # Press Escape
+        await pilot.press("escape")
+
+        # Input should be blurred
+        assert not ticker_input.has_focus
+
+        # Text should remain in input (not cleared)
+        assert ticker_input.value == "AAPL"

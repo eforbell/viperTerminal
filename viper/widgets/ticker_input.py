@@ -1,5 +1,6 @@
 """Ticker input widget with validation and event emission."""
 
+from textual.binding import Binding
 from textual.events import Key
 from textual.message import Message
 from textual.widgets import Input
@@ -22,6 +23,16 @@ class TickerInput(Input):
             super().__init__()
             self.ticker = ticker
 
+    class InputBlurred(Message):
+        """Event emitted when the input is blurred via Escape key."""
+
+        pass
+
+    # Keyboard binding for Escape to blur/exit input mode
+    BINDINGS = [
+        Binding("escape", "blur_input", "Exit Input", show=False, priority=True),
+    ]
+
     def __init__(self, history_manager: HistoryManager | None = None) -> None:
         """Initialize the ticker input widget.
 
@@ -30,6 +41,17 @@ class TickerInput(Input):
         """
         super().__init__(placeholder="Enter ticker symbol (e.g., AAPL, BTC)")
         self.history_manager = history_manager
+
+    def action_blur_input(self) -> None:
+        """Blur the input widget to exit input mode and enter command mode."""
+        # Clear any error state
+        self.remove_class("error")
+
+        # Blur the widget to transfer focus away
+        self.blur()
+
+        # Emit event to notify app about the blur
+        self.post_message(self.InputBlurred())
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle input submission.

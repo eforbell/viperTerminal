@@ -67,6 +67,10 @@ class ViperApp(App[None]):
         border: solid $accent;
     }
 
+    TickerInput:focus {
+        border: double $accent;
+    }
+
     TickerInput.error {
         border: solid red;
     }
@@ -211,6 +215,7 @@ class ViperApp(App[None]):
         self._options_panel_visible = False
         self._current_ticker: str | None = None
         self._technical_prefix_active = False
+        self._input_mode = True  # Track input mode (True) vs command mode (False)
 
     def on_resize(self, event: object) -> None:
         """Handle terminal resize to show/hide watchlist on narrow screens.
@@ -274,16 +279,37 @@ class ViperApp(App[None]):
         """Called when app is first mounted."""
         # Set initial focus to the ticker input
         self.query_one(TickerInput).focus()
-        
+
+        # Initialize mode indicator
+        self._input_mode = True
+        self._update_mode_indicator()
+
         # Check if this is the first run and show welcome screen
         if is_first_run():
             self.push_screen(HelpScreen(is_welcome=True))
             mark_first_run_complete()
 
+    def _update_mode_indicator(self) -> None:
+        """Update the status bar to show current mode (input vs command)."""
+        try:
+            status_bar = self.query_one(StatusBar)
+            # Only show mode indicator when in command mode
+            if not self._input_mode:
+                status_bar.set_message("COMMAND MODE (/ to search)")
+            else:
+                # Clear mode indicator when in input mode
+                if not self._technical_prefix_active:
+                    status_bar.set_message("")
+        except Exception:
+            # StatusBar not yet mounted
+            pass
+
     def action_focus_input(self) -> None:
-        """Focus the ticker input bar."""
+        """Focus the ticker input bar and enter input mode."""
         ticker_input = self.query_one(TickerInput)
         ticker_input.focus()
+        self._input_mode = True
+        self._update_mode_indicator()
 
     def action_clear_or_close(self) -> None:
         """Clear input or close overlays when Escape is pressed."""
@@ -680,6 +706,16 @@ class ViperApp(App[None]):
             options_panel = self.query_one(OptionsChainPanel)
             current_price = self._get_current_price()
             self.run_worker(options_panel.load_options(self._current_ticker, current_price))
+
+    def on_ticker_input_input_blurred(self, event: TickerInput.InputBlurred) -> None:
+        """Handle input blur event when user exits input mode with Escape.
+
+        Args:
+            event: The input blurred event.
+        """
+        # Enter command mode
+        self._input_mode = False
+        self._update_mode_indicator()
 
     async def on_ticker_input_ticker_lookup(self, event: TickerInput.TickerLookup) -> None:
         """Handle ticker lookup events.

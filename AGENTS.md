@@ -5108,3 +5108,112 @@ assert all(t in watchlist for t in ["AAPL", "MSFT", "GOOGL"])
 - `tests/test_app.py`: Added 7 new tests for multi-ticker functionality
 
 **Result**: 1009 tests passing (7 new tests added). Coverage: 88%. VPR-094 complete.
+
+
+---
+
+## VPR-095: Command Mode - Global Key to Exit Input Focus (2026-01-21)
+
+**Feature**: Escape key exits input focus, enabling chart/news/options keys without tabbing. '/' re-enters input mode.
+
+**Implementation Pattern**:
+```python
+# In TickerInput widget - add Escape binding
+class TickerInput(Input):
+    BINDINGS = [
+        Binding("escape", "blur_input", "Exit Input", show=False, priority=True),
+    ]
+
+    def action_blur_input(self) -> None:
+        """Blur the input to exit input mode."""
+        self.remove_class("error")
+        self.blur()
+        self.post_message(self.InputBlurred())
+
+# In ViperApp - track mode and handle event
+def __init__(self) -> None:
+    self._input_mode = True  # Track input vs command mode
+
+def on_ticker_input_input_blurred(self, event: TickerInput.InputBlurred) -> None:
+    """Handle input blur - enter command mode."""
+    self._input_mode = False
+    self._update_mode_indicator()
+
+def action_focus_input(self) -> None:
+    """'/' key re-enters input mode."""
+    ticker_input.focus()
+    self._input_mode = True
+    self._update_mode_indicator()
+```
+
+**Key Learnings**:
+
+**Widget Binding Priority**:
+- Use `priority=True` on widget bindings to ensure they handle keys first
+- When input has focus, its Escape binding fires BEFORE app-level binding
+- When input lacks focus, app-level Escape binding fires (e.g., to clear technical prefix)
+- No conflict: different focus contexts = different handlers
+
+**CSS Focus Indicator**:
+- Added `TickerInput:focus { border: double $accent; }` for visual feedback
+- Double border when focused, single border when blurred
+
+**Mode Indicator**:
+- Only show "COMMAND MODE (/ to search)" when NOT in input mode
+- Clear message when returning to input mode (unless technical prefix active)
+- Status bar provides clear visual feedback of current mode
+
+**Event-Driven State Management**:
+- Custom `InputBlurred` Message for explicit communication between widget and app
+- App tracks mode with `_input_mode` boolean
+- '/' key already bound to `action_focus_input` - just needed to set mode flag
+
+**Behavior Change**:
+- OLD: Escape cleared input value
+- NEW: Escape blurs input (value preserved), enters command mode
+- This is a UX improvement - users can type, Escape to use global keys, then '/' to resume typing
+
+**Testing Context-Dependent Behavior**:
+```python
+# Test 1: Escape with input focused -> blurs input
+ticker_input.focus()
+await pilot.press("escape")
+assert not ticker_input.has_focus  # Blurred
+assert app._input_mode is False    # Command mode
+
+# Test 2: Escape without input focused -> clears technical prefix
+ticker_input.blur()
+await pilot.press("t")  # Activate prefix
+await pilot.press("escape")
+assert app._technical_prefix_active is False  # Cleared
+```
+
+**Test Migration**:
+- Updated 3 existing tests that relied on old Escape-clears-input behavior
+- `test_escape_blurs_input`: Changed from "clears input" to "blurs input, preserves value"
+- `test_escape_clears_error_state`: Now expects value preserved, just error class removed
+- `test_escape_clears_technical_prefix`: Must blur input first for test to work correctly
+
+**Acceptance Criteria Met**:
+✅ Escape key exits input bar focus when input bar has focus
+✅ After exiting input focus, chart/news/options keybindings become active
+✅ User can access 'o' (options), 'n' (news), 'v' (chart toggle) without tabbing
+✅ Status bar shows current mode ("COMMAND MODE (/ to search)" indicator)
+✅ Tab still works for panel navigation as before
+✅ Pressing '/' re-enters input/search mode
+✅ No disruption to existing tab-based navigation
+✅ No conflict with news panel Escape (different focus context)
+✅ Test: Escape exits input focus correctly
+✅ Test: global keys work after exiting input mode
+✅ Test: '/' returns to input mode
+✅ Test: existing Tab navigation unaffected
+✅ Test: input blur event updates mode state
+
+**Files Modified**:
+- `viper/widgets/ticker_input.py`: Added `InputBlurred` event, Escape binding with `action_blur_input()`
+- `viper/app.py`: Added `_input_mode` tracking, `on_ticker_input_input_blurred()` handler, `_update_mode_indicator()`, CSS focus styling
+- `tests/test_ticker_input.py`: Added 4 new tests for Escape/blur functionality
+- `tests/test_app.py`: Added 6 new command mode tests, updated 3 existing tests for new behavior
+
+**Result**: 1019 tests passing (10 new tests added, 3 updated). Coverage: 87%. VPR-095 complete.
+
