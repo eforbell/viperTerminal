@@ -1663,3 +1663,16 @@
   - All 1002 tests passing (13 new tests: 5 config, 8 chart panel), mypy --strict clean
   - VPR-093 complete with all acceptance criteria met
 ---
+
+## 2026-01-21 - VPR-094
+- Implemented multi-ticker watchlist add/delete with space-delimited input
+- Users can now batch add/remove tickers: 'w AAPL MSFT GOOGL' or 'd AAPL MSFT'
+- Added user feedback notifications showing which tickers succeeded/failed
+- Files changed: viper/app.py (updated on_ticker_input_ticker_lookup and added _show_watchlist_feedback helper)
+- Tests added: 7 new tests in tests/test_app.py covering all multi-ticker scenarios
+- **Learnings:**
+  - When defining similar variables in separate if blocks, use unique names (failed_add vs failed_remove) to avoid mypy no-redef errors
+  - Batch UI refresh after all operations complete, not after each ticker
+  - Test isolation: Clear watchlist state in tests to avoid interference from real config files
+  - User feedback pattern: Clear, concise messages like "Added: AAPL, MSFT. Failed: INVALID"
+---

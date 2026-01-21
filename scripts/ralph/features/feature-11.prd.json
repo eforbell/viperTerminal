@@ -69,7 +69,11 @@
       "priority": 2,
       "estimatedEffort": "Small",
       "dependencies": [],
-      "notes": "Quality-of-life improvement for managing watchlists. Keep existing w/d prefix pattern - just allow multiple tickers after the command. No '-TICKER' syntax to avoid confusion with tickers like BTC-USD."
+      "notes": "Quality-of-life improvement for managing watchlists. Keep existing w/d prefix pattern - just allow multiple tickers after the command. No '-TICKER' syntax to avoid confusion with tickers like BTC-USD.",
+      "passes": true,
+      "completedAt": "2026-01-21",
+      "testsPassing": 1009,
+      "coverage": "88%"
     },
     {
       "id": "VPR-095",
