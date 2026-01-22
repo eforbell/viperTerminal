@@ -5285,3 +5285,86 @@ assert app._technical_prefix_active is False  # Cleared
 
 **Result**: 1025 tests passing (6 new tests added, 1 test helper improved). Coverage: 87%. VPR-096 complete.
 
+---
+
+### VPR-097: StreamingService Singleton for WebSocket Management
+
+**Date**: 2026-01-22
+
+**Objective**: Create foundational service layer for real-time WebSocket streaming via yfinance's AsyncWebSocket.
+
+**Implementation Details**:
+
+**Core Architecture**:
+- Singleton pattern using class method `get_instance()` to ensure single WebSocket connection
+- ConnectionState enum tracks lifecycle: DISCONNECTED → CONNECTING → CONNECTED, with RECONNECTING and ERROR states
+- StreamingQuote dataclass encapsulates real-time quote data with symbol, price, change, change_percent, plus optional volume/high/low/timestamp
+- Service uses callbacks for quote updates and state changes, not Textual messages (that's the UI layer's job)
+
+**Symbol Normalization**:
+- Stock symbols: uppercase and trim whitespace ("aapl" → "AAPL")
+- Crypto symbols: known symbols (BTC, ETH, SOL, DOGE, ADA, XRP, DOT, AVAX, MATIC, LINK, UNI, ATOM, LTC, BCH) get -USD suffix automatically
+- Already-formatted crypto: BTC-USD stays BTC-USD (idempotent)
+- Normalization happens in subscribe/unsubscribe to ensure consistent internal state
+
+**WebSocket Message Parsing**:
+- Quote parsing extracts: `id` or `symbol`, `price` (required), `previousClose` (for calculating change)
+- Change calculation: `change = price - previousClose`, `change_percent = (change / previousClose) * 100`
+- Handles missing previousClose gracefully: defaults to 0.0 change
+- Returns None for malformed messages (missing symbol or price)
+
+**Lifecycle Management**:
+- `start()`: Creates AsyncWebSocket, spawns listen task, transitions to CONNECTING
+- `stop()`: Cancels listen task, closes WebSocket, clears subscriptions, transitions to DISCONNECTED
+- `subscribe()`: Normalizes symbols, filters already-subscribed, calls `ws.subscribe()`, updates internal set
+- `unsubscribe()`: Normalizes symbols, filters not-subscribed, calls `ws.unsubscribe()`, removes from set
+- Listen loop handles exceptions and attempts reconnection with 3-second backoff
+
+**Error Handling Patterns**:
+- Subscribe/unsubscribe when not running: log warning and return (don't raise)
+- WebSocket subscribe/unsubscribe errors: log error, don't crash (graceful degradation)
+- Start failure: set ERROR state, set `_running = False`, re-raise exception (caller handles)
+- Listen loop exceptions: log error, transition to RECONNECTING, sleep 3s, retry (yfinance handles exponential backoff internally)
+- Parse errors in message handler: log error, don't crash listen loop
+
+**Testing Patterns**:
+- Mock `AsyncWebSocket` class with `AsyncMock` from unittest.mock
+- Mock `listen()` method with custom async function to control timing
+- Use `asyncio.sleep()` in tests to give listen loop time to start
+- Call `_reset_instance()` before each test to ensure clean singleton state
+- Use `patch.object(service._logger, "warning")` to verify logging without cluttering output
+- Test exception paths by having mocked methods raise exceptions
+- Verify state transitions with `on_state_change` callback collecting states in list
+
+**Type Checking**:
+- yfinance lacks type stubs, requires `# type: ignore[import-untyped]` on import
+- Follow existing pattern in crypto.py, stock.py, news.py, options.py, history_data.py
+- `mypy --strict` passes with this annotation
+
+**Coverage Achievement**:
+- Started at 89% coverage (6 uncovered lines)
+- Added edge case tests: start failure, unsubscribe empty list, listen loop reconnect, callback exceptions
+- Final: 100% coverage with 42 comprehensive tests
+- Tests cover: singleton pattern, normalization, parsing, lifecycle, subscriptions, error handling, properties
+
+**Key Learnings**:
+1. **Singleton with _reset_instance()**: Critical for testing - allows tests to get fresh instances
+2. **AsyncMock for WebSocket**: Mock async methods with `AsyncMock()`, not `MagicMock()`
+3. **Mock listen() carefully**: Use custom async function, not just AsyncMock, to control when loop runs
+4. **Give async tasks time to start**: Use `await asyncio.sleep(0.05)` after `start()` to let listen task spawn
+5. **Callback vs Message separation**: Service uses callbacks (runs in any context), UI layer converts to Textual messages
+6. **Error handling philosophy**: Log and continue for subscription errors, log and reconnect for connection errors, re-raise for start failures
+7. **Idempotent operations**: stop() when not running is safe, subscribe() with duplicates is safe, unsubscribe() with non-existent is safe
+8. **yfinance AsyncWebSocket features**: Handles heartbeat (15s) and reconnect with exponential backoff automatically
+9. **Symbol normalization must be idempotent**: BTC-USD → BTC-USD (don't double-convert)
+10. **100% coverage requires edge cases**: Test "no-op" paths (empty subscribe list, unsubscribe empty, stop when not running)
+
+**Files Created**:
+- `viper/services/streaming.py`: StreamingService, StreamingQuote, ConnectionState (160 lines, 100% coverage)
+- `tests/test_streaming.py`: 42 comprehensive tests covering all functionality and edge cases
+
+**Files Modified**:
+- `viper/services/__init__.py`: Added "streaming" to `__all__` exports
+
+**Result**: 42 new tests passing, 100% coverage on streaming.py. All existing tests still pass (1025 total). mypy --strict passes. VPR-097 complete.
+
