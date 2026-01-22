@@ -5368,3 +5368,80 @@ assert app._technical_prefix_active is False  # Cleared
 
 **Result**: 42 new tests passing, 100% coverage on streaming.py. All existing tests still pass (1025 total). mypy --strict passes. VPR-097 complete.
 
+---
+
+## VPR-098: Integrate Streaming Toggle into WatchlistPanel
+
+**Goal**: Add streaming mode toggle to WatchlistPanel, integrating StreamingService from VPR-097.
+
+**Implementation Approach**:
+1. Add streaming state tracking instance variables (`_streaming_enabled`, `_streaming_quotes`, `_streaming_service`, `_connection_state`)
+2. Create Message classes for Textual event handling (`StreamingQuoteReceived`, `StreamingStateChanged`)
+3. Implement callback-to-message bridge for thread-safe communication between WebSocket context and Textual event loop
+4. Implement `_enable_streaming()` and `_disable_streaming()` async methods
+5. Implement `toggle_streaming()` method that uses `run_worker()` to call async enable/disable
+6. Modify `_render_items()` to prefer streaming quotes over polling quotes and update header based on connection state
+7. Modify `on_ticker_added()` and `on_ticker_removed()` to manage streaming subscriptions
+8. Add message handlers for `StreamingQuoteReceived` and `StreamingStateChanged`
+
+**Thread Safety Pattern**: WebSocket callbacks to Textual messages
+```python
+def _on_streaming_quote(self, quote: StreamingQuote) -> None:
+    """Callback from StreamingService - runs in WebSocket context."""
+    self._streaming_quotes[quote.symbol] = quote
+    # Thread-safe way to post message to Textual event loop
+    if self.app:
+        self.app.call_from_thread(
+            self.post_message, self.StreamingQuoteReceived(quote)
+        )
+```
+
+**Key Pattern**: `app.call_from_thread()` is the ONLY safe way to post Textual messages from non-Textual async contexts (like WebSocket callbacks).
+
+**Data Flow Preference**:
+1. Streaming quote takes precedence when available (`_streaming_quotes`)
+2. Falls back to polling quote if streaming unavailable
+3. Polling continues during streaming as fallback/failsafe
+4. `_render_items()` checks `streaming_quote` first, then `polling_quote`
+
+**Header State Mapping**:
+- Default: "WATCHLIST"
+- CONNECTED: "WATCHLIST [LIVE]"
+- CONNECTING: "WATCHLIST [CONNECTING...]"
+- RECONNECTING: "WATCHLIST [RECONNECTING...]"
+- Header updated via `query_one('.panel-header', Label).update(text)`
+
+**Testing Challenges**:
+1. **Singleton mocking issue**: Patching class methods after singleton instance created doesn't work
+2. **Solution**: Manually mock `panel._streaming_service` with `MagicMock()` and `AsyncMock()` methods
+3. **Message testing**: Post messages directly and verify state changes, don't test UI rendering in unit tests
+4. **Textual rendering**: Use `str(label.render())` to get text content, not `label.renderable`
+
+**Testing Patterns**:
+- Reset singleton before tests: `StreamingService._reset_instance()`
+- Mock service directly on panel instance: `panel._streaming_service = MagicMock()`
+- Mock async methods individually: `panel._streaming_service.subscribe = AsyncMock()`
+- Test state changes, not rendered UI: `assert panel._connection_state == ConnectionState.CONNECTED`
+- Use `await pilot.pause()` to let messages propagate
+
+**Coverage Notes**:
+- WatchlistPanel: 92% coverage (16 uncovered lines, mostly error handling edge cases)
+- Total project coverage: 87% (1077 tests passing)
+- All streaming integration tests passing
+
+**Key Learnings**:
+1. **app.call_from_thread()**: REQUIRED for posting Textual messages from WebSocket/async callbacks
+2. **Singleton testing**: Can't patch class methods after instance exists - mock instance directly
+3. **run_worker()**: Use this for calling async methods from sync contexts (like button handlers)
+4. **Polling as fallback**: Don't stop polling when streaming enabled - streaming may not have all data
+5. **Header updates in _render_items()**: Keeps header in sync with data, prevents flickering
+6. **Message handlers naming**: `on_<widget_name>_<message_name>` (e.g., `on_watchlist_panel_streaming_quote_received`)
+7. **Prefer streaming data**: Check `_streaming_quotes` first, fall back to `_quotes` for robustness
+8. **Textual pilot testing**: Use `await pilot.pause()` to give event loop time to process messages
+
+**Files Modified**:
+- `viper/widgets/watchlist_panel.py`: Added 100 lines for streaming integration (212 total lines, 92% coverage)
+- `tests/test_watchlist_panel.py`: Added 11 comprehensive streaming tests (total 38 tests, all passing)
+
+**Result**: All 1077 tests passing, mypy --strict passes, watchlist panel now supports streaming mode toggle with graceful fallback. VPR-098 complete.
+
