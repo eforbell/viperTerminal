@@ -993,10 +993,14 @@ async def test_format_streaming_quote_line() -> None:
 
 
 @pytest.mark.asyncio
-async def test_streaming_callbacks_use_call_from_thread(
+async def test_streaming_callbacks_post_messages(
     watchlist_manager: WatchlistManager,
 ) -> None:
-    """Test that streaming callbacks use call_from_thread for thread safety."""
+    """Test that streaming callbacks post messages directly.
+
+    Since yfinance AsyncWebSocket runs in the same asyncio event loop as Textual,
+    we use post_message directly rather than call_from_thread.
+    """
     watchlist_manager.add("AAPL")
 
     # Reset singleton before test
@@ -1008,8 +1012,15 @@ async def test_streaming_callbacks_use_call_from_thread(
         panel = app.query_one(WatchlistPanel)
         await pilot.pause(0.1)
 
-        # Mock the app's call_from_thread method
-        panel.app.call_from_thread = MagicMock()  # type: ignore
+        # Mock post_message to track calls
+        original_post_message = panel.post_message
+        post_message_calls: list[object] = []
+
+        def mock_post_message(message: object) -> bool:
+            post_message_calls.append(message)
+            return original_post_message(message)
+
+        panel.post_message = mock_post_message  # type: ignore
 
         # Call the streaming quote callback
         quote = StreamingQuote(
@@ -1017,11 +1028,13 @@ async def test_streaming_callbacks_use_call_from_thread(
         )
         panel._on_streaming_quote(quote)
 
-        # Should have called call_from_thread
-        assert panel.app.call_from_thread.called  # type: ignore
+        # Should have posted a StreamingQuoteReceived message
+        assert len(post_message_calls) == 1
+        assert isinstance(post_message_calls[0], WatchlistPanel.StreamingQuoteReceived)
 
         # Call the state change callback
         panel._on_connection_state_change(ConnectionState.CONNECTED)
 
-        # Should have called call_from_thread again
-        assert panel.app.call_from_thread.call_count == 2  # type: ignore
+        # Should have posted a StreamingStateChanged message
+        assert len(post_message_calls) == 2
+        assert isinstance(post_message_calls[1], WatchlistPanel.StreamingStateChanged)

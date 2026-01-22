@@ -41,6 +41,7 @@ class WatchlistPanel(Widget):
         text-style: bold;
         color: $accent;
         margin-bottom: 1;
+        width: 100%;
     }
 
     WatchlistPanel .watchlist-item {
@@ -128,13 +129,14 @@ class WatchlistPanel(Widget):
             self.state = state
 
     def __init__(
-        self, watchlist_manager: WatchlistManager, refresh_interval: int = 60
+        self, watchlist_manager: WatchlistManager, refresh_interval: int = 60, streaming_enabled: bool = False
     ) -> None:
         """Initialize the watchlist panel.
 
         Args:
             watchlist_manager: The watchlist manager instance.
             refresh_interval: Auto-refresh interval in seconds (default: 60).
+            streaming_enabled: Enable real-time streaming mode on mount (default: False).
         """
         super().__init__()
         self._watchlist_manager = watchlist_manager
@@ -143,6 +145,7 @@ class WatchlistPanel(Widget):
         self._refresh_timer_active = False
         self._selected_index = 0
         self._initial_load = True  # Track if this is the first load
+        self._auto_enable_streaming = streaming_enabled  # Store for on_mount
         self._streaming_enabled: bool = False
         self._streaming_quotes: dict[str, StreamingQuote] = {}
         self._streaming_service: StreamingService | None = None
@@ -150,7 +153,7 @@ class WatchlistPanel(Widget):
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
-        yield Label("WATCHLIST", classes="panel-header")
+        yield Label("WATCHLIST", id="watchlist-header", classes="panel-header")
         yield VerticalScroll(id="watchlist-content")
 
     def on_mount(self) -> None:
@@ -162,9 +165,16 @@ class WatchlistPanel(Widget):
         self.set_interval(self._refresh_interval, self.refresh_quotes)
         self.run_worker(self.refresh_quotes())
 
+        # Enable streaming if configured
+        if self._auto_enable_streaming:
+            self.run_worker(self._enable_streaming())
+
     def on_unmount(self) -> None:
-        """Stop the refresh timer when unmounted."""
+        """Stop the refresh timer and streaming when unmounted."""
         self._refresh_timer_active = False
+        # Stop streaming service if running
+        if self._streaming_enabled and self._streaming_service:
+            self.run_worker(self._streaming_service.stop())
 
     async def refresh_quotes(self) -> None:
         """Fetch updated quotes for all watchlist items."""
@@ -188,7 +198,7 @@ class WatchlistPanel(Widget):
     def _render_items(self) -> None:
         """Render the watchlist items with current quotes."""
         # Update header to show streaming state
-        header = self.query_one(".panel-header", Label)
+        header = self.query_one("#watchlist-header", Label)
         if self._streaming_enabled:
             if self._connection_state == ConnectionState.CONNECTED:
                 header.update("WATCHLIST [LIVE]")
@@ -368,17 +378,14 @@ class WatchlistPanel(Widget):
         self.post_message(self.TickerSelected(selected_ticker))
 
     def _on_streaming_quote(self, quote: StreamingQuote) -> None:
-        """Callback from StreamingService - runs in WebSocket context.
+        """Callback from StreamingService - runs in same asyncio event loop.
 
         Args:
             quote: The streaming quote data.
         """
         self._streaming_quotes[quote.symbol] = quote
-        # Thread-safe way to post message to Textual event loop
-        if self.app:
-            self.app.call_from_thread(
-                self.post_message, self.StreamingQuoteReceived(quote)
-            )
+        # Post message directly - we're in the same event loop as Textual
+        self.post_message(self.StreamingQuoteReceived(quote))
 
     def _on_connection_state_change(self, state: ConnectionState) -> None:
         """Callback from StreamingService when connection state changes.
@@ -387,10 +394,10 @@ class WatchlistPanel(Widget):
             state: The new connection state.
         """
         self._connection_state = state
-        if self.app:
-            self.app.call_from_thread(
-                self.post_message, self.StreamingStateChanged(state)
-            )
+        # Update UI directly - we're in the same event loop as Textual
+        self._render_items()
+        # Also post message for any other listeners (like StatusBar)
+        self.post_message(self.StreamingStateChanged(state))
 
     async def _enable_streaming(self) -> None:
         """Enable real-time streaming mode."""
@@ -399,6 +406,9 @@ class WatchlistPanel(Widget):
 
         try:
             self._streaming_service = StreamingService.get_instance()
+            # Set flag BEFORE start/subscribe so callbacks see it as enabled
+            self._streaming_enabled = True
+
             await self._streaming_service.start(
                 on_quote=self._on_streaming_quote,
                 on_state_change=self._on_connection_state_change,
@@ -409,7 +419,6 @@ class WatchlistPanel(Widget):
             if tickers:
                 await self._streaming_service.subscribe(tickers)
 
-            self._streaming_enabled = True
             self._render_items()  # Re-render to show [LIVE] header
         except Exception as e:
             # Failed to start - stay in polling mode

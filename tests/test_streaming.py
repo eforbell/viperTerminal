@@ -601,6 +601,9 @@ class TestStreamingServiceSubscriptions:
 
             await service.start(on_state_change=on_state_change)
 
+            # Subscribe to trigger listen loop (listen is deferred until first subscribe)
+            await service.subscribe(["AAPL"])
+
             # Wait for first error and reconnect attempt
             await asyncio.sleep(0.5)
 

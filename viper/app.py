@@ -356,6 +356,7 @@ class ViperApp(App[None]):
                     yield WatchlistPanel(
                         watchlist_manager=self.watchlist_manager,
                         refresh_interval=self.config.refresh_interval,
+                        streaming_enabled=self.config.streaming_enabled,
                     )
                 with Container(id="quote-container"):
                     yield QuotePanel()
@@ -670,13 +671,15 @@ class ViperApp(App[None]):
         """Toggle streaming mode for the watchlist panel."""
         try:
             watchlist_panel = self.query_one(WatchlistPanel)
+            # Check current state BEFORE toggling to show correct notification
+            was_enabled = watchlist_panel._streaming_enabled
             watchlist_panel.toggle_streaming()
 
-            # Show notification
-            if watchlist_panel._streaming_enabled:
-                self.notify("Streaming enabled", severity="information")
-            else:
+            # Show notification based on what we're toggling TO (opposite of current)
+            if was_enabled:
                 self.notify("Streaming disabled", severity="information")
+            else:
+                self.notify("Enabling streaming...", severity="information")
         except Exception as e:
             self.logger.error(f"Error toggling streaming: {e}")
             self.notify("Error toggling streaming", severity="error")

@@ -68,6 +68,21 @@ class TestConfig:
         config = Config(default_watchlist="invalid")  # type: ignore[arg-type]
         assert config.default_watchlist == []
 
+    def test_default_streaming_enabled(self) -> None:
+        """Test default streaming_enabled value."""
+        config = Config()
+        assert config.streaming_enabled is False
+
+    def test_custom_streaming_enabled(self) -> None:
+        """Test setting streaming_enabled to True."""
+        config = Config(streaming_enabled=True)
+        assert config.streaming_enabled is True
+
+    def test_invalid_streaming_enabled_type(self) -> None:
+        """Test that invalid streaming_enabled type falls back to default."""
+        config = Config(streaming_enabled="true")  # type: ignore[arg-type]
+        assert config.streaming_enabled is False
+
 
 class TestGetConfigPath:
     """Tests for get_config_path function."""
@@ -241,6 +256,37 @@ background = "#111111"
         }
         assert config.default_watchlist == []
 
+    def test_load_config_streaming_enabled_true(self, tmp_path: Path) -> None:
+        """Test loading streaming_enabled=true from config file."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("streaming_enabled = true\n")
+
+        with patch("viper.config.get_config_path", return_value=config_file):
+            config = load_config()
+
+        assert config.streaming_enabled is True
+
+    def test_load_config_streaming_enabled_false(self, tmp_path: Path) -> None:
+        """Test loading streaming_enabled=false from config file."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("streaming_enabled = false\n")
+
+        with patch("viper.config.get_config_path", return_value=config_file):
+            config = load_config()
+
+        assert config.streaming_enabled is False
+
+    def test_load_config_streaming_enabled_invalid_type(self, tmp_path: Path) -> None:
+        """Test that invalid streaming_enabled type triggers validation."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text('streaming_enabled = "true"\n')
+
+        with patch("viper.config.get_config_path", return_value=config_file):
+            config = load_config()
+
+        # Validation should correct it to False
+        assert config.streaming_enabled is False
+
 
 class TestConfigChartOptions:
     """Test chart-related configuration options."""
@@ -379,6 +425,7 @@ class TestConfigAllOptions:
         config_file.write_text("""
 # All top-level keys must come before any table sections
 refresh_interval = 120
+streaming_enabled = true
 default_watchlist = ["AAPL", "MSFT"]
 default_chart_timeframe = "1Y"
 chart_style = "block"
@@ -397,6 +444,7 @@ background = "#111111"
 
         # Verify all options loaded correctly
         assert config.refresh_interval == 120
+        assert config.streaming_enabled is True
         assert config.default_watchlist == ["AAPL", "MSFT"]
         assert config.theme_colors["positive"] == "#00aa00"
         assert config.default_chart_timeframe == "1Y"

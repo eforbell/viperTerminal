@@ -115,21 +115,35 @@ class StreamingService:
         if not symbol or price is None:
             return None
 
-        # Calculate change from previous close if available
-        prev_close = data.get("previousClose", 0)
-        if prev_close and prev_close > 0:
-            change = price - prev_close
-            change_pct = (change / prev_close) * 100
-        else:
-            change = 0.0
-            change_pct = 0.0
+        # Use change/change_percent directly from message if available
+        # Otherwise calculate from previousClose
+        change = data.get("change")
+        change_pct = data.get("change_percent")
+
+        if change is None or change_pct is None:
+            # Fall back to calculation from previousClose
+            prev_close = data.get("previousClose", 0)
+            if prev_close and prev_close > 0:
+                change = price - prev_close
+                change_pct = (change / prev_close) * 100
+            else:
+                change = 0.0
+                change_pct = 0.0
+
+        # Handle volume - may be string in some messages
+        volume = data.get("dayVolume") or data.get("day_volume")
+        if isinstance(volume, str):
+            try:
+                volume = int(volume)
+            except ValueError:
+                volume = None
 
         return StreamingQuote(
             symbol=str(symbol),
             price=float(price),
             change=float(change),
             change_percent=float(change_pct),
-            volume=data.get("dayVolume"),
+            volume=volume,
             day_high=data.get("dayHigh"),
             day_low=data.get("dayLow"),
             timestamp=data.get("time"),
@@ -142,6 +156,9 @@ class StreamingService:
     ) -> None:
         """Start the streaming service.
 
+        Note: This initializes the WebSocket but doesn't start listening yet.
+        Listening begins when the first subscription is made via subscribe().
+
         Args:
             on_quote: Callback for receiving quote updates
             on_state_change: Callback for connection state changes
@@ -152,18 +169,20 @@ class StreamingService:
 
         self._on_quote = on_quote
         self._on_state_change = on_state_change
-        self._running = True
 
         self._set_state(ConnectionState.CONNECTING)
 
         try:
             self._ws = AsyncWebSocket(verbose=False)
-            self._listen_task = asyncio.create_task(self._listen_loop())
-            self._logger.info("StreamingService started")
+            self._running = True  # Only set running after WebSocket created
+            # Note: Don't start listen task here - wait until first subscribe()
+            # yfinance WebSocket needs subscriptions before listen() is called
+            self._logger.info("StreamingService started (waiting for subscriptions)")
         except Exception as e:
             self._logger.error(f"Failed to start StreamingService: {e}")
             self._set_state(ConnectionState.ERROR)
             self._running = False
+            self._ws = None
             raise
 
     async def stop(self) -> None:
@@ -209,6 +228,11 @@ class StreamingService:
             await self._ws.subscribe(new_symbols)
             self._subscriptions.update(new_symbols)
             self._logger.info(f"Subscribed to: {new_symbols}")
+
+            # Start listening after first subscription (yfinance needs subs before listen)
+            if self._listen_task is None:
+                self._listen_task = asyncio.create_task(self._listen_loop())
+                self._logger.info("Started listening for messages")
         except Exception as e:
             self._logger.error(f"Failed to subscribe to {new_symbols}: {e}")
 
@@ -274,7 +298,7 @@ class StreamingService:
         """
         if self._state != state:
             self._state = state
-            self._logger.debug(f"Connection state: {state.value}")
+            self._logger.info(f"Connection state changed: {state.value}")
             if self._on_state_change:
                 self._on_state_change(state)
 

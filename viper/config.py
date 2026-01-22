@@ -25,6 +25,7 @@ class Config:
 
     # Watchlist settings
     refresh_interval: int = 60  # Watchlist refresh interval in seconds
+    streaming_enabled: bool = False  # Enable real-time streaming mode for watchlist
     theme_colors: dict[str, str] = field(
         default_factory=lambda: {
             "positive": "#00ff00",
@@ -51,6 +52,13 @@ class Config:
                 f"Invalid refresh_interval {self.refresh_interval}, using default 60"
             )
             self.refresh_interval = 60
+
+        # Validate streaming_enabled is bool
+        if not isinstance(self.streaming_enabled, bool):
+            logger.warning(
+                f"Invalid streaming_enabled type {type(self.streaming_enabled)}, using default False"
+            )
+            self.streaming_enabled = False
 
         # Validate theme_colors is a dict
         if not isinstance(self.theme_colors, dict):
@@ -134,6 +142,9 @@ def load_config() -> Config:
         # Watchlist settings
         if "refresh_interval" in data:
             config_dict["refresh_interval"] = data["refresh_interval"]
+
+        if "streaming_enabled" in data:
+            config_dict["streaming_enabled"] = data["streaming_enabled"]
 
         if "theme_colors" in data:
             config_dict["theme_colors"] = data["theme_colors"]
