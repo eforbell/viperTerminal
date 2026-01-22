@@ -858,16 +858,9 @@ class ViperApp(App[None]):
         """
         status_bar = self.query_one(StatusBar)
 
-        # Update status bar based on connection state
-        if event.state == ConnectionState.CONNECTED:
-            status_bar.set_message("Streaming")
-        elif event.state == ConnectionState.CONNECTING:
-            status_bar.set_message("Connecting...")
-        elif event.state == ConnectionState.RECONNECTING:
-            status_bar.set_message("Reconnecting...")
-        else:
-            # DISCONNECTED or ERROR - clear message
-            status_bar.set_message("")
+        # Update status bar streaming indicator
+        is_streaming = event.state == ConnectionState.CONNECTED
+        status_bar.set_streaming(is_streaming)
 
     def on_ticker_input_input_blurred(self, event: TickerInput.InputBlurred) -> None:
         """Handle input blur event when user exits input mode with Escape.
