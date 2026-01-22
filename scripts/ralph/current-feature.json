@@ -1,10 +1,23 @@
 {
-  "currentFeature": "feature-11",
-  "featureName": "Odds and Ends",
-  "prdPath": "features/feature-11.prd.json",
-  "branch": "viper/feature-11-odds-and-ends",
+  "currentFeature": "feature-12",
+  "featureName": "Real-time Watchlist Mode",
+  "prdPath": "features/feature-12.prd.json",
+  "branch": "viper/feature-12-realtime-watchlist",
   "status": "planning",
   "completedFeatures": [
+    {
+      "feature": "feature-11",
+      "featureName": "Odds and Ends",
+      "prdPath": "features/feature-11.prd.json",
+      "branch": "viper/feature-11-odds-and-ends",
+      "status": "complete",
+      "completedAt": "2026-01-21",
+      "stories": 4,
+      "testsPassing": 1025,
+      "coverage": "87%",
+      "notes": "Implemented configurable chart refresh for candlestick mode (30s default), multi-ticker watchlist add/delete with space-delimited input, command mode with Escape to exit input focus, and PgUp/PgDn navigation in options panel.",
+      "description": "A collection of small UX improvements: chart auto-refresh, batch watchlist operations, command mode focus handling, and page navigation in options."
+    },
     {
       "feature": "feature-10",
       "featureName": "Candlestick Chart View",
@@ -229,10 +242,19 @@
       "id": "FE-012",
       "title": "WebSocket real-time streaming",
       "description": "Replace polling with WebSocket connections for sub-second quote updates",
-      "priority": "Low",
+      "priority": "Medium",
       "relatedFeature": "feature-1",
-      "effort": "Large",
-      "notes": "Requires paid API (Alpaca, Polygon.io) or complex websocket setup with free sources"
+      "effort": "Medium",
+      "notes": "Feature 12 implements this for watchlist using yfinance AsyncWebSocket. Exploratory scope - watchlist only before expanding to charts.",
+      "status": "IN_PROGRESS_FEATURE_12",
+      "assignedStories": [
+        "VPR-097",
+        "VPR-098",
+        "VPR-099",
+        "VPR-100",
+        "VPR-101"
+      ],
+      "lastUpdated": "2026-01-22"
     }
   ]
 }

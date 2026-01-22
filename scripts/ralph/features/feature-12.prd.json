@@ -1,0 +1,781 @@
+{
+  "branchName": "viper/feature-12-realtime-watchlist",
+  "projectName": "Viper Terminal - Feature 12",
+  "description": "Real-time Watchlist Mode: Introduce WebSocket streaming via yfinance's AsyncWebSocket to enable live price updates for the watchlist. This is an exploratory feature to validate streaming architecture before potentially expanding to charts.",
+  "principles": [
+    "EXPLORATORY AND INCREMENTAL - Prove the concept before expanding scope",
+    "STABILITY AND PERFORMANCE ARE PARAMOUNT - Streaming must not degrade app responsiveness",
+    "Graceful degradation - polling remains the reliable fallback",
+    "Connection resilience - handle disconnects, reconnects, and errors gracefully",
+    "Minimal invasive changes - streaming is opt-in, not a replacement",
+    "Rock-solid quality over speed - every change must be bulletproof",
+    "Comprehensive test coverage - unit tests, integration tests, edge cases",
+    "If in doubt, keep it simple"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "tui": "Textual (built on Rich)",
+    "streaming": "yfinance AsyncWebSocket (wss://streamer.finance.yahoo.com)",
+    "testing": "pytest + pytest-asyncio + pytest-cov",
+    "mocking": "pytest-mock",
+    "typecheck": "mypy --strict",
+    "linting": "ruff"
+  },
+  "userStories": [
+    {
+      "id": "VPR-097",
+      "title": "Create StreamingService singleton for WebSocket management",
+      "acceptanceCriteria": [
+        "Create new viper/services/streaming.py module",
+        "Implement ConnectionState enum with values: DISCONNECTED, CONNECTING, CONNECTED, RECONNECTING, ERROR",
+        "Implement StreamingQuote dataclass with fields: symbol, price, change, change_percent, volume (optional), timestamp (optional)",
+        "Implement StreamingService class as singleton using get_instance() class method",
+        "StreamingService.__init__ sets up instance variables but does NOT connect",
+        "StreamingService.start(on_quote, on_state_change) begins connection and listening",
+        "StreamingService.stop() closes connection and cleans up",
+        "StreamingService.subscribe(symbols: list[str]) adds symbols to subscription",
+        "StreamingService.unsubscribe(symbols: list[str]) removes symbols from subscription",
+        "StreamingService.state property returns current ConnectionState",
+        "StreamingService.is_connected property returns bool",
+        "StreamingService.subscriptions property returns set of currently subscribed symbols",
+        "Symbol normalization: uppercase and trim whitespace for all symbols",
+        "Symbol normalization: known crypto symbols (BTC, ETH, SOL, DOGE, etc.) get -USD suffix",
+        "Parse WebSocket messages to StreamingQuote using _parse_quote() method",
+        "Log connection events, errors, and subscription changes using viper.utils.logger",
+        "Test: singleton pattern returns same instance across multiple get_instance() calls",
+        "Test: symbol normalization handles stocks (aapl -> AAPL)",
+        "Test: symbol normalization handles crypto (btc -> BTC-USD, ETH -> ETH-USD)",
+        "Test: symbol normalization preserves already-formatted crypto (BTC-USD stays BTC-USD)",
+        "Test: _parse_quote extracts price, change, change_percent from WebSocket dict",
+        "Test: _parse_quote returns None for malformed messages",
+        "Test: start() transitions state from DISCONNECTED to CONNECTING to CONNECTED",
+        "Test: stop() transitions state to DISCONNECTED and clears subscriptions",
+        "Test: subscribe() adds to internal _subscriptions set",
+        "Test: unsubscribe() removes from internal _subscriptions set"
+      ],
+      "priority": 1,
+      "estimatedEffort": "Medium",
+      "dependencies": [],
+      "notes": "This is the foundational service layer. yfinance AsyncWebSocket handles heartbeat (15s) and reconnect with exponential backoff automatically. We wrap it to provide a clean interface for UI components.",
+      "implementationGuide": {
+        "fileLocation": "viper/services/streaming.py",
+        "imports": [
+          "import asyncio",
+          "from dataclasses import dataclass",
+          "from enum import Enum",
+          "from typing import Callable, Any",
+          "from yfinance import AsyncWebSocket",
+          "from viper.utils.logger import get_logger"
+        ],
+        "connectionStateEnum": {
+          "code": [
+            "class ConnectionState(Enum):",
+            "    '''WebSocket connection states.'''",
+            "    DISCONNECTED = 'disconnected'",
+            "    CONNECTING = 'connecting'",
+            "    CONNECTED = 'connected'",
+            "    RECONNECTING = 'reconnecting'",
+            "    ERROR = 'error'"
+          ]
+        },
+        "streamingQuoteDataclass": {
+          "code": [
+            "@dataclass",
+            "class StreamingQuote:",
+            "    '''Real-time quote data from WebSocket stream.'''",
+            "    symbol: str",
+            "    price: float",
+            "    change: float",
+            "    change_percent: float",
+            "    volume: int | None = None",
+            "    day_high: float | None = None",
+            "    day_low: float | None = None",
+            "    timestamp: int | None = None"
+          ],
+          "fieldSources": {
+            "symbol": "data.get('id') or data.get('symbol')",
+            "price": "data.get('price')",
+            "change": "price - previousClose (calculated)",
+            "change_percent": "(change / previousClose) * 100 (calculated)",
+            "volume": "data.get('dayVolume')",
+            "day_high": "data.get('dayHigh')",
+            "day_low": "data.get('dayLow')",
+            "timestamp": "data.get('time')"
+          }
+        },
+        "singletonPattern": {
+          "code": [
+            "class StreamingService:",
+            "    '''Singleton service for managing WebSocket streaming.'''",
+            "    ",
+            "    _instance: 'StreamingService | None' = None",
+            "    ",
+            "    @classmethod",
+            "    def get_instance(cls) -> 'StreamingService':",
+            "        '''Get the singleton instance.'''",
+            "        if cls._instance is None:",
+            "            cls._instance = cls()",
+            "        return cls._instance",
+            "    ",
+            "    @classmethod",
+            "    def _reset_instance(cls) -> None:",
+            "        '''Reset singleton for testing purposes only.'''",
+            "        cls._instance = None"
+          ]
+        },
+        "instanceVariables": {
+          "code": [
+            "def __init__(self) -> None:",
+            "    '''Initialize the streaming service.'''",
+            "    self._ws: AsyncWebSocket | None = None",
+            "    self._state = ConnectionState.DISCONNECTED",
+            "    self._subscriptions: set[str] = set()",
+            "    self._on_quote: Callable[[StreamingQuote], None] | None = None",
+            "    self._on_state_change: Callable[[ConnectionState], None] | None = None",
+            "    self._listen_task: asyncio.Task[None] | None = None",
+            "    self._running = False",
+            "    self._logger = get_logger()"
+          ]
+        },
+        "symbolNormalization": {
+          "knownCryptoSymbols": ["BTC", "ETH", "SOL", "DOGE", "ADA", "XRP", "DOT", "AVAX", "MATIC", "LINK", "UNI", "ATOM", "LTC", "BCH"],
+          "code": [
+            "def _normalize_symbol(self, symbol: str) -> str:",
+            "    '''Normalize a symbol for WebSocket subscription.'''",
+            "    symbol = symbol.upper().strip()",
+            "    ",
+            "    # Known crypto symbols need -USD suffix for Yahoo WebSocket",
+            "    CRYPTO_SYMBOLS = {'BTC', 'ETH', 'SOL', 'DOGE', 'ADA', 'XRP', 'DOT', 'AVAX', 'MATIC', 'LINK', 'UNI', 'ATOM', 'LTC', 'BCH'}",
+            "    if symbol in CRYPTO_SYMBOLS:",
+            "        return f'{symbol}-USD'",
+            "    ",
+            "    # Already has -USD suffix (e.g., BTC-USD passed directly)",
+            "    if symbol.endswith('-USD') and symbol[:-4] in CRYPTO_SYMBOLS:",
+            "        return symbol",
+            "    ",
+            "    return symbol"
+          ]
+        },
+        "parseQuoteMethod": {
+          "code": [
+            "def _parse_quote(self, data: dict[str, Any]) -> StreamingQuote | None:",
+            "    '''Parse WebSocket message dict into StreamingQuote.'''",
+            "    symbol = data.get('id') or data.get('symbol')",
+            "    price = data.get('price')",
+            "    ",
+            "    if not symbol or price is None:",
+            "        return None",
+            "    ",
+            "    # Calculate change from previous close if available",
+            "    prev_close = data.get('previousClose', 0)",
+            "    if prev_close and prev_close > 0:",
+            "        change = price - prev_close",
+            "        change_pct = (change / prev_close) * 100",
+            "    else:",
+            "        change = 0.0",
+            "        change_pct = 0.0",
+            "    ",
+            "    return StreamingQuote(",
+            "        symbol=str(symbol),",
+            "        price=float(price),",
+            "        change=float(change),",
+            "        change_percent=float(change_pct),",
+            "        volume=data.get('dayVolume'),",
+            "        day_high=data.get('dayHigh'),",
+            "        day_low=data.get('dayLow'),",
+            "        timestamp=data.get('time'),",
+            "    )"
+          ]
+        },
+        "startMethod": {
+          "code": [
+            "async def start(",
+            "    self,",
+            "    on_quote: Callable[[StreamingQuote], None] | None = None,",
+            "    on_state_change: Callable[[ConnectionState], None] | None = None,",
+            ") -> None:",
+            "    '''Start the streaming service.'''",
+            "    if self._running:",
+            "        self._logger.warning('StreamingService already running')",
+            "        return",
+            "    ",
+            "    self._on_quote = on_quote",
+            "    self._on_state_change = on_state_change",
+            "    self._running = True",
+            "    ",
+            "    self._set_state(ConnectionState.CONNECTING)",
+            "    ",
+            "    try:",
+            "        self._ws = AsyncWebSocket(verbose=False)",
+            "        self._listen_task = asyncio.create_task(self._listen_loop())",
+            "        self._logger.info('StreamingService started')",
+            "    except Exception as e:",
+            "        self._logger.error(f'Failed to start StreamingService: {e}')",
+            "        self._set_state(ConnectionState.ERROR)",
+            "        self._running = False",
+            "        raise"
+          ]
+        },
+        "stopMethod": {
+          "code": [
+            "async def stop(self) -> None:",
+            "    '''Stop the streaming service and close connection.'''",
+            "    if not self._running:",
+            "        return",
+            "    ",
+            "    self._running = False",
+            "    ",
+            "    if self._listen_task:",
+            "        self._listen_task.cancel()",
+            "        try:",
+            "            await self._listen_task",
+            "        except asyncio.CancelledError:",
+            "            pass",
+            "        self._listen_task = None",
+            "    ",
+            "    if self._ws:",
+            "        await self._ws.close()",
+            "        self._ws = None",
+            "    ",
+            "    self._subscriptions.clear()",
+            "    self._set_state(ConnectionState.DISCONNECTED)",
+            "    self._logger.info('StreamingService stopped')"
+          ]
+        },
+        "subscribeMethod": {
+          "code": [
+            "async def subscribe(self, symbols: list[str]) -> None:",
+            "    '''Subscribe to symbols for real-time updates.'''",
+            "    if not self._ws or not self._running:",
+            "        self._logger.warning('Cannot subscribe: service not running')",
+            "        return",
+            "    ",
+            "    normalized = [self._normalize_symbol(s) for s in symbols]",
+            "    new_symbols = [s for s in normalized if s not in self._subscriptions]",
+            "    ",
+            "    if not new_symbols:",
+            "        return",
+            "    ",
+            "    try:",
+            "        await self._ws.subscribe(new_symbols)",
+            "        self._subscriptions.update(new_symbols)",
+            "        self._logger.info(f'Subscribed to: {new_symbols}')",
+            "    except Exception as e:",
+            "        self._logger.error(f'Failed to subscribe to {new_symbols}: {e}')"
+          ]
+        },
+        "listenLoopMethod": {
+          "code": [
+            "async def _listen_loop(self) -> None:",
+            "    '''Main loop for receiving WebSocket messages.'''",
+            "    while self._running:",
+            "        try:",
+            "            self._set_state(ConnectionState.CONNECTED)",
+            "            await self._ws.listen(self._handle_message)",
+            "        except asyncio.CancelledError:",
+            "            break",
+            "        except Exception as e:",
+            "            self._logger.error(f'WebSocket error: {e}')",
+            "            if self._running:",
+            "                self._set_state(ConnectionState.RECONNECTING)",
+            "                await asyncio.sleep(3)  # Backoff before reconnect attempt"
+          ]
+        },
+        "handleMessageMethod": {
+          "code": [
+            "def _handle_message(self, data: dict[str, Any]) -> None:",
+            "    '''Handle a decoded WebSocket message.'''",
+            "    if 'error' in data:",
+            "        self._logger.warning(f'WebSocket message error: {data.get(\"error\")}')",
+            "        return",
+            "    ",
+            "    try:",
+            "        quote = self._parse_quote(data)",
+            "        if quote and self._on_quote:",
+            "            self._on_quote(quote)",
+            "    except Exception as e:",
+            "        self._logger.error(f'Failed to parse quote: {e}')"
+          ]
+        },
+        "setStateHelper": {
+          "code": [
+            "def _set_state(self, state: ConnectionState) -> None:",
+            "    '''Update connection state and notify callback.'''",
+            "    if self._state != state:",
+            "        self._state = state",
+            "        self._logger.debug(f'Connection state: {state.value}')",
+            "        if self._on_state_change:",
+            "            self._on_state_change(state)"
+          ]
+        },
+        "properties": {
+          "code": [
+            "@property",
+            "def state(self) -> ConnectionState:",
+            "    '''Current connection state.'''",
+            "    return self._state",
+            "",
+            "@property",
+            "def is_connected(self) -> bool:",
+            "    '''Whether the WebSocket is connected.'''",
+            "    return self._state == ConnectionState.CONNECTED",
+            "",
+            "@property",
+            "def subscriptions(self) -> set[str]:",
+            "    '''Currently subscribed symbols (copy).'''",
+            "    return self._subscriptions.copy()"
+          ]
+        }
+      }
+    },
+    {
+      "id": "VPR-098",
+      "title": "Integrate streaming toggle into WatchlistPanel",
+      "acceptanceCriteria": [
+        "Add _streaming_enabled: bool = False instance variable",
+        "Add _streaming_quotes: dict[str, StreamingQuote] = {} instance variable",
+        "Add _streaming_service: StreamingService | None = None instance variable",
+        "Create StreamingQuoteReceived(Message) class with quote: StreamingQuote attribute",
+        "Create StreamingStateChanged(Message) class with state: ConnectionState attribute",
+        "Implement async _enable_streaming() method",
+        "Implement async _disable_streaming() method",
+        "Implement toggle_streaming() that calls enable/disable based on current state",
+        "Polling timer CONTINUES during streaming (fallback data source)",
+        "Modify _render_items() to check _streaming_quotes FIRST, fall back to _quotes",
+        "Modify on_ticker_added() to also subscribe if streaming is active",
+        "Modify on_ticker_removed() to also unsubscribe if streaming is active",
+        "Handle StreamingQuoteReceived message to trigger _render_items()",
+        "Handle StreamingStateChanged message to update header text",
+        "Test: toggle on subscribes to all watchlist tickers",
+        "Test: toggle off stops streaming and clears _streaming_quotes",
+        "Test: ticker add/remove updates subscriptions when streaming",
+        "Test: _render_items uses streaming quote when available",
+        "Test: _render_items falls back to polling quote when streaming quote missing"
+      ],
+      "priority": 2,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-097"],
+      "notes": "WatchlistPanel becomes a consumer of StreamingService. Polling continues as fallback.",
+      "implementationGuide": {
+        "newImports": [
+          "from viper.services.streaming import StreamingService, StreamingQuote, ConnectionState"
+        ],
+        "newInstanceVariables": {
+          "location": "Add to __init__ after self._initial_load = True (line 116)",
+          "code": [
+            "self._streaming_enabled: bool = False",
+            "self._streaming_quotes: dict[str, StreamingQuote] = {}",
+            "self._streaming_service: StreamingService | None = None",
+            "self._connection_state: ConnectionState = ConnectionState.DISCONNECTED"
+          ]
+        },
+        "newMessageClasses": {
+          "location": "Add after existing TickerSelected class (after line 99)",
+          "code": [
+            "class StreamingQuoteReceived(Message):",
+            "    def __init__(self, quote: StreamingQuote) -> None:",
+            "        super().__init__()",
+            "        self.quote = quote",
+            "",
+            "class StreamingStateChanged(Message):",
+            "    def __init__(self, state: ConnectionState) -> None:",
+            "        super().__init__()",
+            "        self.state = state"
+          ]
+        },
+        "callbackToMessageBridge": {
+          "problem": "StreamingService callbacks run in async context but need to post Textual Messages",
+          "solution": "Use app.call_from_thread() for thread-safe message posting",
+          "code": [
+            "def _on_streaming_quote(self, quote: StreamingQuote) -> None:",
+            "    '''Callback from StreamingService - runs in WebSocket context.'''",
+            "    self._streaming_quotes[quote.symbol] = quote",
+            "    # Thread-safe way to post message to Textual event loop",
+            "    if self.app:",
+            "        self.app.call_from_thread(self.post_message, self.StreamingQuoteReceived(quote))",
+            "",
+            "def _on_connection_state_change(self, state: ConnectionState) -> None:",
+            "    '''Callback from StreamingService when connection state changes.'''",
+            "    self._connection_state = state",
+            "    if self.app:",
+            "        self.app.call_from_thread(self.post_message, self.StreamingStateChanged(state))"
+          ]
+        },
+        "enableStreamingMethod": {
+          "code": [
+            "async def _enable_streaming(self) -> None:",
+            "    '''Enable real-time streaming mode.'''",
+            "    if self._streaming_enabled:",
+            "        return  # Already enabled",
+            "    ",
+            "    try:",
+            "        self._streaming_service = StreamingService.get_instance()",
+            "        await self._streaming_service.start(",
+            "            on_quote=self._on_streaming_quote,",
+            "            on_state_change=self._on_connection_state_change,",
+            "        )",
+            "        ",
+            "        # Subscribe to all current watchlist tickers",
+            "        tickers = self._watchlist_manager.get_all()",
+            "        if tickers:",
+            "            await self._streaming_service.subscribe(tickers)",
+            "        ",
+            "        self._streaming_enabled = True",
+            "        self._render_items()  # Re-render to show [LIVE] header",
+            "    except Exception as e:",
+            "        # Failed to start - stay in polling mode",
+            "        from viper.utils.logger import get_logger",
+            "        get_logger().error(f'Failed to enable streaming: {e}')",
+            "        self._streaming_enabled = False",
+            "        self._streaming_service = None",
+            "        # Notify user via app notification if available",
+            "        if self.app:",
+            "            self.app.notify('Streaming unavailable - using polling', severity='warning')"
+          ]
+        },
+        "disableStreamingMethod": {
+          "code": [
+            "async def _disable_streaming(self) -> None:",
+            "    '''Disable streaming and return to polling-only mode.'''",
+            "    if not self._streaming_enabled:",
+            "        return  # Already disabled",
+            "    ",
+            "    if self._streaming_service:",
+            "        await self._streaming_service.stop()",
+            "        self._streaming_service = None",
+            "    ",
+            "    self._streaming_enabled = False",
+            "    self._streaming_quotes.clear()",
+            "    self._connection_state = ConnectionState.DISCONNECTED",
+            "    self._render_items()  # Re-render to remove [LIVE] header"
+          ]
+        },
+        "toggleMethod": {
+          "code": [
+            "def toggle_streaming(self) -> None:",
+            "    '''Toggle between polling and streaming modes.'''",
+            "    if self._streaming_enabled:",
+            "        self.run_worker(self._disable_streaming())",
+            "    else:",
+            "        self.run_worker(self._enable_streaming())"
+          ]
+        },
+        "modifyRenderItems": {
+          "location": "In _render_items(), modify the loop at line 184",
+          "change": "Check _streaming_quotes first, fall back to _quotes",
+          "beforeCode": "quote = self._quotes.get(ticker)",
+          "afterCode": [
+            "# Prefer streaming quote if available and streaming is enabled",
+            "streaming_quote = self._streaming_quotes.get(ticker) if self._streaming_enabled else None",
+            "polling_quote = self._quotes.get(ticker)",
+            "",
+            "if streaming_quote:",
+            "    # Use streaming data - format it for display",
+            "    line = self._format_streaming_quote_line(ticker, streaming_quote)",
+            "    change_pct = streaming_quote.change_percent",
+            "elif polling_quote and not isinstance(polling_quote, QuoteError):",
+            "    # Fall back to polling data",
+            "    line = self._format_quote_line(ticker, polling_quote)",
+            "    change_pct = polling_quote.change_percent if hasattr(polling_quote, 'change_percent') else polling_quote.change_24h_percent",
+            "elif polling_quote:  # QuoteError",
+            "    line = f'{ticker}: Error'",
+            "    change_pct = 0.0",
+            "else:",
+            "    line = f'{ticker}: Loading...'",
+            "    change_pct = 0.0"
+          ]
+        },
+        "newFormatMethod": {
+          "purpose": "Format StreamingQuote for display (matches existing _format_quote_line output)",
+          "code": [
+            "def _format_streaming_quote_line(self, ticker: str, quote: StreamingQuote) -> str:",
+            "    '''Format a streaming quote for display.'''",
+            "    price_str = f'${quote.price:,.2f}'",
+            "    ",
+            "    if quote.change_percent > 0:",
+            "        change_str = f'+{quote.change_percent:.2f}%'",
+            "    elif quote.change_percent < 0:",
+            "        change_str = f'{quote.change_percent:.2f}%'",
+            "    else:",
+            "        change_str = '0.00%'",
+            "    ",
+            "    return f'{ticker:8s} {price_str:>12s} {change_str:>8s}'"
+          ]
+        },
+        "modifyHeaderRendering": {
+          "location": "In _render_items(), update header based on streaming state",
+          "addBefore": "Line 157 (container = self.query_one...)",
+          "code": [
+            "# Update header to show streaming state",
+            "header = self.query_one('.panel-header', Label)",
+            "if self._streaming_enabled:",
+            "    if self._connection_state == ConnectionState.CONNECTED:",
+            "        header.update('WATCHLIST [LIVE]')",
+            "    elif self._connection_state == ConnectionState.CONNECTING:",
+            "        header.update('WATCHLIST [CONNECTING...]')",
+            "    elif self._connection_state == ConnectionState.RECONNECTING:",
+            "        header.update('WATCHLIST [RECONNECTING...]')",
+            "    else:",
+            "        header.update('WATCHLIST')",
+            "else:",
+            "    header.update('WATCHLIST')"
+          ]
+        },
+        "modifyOnTickerAdded": {
+          "location": "Modify on_ticker_added() at line 262",
+          "code": [
+            "def on_ticker_added(self, ticker: str) -> None:",
+            "    '''Handle a ticker being added to the watchlist.'''",
+            "    # Subscribe to streaming if active",
+            "    if self._streaming_enabled and self._streaming_service:",
+            "        self.run_worker(self._streaming_service.subscribe([ticker]))",
+            "    # Always refresh polling quotes",
+            "    self.run_worker(self.refresh_quotes())"
+          ]
+        },
+        "modifyOnTickerRemoved": {
+          "location": "Modify on_ticker_removed() at line 270",
+          "code": [
+            "def on_ticker_removed(self, ticker: str) -> None:",
+            "    '''Handle a ticker being removed from the watchlist.'''",
+            "    # Unsubscribe from streaming if active",
+            "    if self._streaming_enabled and self._streaming_service:",
+            "        self.run_worker(self._streaming_service.unsubscribe([ticker]))",
+            "    # Clean up cached quotes",
+            "    if ticker in self._quotes:",
+            "        del self._quotes[ticker]",
+            "    if ticker in self._streaming_quotes:",
+            "        del self._streaming_quotes[ticker]",
+            "    self._render_items()"
+          ]
+        },
+        "messageHandlers": {
+          "code": [
+            "def on_watchlist_panel_streaming_quote_received(",
+            "    self, event: StreamingQuoteReceived",
+            ") -> None:",
+            "    '''Handle streaming quote message - re-render display.'''",
+            "    self._render_items()",
+            "",
+            "def on_watchlist_panel_streaming_state_changed(",
+            "    self, event: StreamingStateChanged",
+            ") -> None:",
+            "    '''Handle connection state change - update header.'''",
+            "    self._connection_state = event.state",
+            "    self._render_items()"
+          ]
+        },
+        "fieldMapping": {
+          "description": "How StreamingQuote fields map to display requirements",
+          "StreamingQuote.symbol": "Used as ticker in display (already uppercase)",
+          "StreamingQuote.price": "Maps to price_str as ${price:,.2f}",
+          "StreamingQuote.change_percent": "Maps to change_str with +/- prefix",
+          "StreamingQuote.change": "Not displayed but stored for potential future use",
+          "StreamingQuote.volume": "Not displayed in watchlist (optional field)",
+          "note": "Output format must match _format_quote_line: '{ticker:8s} {price_str:>12s} {change_str:>8s}'"
+        },
+        "pollingBehavior": {
+          "description": "Polling continues during streaming as fallback",
+          "reason": "Streaming may not have data for all symbols immediately",
+          "implementation": "Do NOT stop the set_interval timer when streaming is enabled",
+          "dataPreference": "Streaming quote takes precedence when both are available"
+        }
+      }
+    },
+    {
+      "id": "VPR-099",
+      "title": "Add streaming keybinding and app-level integration",
+      "acceptanceCriteria": [
+        "Add 's' keybinding to ViperApp BINDINGS list",
+        "Keybinding must call action_toggle_streaming method",
+        "action_toggle_streaming must query WatchlistPanel and call its toggle_streaming() method",
+        "ViperApp must handle StreamingStateChanged message bubbled up from WatchlistPanel",
+        "On state change, update StatusBar with appropriate text",
+        "StatusBar text mapping: CONNECTED='Streaming', CONNECTING='Connecting...', RECONNECTING='Reconnecting...', others=empty/default",
+        "On toggle, show notification to user: 'Streaming enabled' or 'Streaming disabled'",
+        "Add command palette entry in ViperCommands tuple: category='Watchlist', label='Toggle Real-time Mode', key='s'",
+        "Keybinding must NOT conflict with existing bindings (check app.py BINDINGS)",
+        "Test: pressing 's' key triggers toggle action",
+        "Test: StatusBar updates correctly for each ConnectionState value",
+        "Test: command palette entry appears and triggers correct action"
+      ],
+      "priority": 3,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-098"],
+      "constraints": [
+        "Use existing StatusBar.set_message() or add new method if needed for persistent state display",
+        "Follow existing keybinding patterns in app.py (see 'r' for refresh, 'o' for options)",
+        "Follow existing command palette patterns in app.py ViperCommands",
+        "Message handler naming must follow Textual convention: on_<widget>_<message_name>"
+      ]
+    },
+    {
+      "id": "VPR-100",
+      "title": "Visual indicators for streaming mode",
+      "acceptanceCriteria": [
+        "Watchlist panel header text changes based on streaming state",
+        "Header states: 'WATCHLIST' (default/polling), 'WATCHLIST [LIVE]' (connected), 'WATCHLIST [CONNECTING...]' (connecting), 'WATCHLIST [RECONNECTING...]' (reconnecting)",
+        "Header update logic must be in _render_items() method to stay in sync with data",
+        "Header update must use query_one('.panel-header', Label) to find the header widget",
+        "No visual flicker during rapid streaming updates - render must be efficient",
+        "Update help_screen.py HELP_TEXT to document 's' keybinding under appropriate section",
+        "Help text format must match existing entries (key, description pattern)",
+        "Test: header shows correct text for each ConnectionState value",
+        "Test: header reverts to 'WATCHLIST' when streaming disabled",
+        "Test: help screen contains 's' keybinding documentation"
+      ],
+      "priority": 4,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-098", "VPR-099"],
+      "constraints": [
+        "Header indicator is implemented in VPR-098's _render_items() modification - this story ensures it works correctly",
+        "Do NOT add animation or color changes that could cause flicker with rapid updates",
+        "Keep indicator text concise - terminal width is limited",
+        "Help screen update must be minimal - just add the keybinding entry"
+      ]
+    },
+    {
+      "id": "VPR-101",
+      "title": "Add streaming_enabled config option",
+      "acceptanceCriteria": [
+        "Add streaming_enabled field to Config dataclass in config.py",
+        "Field type: bool, default value: False",
+        "Config loads from config.toml key 'streaming_enabled'",
+        "Validation in __post_init__: if not isinstance bool, log warning and set to False",
+        "WatchlistPanel.__init__ must accept optional streaming_enabled parameter",
+        "If streaming_enabled=True passed to WatchlistPanel, call _enable_streaming() in on_mount()",
+        "app.py must read config.streaming_enabled and pass to WatchlistPanel constructor",
+        "Update README.md Configuration section with streaming_enabled option",
+        "README must document: key name, type, default, description of behavior",
+        "Test: Config loads streaming_enabled=true from TOML correctly",
+        "Test: Config loads streaming_enabled=false from TOML correctly",
+        "Test: Config handles missing streaming_enabled (uses default False)",
+        "Test: Config handles invalid type (string 'true') with warning and default",
+        "Test: WatchlistPanel starts in streaming mode when config enables it"
+      ],
+      "priority": 5,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-098"],
+      "constraints": [
+        "Follow existing config field patterns in config.py (see refresh_interval, chart_refresh_interval)",
+        "Follow existing validation patterns in __post_init__",
+        "Auto-enable streaming on mount must handle errors gracefully (fall back to polling)",
+        "README update must match existing documentation style"
+      ]
+    }
+  ],
+  "technicalNotes": {
+    "yfinanceWebSocket": {
+      "class": "yfinance.AsyncWebSocket",
+      "endpoint": "wss://streamer.finance.yahoo.com/?version=2",
+      "features": [
+        "Automatic heartbeat every 15 seconds (keep-alive, not refresh interval)",
+        "Automatic reconnection with exponential backoff",
+        "Isolated error handling - handler errors don't break message loop"
+      ],
+      "messageFormat": "Base64-encoded protobuf, decoded to Python dict",
+      "supportedSymbols": "Stocks (AAPL, TSLA) and Crypto (BTC-USD, ETH-USD)",
+      "updateModel": {
+        "description": "Server-push model - no fixed refresh interval",
+        "behavior": "Server pushes price updates in real-time as they occur",
+        "frequency": "Variable - can be multiple times per second for active tickers during market hours, less frequent for quieter symbols",
+        "heartbeat": "15-second keep-alive ping to maintain connection (not related to data updates)"
+      }
+    },
+    "streamingService": {
+      "pattern": "Singleton for shared WebSocket connection",
+      "asyncIntegration": "Callbacks work with Textual's async model",
+      "stateManagement": "ConnectionState enum tracks lifecycle",
+      "symbolNormalization": {
+        "stocks": "Uppercase, trim whitespace",
+        "crypto": "Known symbols (BTC, ETH, SOL, etc.) get -USD suffix"
+      }
+    },
+    "dataFlow": {
+      "description": "StreamingService -> Textual Messages -> WatchlistPanel re-render",
+      "steps": [
+        "1. AsyncWebSocket receives protobuf message",
+        "2. StreamingService parses to StreamingQuote",
+        "3. Service calls on_quote callback",
+        "4. WatchlistPanel posts StreamingQuoteReceived message",
+        "5. Message handler triggers _render_items()",
+        "6. Render prefers streaming data over polling data"
+      ]
+    },
+    "errorHandling": {
+      "connectionFailure": "Show error notification, remain in polling mode",
+      "midSessionDisconnect": "Auto-reconnect (yfinance handles backoff), show 'Reconnecting...'",
+      "invalidSymbols": "WebSocket ignores them silently, polling provides fallback data"
+    },
+    "filesToCreate": [
+      "viper/services/streaming.py - StreamingService, StreamingQuote, ConnectionState",
+      "tests/test_streaming.py - Unit tests for streaming service"
+    ],
+    "filesToModify": [
+      "viper/services/__init__.py - Export streaming module",
+      "viper/widgets/watchlist_panel.py - Streaming integration, messages, toggle",
+      "viper/widgets/status_bar.py - Add streaming state display",
+      "viper/app.py - Add 's' keybinding, handle state messages, command palette",
+      "viper/config.py - Add streaming_enabled option",
+      "viper/widgets/help_screen.py - Document 's' keybinding",
+      "README.md - Document streaming_enabled config option"
+    ]
+  },
+  "outOfScope": [
+    "Real-time chart streaming - future feature after watchlist proves out",
+    "Price alerts based on streaming data - potential future feature",
+    "Historical data via WebSocket - not supported by yfinance",
+    "Custom WebSocket endpoints - use yfinance's built-in endpoint only",
+    "Per-ticker streaming toggle - all or nothing for watchlist",
+    "Streaming for options data - not available via this WebSocket"
+  ],
+  "successMetrics": [
+    "StreamingService connects and receives real-time quotes from yfinance",
+    "Pressing 's' toggles between polling (60s) and streaming (real-time) modes",
+    "Watchlist header shows [LIVE] indicator when streaming is active",
+    "Status bar shows connection state (Streaming, Connecting, Reconnecting)",
+    "Adding/removing tickers while streaming updates subscriptions correctly",
+    "Streaming gracefully falls back to polling on connection failure",
+    "Config option streaming_enabled allows default streaming on startup",
+    "No performance degradation or UI lag when streaming is active",
+    "All existing polling functionality continues to work unchanged",
+    "All tests pass with >= 87% coverage",
+    "mypy --strict passes with no errors"
+  ],
+  "storyDependencyGraph": {
+    "description": "Linear dependencies - streaming service must exist before it can be consumed",
+    "flow": "VPR-097 -> VPR-098 -> VPR-099/VPR-100/VPR-101",
+    "parallelization": "VPR-099, VPR-100, VPR-101 can be done in parallel after VPR-098"
+  },
+  "riskAssessment": {
+    "level": "MEDIUM",
+    "reasons": [
+      "First WebSocket integration - new async pattern for codebase",
+      "External dependency on Yahoo Finance WebSocket availability",
+      "Potential for increased network usage with persistent connection",
+      "Need to handle connection lifecycle carefully to avoid resource leaks"
+    ],
+    "mitigations": [
+      "Polling remains default and fallback - streaming is opt-in",
+      "yfinance handles reconnection logic internally",
+      "Comprehensive testing with mocked WebSocket",
+      "Connection state management with proper cleanup on stop()",
+      "Exploratory scope - watchlist only before expanding to charts"
+    ]
+  },
+  "exploratoryNotes": {
+    "purpose": "Validate WebSocket streaming architecture before broader adoption",
+    "learningGoals": [
+      "Understand yfinance AsyncWebSocket behavior and reliability",
+      "Measure latency and update frequency of real-time data",
+      "Identify any rate limiting or connection stability issues",
+      "Validate Textual message-based update pattern for streaming",
+      "Assess impact on app responsiveness and resource usage"
+    ],
+    "futureExpansion": [
+      "Real-time candlestick chart updates",
+      "Price alerts and notifications",
+      "News panel with live ticker mentions"
+    ]
+  }
+}
