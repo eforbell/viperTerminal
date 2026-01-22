@@ -57,6 +57,10 @@
       "estimatedEffort": "Medium",
       "dependencies": [],
       "notes": "This is the foundational service layer. yfinance AsyncWebSocket handles heartbeat (15s) and reconnect with exponential backoff automatically. We wrap it to provide a clean interface for UI components.",
+      "passes": true,
+      "completedAt": "2026-01-22",
+      "testsPassing": 42,
+      "coverage": "100%",
       "implementationGuide": {
         "fileLocation": "viper/services/streaming.py",
         "imports": [

@@ -1717,3 +1717,30 @@
   - 1025 tests passing, 87% coverage, all acceptance criteria met
 ---
 
+
+## 2026-01-22 - VPR-097
+- **What was implemented**: StreamingService singleton for WebSocket-based real-time quote streaming
+- **Files changed**:
+  - `viper/services/streaming.py`: Created StreamingService, StreamingQuote, ConnectionState (160 lines)
+  - `viper/services/__init__.py`: Added "streaming" to exports
+  - `tests/test_streaming.py`: 42 comprehensive tests with 100% coverage
+  - `AGENTS.md`: Added VPR-097 learnings section
+  - `scripts/ralph/features/feature-12.prd.json`: Marked VPR-097 complete
+- **Learnings**:
+  - **Singleton with testing**: Use `_reset_instance()` class method to allow tests to get fresh instances
+  - **AsyncMock for WebSocket**: Mock async methods with `AsyncMock()`, not `MagicMock()` for proper async behavior
+  - **Mock listen() carefully**: Use custom async function with `asyncio.sleep()`, not just AsyncMock, to control when loop runs
+  - **Give async tasks time**: Use `await asyncio.sleep(0.05)` after `start()` to let listen task spawn before assertions
+  - **Callback vs Message separation**: Service uses callbacks (runs in any context), UI layer converts to Textual messages
+  - **Error handling philosophy**: Log and continue for subscription errors, log and reconnect for connection errors, re-raise for start failures
+  - **Idempotent operations**: stop() when not running is safe, subscribe() with duplicates is safe, unsubscribe() with non-existent is safe
+  - **yfinance AsyncWebSocket**: Handles heartbeat (15s) and reconnect with exponential backoff automatically
+  - **Symbol normalization must be idempotent**: BTC-USD → BTC-USD (don't double-convert)
+  - **100% coverage requires edge cases**: Test "no-op" paths (empty lists, stop when not running, subscribe when not running, etc.)
+  - **Type checking yfinance**: Requires `# type: ignore[import-untyped]` on import (follows pattern from crypto.py, stock.py, news.py)
+  - **WebSocket message parsing**: Extract `id` or `symbol`, `price`, calculate change from `previousClose`, default to 0.0 if missing
+  - **State management**: Use enum for clear state transitions, notify via callback when state changes
+  - **Lifecycle**: start() spawns listen task, stop() cancels task and closes connection, listen loop handles reconnect
+  - **Subscription management**: Normalize symbols, deduplicate, maintain internal set, call WebSocket subscribe/unsubscribe
+  - Coverage: 100% on streaming.py (42 tests), 87% overall (1067 tests passing)
+---
