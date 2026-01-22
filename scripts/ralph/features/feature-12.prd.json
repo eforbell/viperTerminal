@@ -359,6 +359,10 @@
       "priority": 2,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-097"],
+      "passes": true,
+      "completedAt": "2026-01-22",
+      "testsPassing": 11,
+      "coverage": "92%",
       "notes": "WatchlistPanel becomes a consumer of StreamingService. Polling continues as fallback.",
       "implementationGuide": {
         "newImports": [
