@@ -610,12 +610,17 @@
       "priority": 3,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-098"],
+      "passes": true,
+      "completedAt": "2026-01-22",
+      "testsPassing": 1077,
+      "coverage": "87%",
       "constraints": [
         "Use existing StatusBar.set_message() or add new method if needed for persistent state display",
         "Follow existing keybinding patterns in app.py (see 'r' for refresh, 'o' for options)",
         "Follow existing command palette patterns in app.py ViperCommands",
         "Message handler naming must follow Textual convention: on_<widget>_<message_name>"
-      ]
+      ],
+      "notes": "App-level integration complete. 's' key toggles streaming, StatusBar shows connection state, command palette entry added."
     },
     {
       "id": "VPR-100",

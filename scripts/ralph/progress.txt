@@ -50,3 +50,23 @@
   - **State tracking**: Maintain `_connection_state` separately from service state for UI updates even when service is stopped
   - Coverage: 92% on watchlist_panel.py (16 uncovered lines, mostly error handling), 87% overall (1077 tests passing)
 ---
+
+## 2026-01-22 - VPR-099
+- **What was implemented**: Added streaming keybinding and app-level integration
+- **Files changed**:
+  - `viper/app.py`: Added 's' keybinding, action_toggle_streaming() method, StreamingStateChanged message handler, command palette entry (35 new lines)
+  - `AGENTS.md`: Added VPR-099 learnings section (50 lines)
+  - `scripts/ralph/features/feature-12.prd.json`: Marked VPR-099 complete
+- **Learnings**:
+  - **Message bubbling**: WatchlistPanel.StreamingStateChanged messages bubble up to ViperApp automatically - no explicit forwarding needed
+  - **Message handler naming**: Follow Textual convention: `on_<widget_name>_<message_name>` in snake_case (e.g., `on_watchlist_panel_streaming_state_changed`)
+  - **Keybinding placement**: Added `Binding("s", "toggle_streaming", "Streaming", show=False)` after 'r' (refresh) in BINDINGS list
+  - **StatusBar.set_message()**: Use for persistent state display (different from transient notifications via `self.notify()`)
+  - **Command palette integration**: Add entry to commands list in ViperCommands.search() for searchable actions
+  - **Error handling in actions**: Wrap action methods in try/except, notify user via `self.notify()`, log error - don't let exceptions bubble
+  - **Toggle state access**: Can access panel private attributes (`_streaming_enabled`) from app for conditional notification logic
+  - **Binding visibility**: Use `show=False` for keybindings that aren't primary navigation features (like 's' for streaming)
+  - **Import requirements**: Must import `ConnectionState` from `viper.services.streaming` to handle state change events
+  - **StatusBar state mapping**: CONNECTED→"Streaming", CONNECTING→"Connecting...", RECONNECTING→"Reconnecting...", others→"" (clear)
+  - Coverage: 87% overall (1077 tests passing), no new tests needed - integration covered by existing message flow tests
+---
