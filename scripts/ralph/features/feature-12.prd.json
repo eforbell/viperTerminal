@@ -640,12 +640,17 @@
       "priority": 4,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-098", "VPR-099"],
+      "passes": true,
+      "completedAt": "2026-01-22",
+      "testsPassing": 1077,
+      "coverage": "87%",
       "constraints": [
         "Header indicator is implemented in VPR-098's _render_items() modification - this story ensures it works correctly",
         "Do NOT add animation or color changes that could cause flicker with rapid updates",
         "Keep indicator text concise - terminal width is limited",
         "Help screen update must be minimal - just add the keybinding entry"
-      ]
+      ],
+      "notes": "Header indicators verified from VPR-098 implementation. Help screen updated with 's' keybinding documentation in both KEYBINDINGS and FEATURES sections."
     },
     {
       "id": "VPR-101",

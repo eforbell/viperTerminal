@@ -70,3 +70,20 @@
   - **StatusBar state mapping**: CONNECTED→"Streaming", CONNECTING→"Connecting...", RECONNECTING→"Reconnecting...", others→"" (clear)
   - Coverage: 87% overall (1077 tests passing), no new tests needed - integration covered by existing message flow tests
 ---
+
+## 2026-01-22 - VPR-100
+- **What was implemented**: Visual indicators for streaming mode and help screen documentation
+- **Files changed**:
+  - `viper/widgets/help_screen.py`: Added 's' keybinding to KEYBINDINGS section, added streaming feature to FEATURES section (4 new lines)
+  - `AGENTS.md`: Added VPR-100 learnings section (35 lines)
+  - `scripts/ralph/features/feature-12.prd.json`: Marked VPR-100 complete
+- **Learnings**:
+  - **Help screen format**: Follow existing pattern - key name left-aligned, description after spaces, classes="help-item"
+  - **Header updates already done**: VPR-098 implemented header indicator logic in _render_items() at lines 191-202 - no new code needed
+  - **query_one('.panel-header', Label)**: Pattern used to find and update header widget dynamically
+  - **No flicker guarantee**: Header updates inside _render_items() keep header in sync with data, prevents visual flicker
+  - **Verification vs implementation**: This story primarily verified VPR-098's implementation met acceptance criteria
+  - **Documentation in two places**: Added to KEYBINDINGS (for quick reference) and FEATURES (for feature discovery)
+  - **Header state consistency**: All 4 header states from VPR-098 work correctly (WATCHLIST, [LIVE], [CONNECTING...], [RECONNECTING...])
+  - Coverage: 87% overall (1077 tests passing)
+---
