@@ -1282,3 +1282,39 @@ Added app-level keybinding ('s') and message handling for WatchlistPanel streami
 
 **Result**: All 1077 tests passing, mypy --strict passes, 's' key toggles streaming with StatusBar feedback. VPR-099 complete.
 
+---
+
+## Feature 12: Real-time Watchlist Mode - VPR-100
+
+**Task**: Visual indicators for streaming mode
+**Date**: 2026-01-22
+**Status**: Complete ✅
+
+### What Was Implemented
+
+Updated help screen documentation to include streaming keybinding and verified that header visual indicators implemented in VPR-098 work correctly.
+
+**Implementation Details**:
+1. **Header indicators**: Already implemented in VPR-098's _render_items() method (lines 191-202 in watchlist_panel.py)
+2. **Help screen keybinding**: Added "s - Toggle real-time streaming mode (watchlist)" to KEYBINDINGS section
+3. **Help screen feature**: Added "Real-time streaming mode for watchlist (press 's' to toggle)" to FEATURES section
+
+**Header State Mapping** (from VPR-098):
+- Streaming enabled + CONNECTED → "WATCHLIST [LIVE]"
+- Streaming enabled + CONNECTING → "WATCHLIST [CONNECTING...]"
+- Streaming enabled + RECONNECTING → "WATCHLIST [RECONNECTING...]"
+- Streaming disabled or ERROR → "WATCHLIST"
+
+**Key Learnings**:
+1. **Help screen format**: Follow existing pattern - key name left-aligned, description after spaces, classes="help-item"
+2. **Header updates already done**: VPR-098 implemented the header indicator logic in _render_items() - no new code needed
+3. **query_one('.panel-header', Label)**: Used to find and update the header widget dynamically
+4. **No flicker**: Header updates inside _render_items() keep header in sync with data without flickering
+5. **Verification over implementation**: This story was primarily verification that VPR-098's implementation met requirements
+6. **Documentation location**: Added to both KEYBINDINGS section (for usage) and FEATURES section (for discovery)
+
+**Files Modified**:
+- `viper/widgets/help_screen.py`: Added 4 lines for streaming documentation
+
+**Result**: All 1077 tests passing, mypy --strict passes, help screen documents streaming feature. VPR-100 complete.
+

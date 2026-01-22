@@ -123,6 +123,7 @@ class HelpScreen(ModalScreen[None]):
                 yield Static("  t-a                Cycle moving averages (Off/SMA20/SMA50/Both)", classes="help-item")
                 yield Static("v                    Toggle chart view (Line/Candlestick)", classes="help-item")
                 yield Static("r                    Refresh chart data (manual refresh)", classes="help-item")
+                yield Static("s                    Toggle real-time streaming mode (watchlist)", classes="help-item")
                 yield Static("e                    Expand news item (show summary)", classes="help-item")
                 yield Static("1-7                  Select timeframe (chart)", classes="help-item")
                 yield Static("? / F1               Show this help screen", classes="help-item")
@@ -336,6 +337,10 @@ class HelpScreen(ModalScreen[None]):
                 )
                 yield Static(
                     "• Watchlist with auto-refresh (configurable interval)",
+                    classes="help-item",
+                )
+                yield Static(
+                    "• Real-time streaming mode for watchlist (press 's' to toggle)",
                     classes="help-item",
                 )
                 yield Static(
