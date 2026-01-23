@@ -142,27 +142,28 @@ class ViperApp(App[None]):
     }
 
     StatusBar {
-        dock: bottom;
+        width: 100%;
         height: 1;
         background: $background;
         color: $accent;
         padding: 0 2;
-    }
-
-    StatusBar Horizontal {
-        width: 100%;
-        height: 1;
+        layout: horizontal;
     }
 
     StatusBar Label {
         width: 1fr;
-        background: $background;
+        height: 1;
         color: $accent;
     }
 
-    TickerInput {
+    #toolbar-container {
         dock: bottom;
-        margin: 1 2;
+        height: 6;
+        layout: vertical;
+    }
+
+    TickerInput {
+        margin: 0 2 1 2;
         border: solid $accent;
     }
 
@@ -377,8 +378,9 @@ class ViperApp(App[None]):
                     yield ArticleReaderPanel()
                 with Container(id="options-container"):
                     yield OptionsChainPanel()
-        yield TickerInput(history_manager=self.history_manager)
-        yield StatusBar()
+        with Container(id="toolbar-container"):
+            yield TickerInput(history_manager=self.history_manager)
+            yield StatusBar()
         yield Footer()
 
     def on_mount(self) -> None:

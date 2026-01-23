@@ -3,7 +3,6 @@
 from datetime import datetime
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal
 from textual.widgets import Label, Static
 
 
@@ -20,10 +19,9 @@ class StatusBar(Static):
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the status bar."""
-        with Horizontal():
-            yield Label(id="connection-status")
-            yield Label(id="last-refresh")
-            yield Label(id="status-message")
+        yield Label("Status: Loading...", id="connection-status")
+        yield Label("Last refresh: Never", id="last-refresh")
+        yield Label("", id="status-message")
 
     def on_mount(self) -> None:
         """Update the display when mounted."""

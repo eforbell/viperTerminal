@@ -203,16 +203,14 @@ class WatchlistPanel(Widget):
 
         # Update header to show streaming state
         header = self.query_one("#watchlist-header", Label)
-        from viper.utils.logger import get_logger
-        get_logger().info(f"_render_items: streaming={self._streaming_enabled}, state={self._connection_state}")
 
         if self._streaming_enabled:
             if self._connection_state == ConnectionState.CONNECTED:
-                header.update("WATCHLIST [LIVE]")
+                header.update("WATCHLIST \\[LIVE]")
             elif self._connection_state == ConnectionState.CONNECTING:
-                header.update("WATCHLIST [CONNECTING...]")
+                header.update("WATCHLIST \\[CONNECTING...]")
             elif self._connection_state == ConnectionState.RECONNECTING:
-                header.update("WATCHLIST [RECONNECTING...]")
+                header.update("WATCHLIST \\[RECONNECTING...]")
             else:
                 header.update("WATCHLIST")
         else:
@@ -400,9 +398,6 @@ class WatchlistPanel(Widget):
         Args:
             state: The new connection state.
         """
-        from viper.utils.logger import get_logger
-        get_logger().info(f"WatchlistPanel: state change callback: {state.value}, mounted={self.is_mounted}")
-
         self._connection_state = state
         # Only update UI if widget is still mounted (avoid crash on quit)
         if not self.is_mounted:
