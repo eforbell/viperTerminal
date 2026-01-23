@@ -235,6 +235,9 @@ class StreamingService:
                 self._logger.info("Started listening for messages")
         except Exception as e:
             self._logger.error(f"Failed to subscribe to {new_symbols}: {e}")
+            # Set error state and re-raise so caller can handle gracefully
+            self._set_state(ConnectionState.ERROR)
+            raise
 
     async def unsubscribe(self, symbols: list[str]) -> None:
         """Unsubscribe from symbols.
