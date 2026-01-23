@@ -14,6 +14,7 @@ from viper.services.crypto import CryptoError, CryptoInfo, CryptoInfoError, Cryp
 from viper.services.history import HistoryManager
 from viper.services.quote import fetch_quote, is_crypto_quote
 from viper.services.stock import StockError, StockInfo, StockInfoError, StockQuote, fetch_stock_info
+from viper.services.streaming import ConnectionState
 from viper.services.watchlist import WatchlistManager
 from viper.utils import (
     format_error_message,
@@ -74,6 +75,7 @@ class ViperCommands(Provider):
             # Watchlist Commands
             ("Watchlist: Add Ticker(s)", "w ...", "wl_info", "Add tickers: w AAPL MSFT"),
             ("Watchlist: Remove Ticker(s)", "d ...", "wl_info", "Remove tickers: d AAPL MSFT"),
+            ("Watchlist: Toggle Real-time Mode", "s", "toggle_streaming", "Enable/disable streaming"),
             # Application
             ("App: Quit", "q", "quit", "Exit the application"),
             ("App: Clear Input", "Esc", "clear_or_close", "Clear input or close overlay"),
@@ -140,27 +142,28 @@ class ViperApp(App[None]):
     }
 
     StatusBar {
-        dock: bottom;
+        width: 100%;
         height: 1;
         background: $background;
         color: $accent;
         padding: 0 2;
-    }
-
-    StatusBar Horizontal {
-        width: 100%;
-        height: 1;
+        layout: horizontal;
     }
 
     StatusBar Label {
         width: 1fr;
-        background: $background;
+        height: 1;
         color: $accent;
     }
 
-    TickerInput {
+    #toolbar-container {
         dock: bottom;
-        margin: 1 2;
+        height: 6;
+        layout: vertical;
+    }
+
+    TickerInput {
+        margin: 0 2 1 2;
         border: solid $accent;
     }
 
@@ -285,6 +288,7 @@ class ViperApp(App[None]):
         ("7", "timeframe_7", "MAX"),
         Binding("v", "toggle_chart_style", "Chart View", show=False),
         Binding("r", "refresh_chart", "Refresh Chart", show=False),
+        Binding("s", "toggle_streaming", "Streaming", show=False),
         Binding("t", "technical_prefix", "Technical (t+r/m/a)", show=False),
         ("question_mark,f1", "show_help", "Help"),
     ]
@@ -353,6 +357,7 @@ class ViperApp(App[None]):
                     yield WatchlistPanel(
                         watchlist_manager=self.watchlist_manager,
                         refresh_interval=self.config.refresh_interval,
+                        streaming_enabled=self.config.streaming_enabled,
                     )
                 with Container(id="quote-container"):
                     yield QuotePanel()
@@ -373,8 +378,9 @@ class ViperApp(App[None]):
                     yield ArticleReaderPanel()
                 with Container(id="options-container"):
                     yield OptionsChainPanel()
-        yield TickerInput(history_manager=self.history_manager)
-        yield StatusBar()
+        with Container(id="toolbar-container"):
+            yield TickerInput(history_manager=self.history_manager)
+            yield StatusBar()
         yield Footer()
 
     def on_mount(self) -> None:
@@ -663,6 +669,23 @@ class ViperApp(App[None]):
             status_bar = self.query_one(StatusBar)
             status_bar.set_message("Refreshing chart...")
 
+    def action_toggle_streaming(self) -> None:
+        """Toggle streaming mode for the watchlist panel."""
+        try:
+            watchlist_panel = self.query_one(WatchlistPanel)
+            # Check current state BEFORE toggling to show correct notification
+            was_enabled = watchlist_panel._streaming_enabled
+            watchlist_panel.toggle_streaming()
+
+            # Show notification based on what we're toggling TO (opposite of current)
+            if was_enabled:
+                self.notify("Streaming disabled", severity="information")
+            else:
+                self.notify("Enabling streaming...", severity="information")
+        except Exception as e:
+            self.logger.error(f"Error toggling streaming: {e}")
+            self.notify("Error toggling streaming", severity="error")
+
     def action_technical_prefix(self) -> None:
         """Placeholder for technical indicator prefix key (t).
 
@@ -826,6 +849,30 @@ class ViperApp(App[None]):
             options_panel = self.query_one(OptionsChainPanel)
             current_price = self._get_current_price()
             self.run_worker(options_panel.load_options(self._current_ticker, current_price))
+
+    def on_watchlist_panel_streaming_state_changed(
+        self, event: WatchlistPanel.StreamingStateChanged
+    ) -> None:
+        """Handle streaming state change from watchlist panel.
+
+        Args:
+            event: The streaming state changed event.
+        """
+        status_bar = self.query_one(StatusBar)
+
+        # Update status bar streaming indicator
+        is_streaming = event.state == ConnectionState.CONNECTED
+        status_bar.set_streaming(is_streaming)
+
+    def on_chart_panel_chart_refreshed(self, event: ChartPanel.ChartRefreshed) -> None:
+        """Handle chart refresh completion.
+
+        Args:
+            event: The chart refreshed event.
+        """
+        # Clear the "Refreshing chart..." message and update timestamp
+        status_bar = self.query_one(StatusBar)
+        status_bar.update_last_refresh()
 
     def on_ticker_input_input_blurred(self, event: TickerInput.InputBlurred) -> None:
         """Handle input blur event when user exits input mode with Escape.

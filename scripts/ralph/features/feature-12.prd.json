@@ -57,6 +57,10 @@
       "estimatedEffort": "Medium",
       "dependencies": [],
       "notes": "This is the foundational service layer. yfinance AsyncWebSocket handles heartbeat (15s) and reconnect with exponential backoff automatically. We wrap it to provide a clean interface for UI components.",
+      "passes": true,
+      "completedAt": "2026-01-22",
+      "testsPassing": 42,
+      "coverage": "100%",
       "implementationGuide": {
         "fileLocation": "viper/services/streaming.py",
         "imports": [
@@ -355,6 +359,10 @@
       "priority": 2,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-097"],
+      "passes": true,
+      "completedAt": "2026-01-22",
+      "testsPassing": 11,
+      "coverage": "92%",
       "notes": "WatchlistPanel becomes a consumer of StreamingService. Polling continues as fallback.",
       "implementationGuide": {
         "newImports": [
@@ -602,12 +610,17 @@
       "priority": 3,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-098"],
+      "passes": true,
+      "completedAt": "2026-01-22",
+      "testsPassing": 1077,
+      "coverage": "87%",
       "constraints": [
         "Use existing StatusBar.set_message() or add new method if needed for persistent state display",
         "Follow existing keybinding patterns in app.py (see 'r' for refresh, 'o' for options)",
         "Follow existing command palette patterns in app.py ViperCommands",
         "Message handler naming must follow Textual convention: on_<widget>_<message_name>"
-      ]
+      ],
+      "notes": "App-level integration complete. 's' key toggles streaming, StatusBar shows connection state, command palette entry added."
     },
     {
       "id": "VPR-100",
@@ -627,12 +640,17 @@
       "priority": 4,
       "estimatedEffort": "Small",
       "dependencies": ["VPR-098", "VPR-099"],
+      "passes": true,
+      "completedAt": "2026-01-22",
+      "testsPassing": 1077,
+      "coverage": "87%",
       "constraints": [
         "Header indicator is implemented in VPR-098's _render_items() modification - this story ensures it works correctly",
         "Do NOT add animation or color changes that could cause flicker with rapid updates",
         "Keep indicator text concise - terminal width is limited",
         "Help screen update must be minimal - just add the keybinding entry"
-      ]
+      ],
+      "notes": "Header indicators verified from VPR-098 implementation. Help screen updated with 's' keybinding documentation in both KEYBINDINGS and FEATURES sections."
     },
     {
       "id": "VPR-101",

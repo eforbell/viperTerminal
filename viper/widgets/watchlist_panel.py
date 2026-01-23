@@ -9,6 +9,11 @@ from textual.widgets import Label, LoadingIndicator
 
 from viper.services.quote import Quote, QuoteError, fetch_quote
 from viper.services.stock import StockQuote
+from viper.services.streaming import (
+    ConnectionState,
+    StreamingQuote,
+    StreamingService,
+)
 from viper.services.watchlist import WatchlistManager
 
 
@@ -36,6 +41,7 @@ class WatchlistPanel(Widget):
         text-style: bold;
         color: $accent;
         margin-bottom: 1;
+        width: 100%;
     }
 
     WatchlistPanel .watchlist-item {
@@ -98,14 +104,39 @@ class WatchlistPanel(Widget):
             super().__init__()
             self.ticker = ticker
 
+    class StreamingQuoteReceived(Message):
+        """Message sent when a streaming quote is received."""
+
+        def __init__(self, quote: StreamingQuote) -> None:
+            """Initialize the message.
+
+            Args:
+                quote: The streaming quote data.
+            """
+            super().__init__()
+            self.quote = quote
+
+    class StreamingStateChanged(Message):
+        """Message sent when streaming connection state changes."""
+
+        def __init__(self, state: ConnectionState) -> None:
+            """Initialize the message.
+
+            Args:
+                state: The new connection state.
+            """
+            super().__init__()
+            self.state = state
+
     def __init__(
-        self, watchlist_manager: WatchlistManager, refresh_interval: int = 60
+        self, watchlist_manager: WatchlistManager, refresh_interval: int = 60, streaming_enabled: bool = False
     ) -> None:
         """Initialize the watchlist panel.
 
         Args:
             watchlist_manager: The watchlist manager instance.
             refresh_interval: Auto-refresh interval in seconds (default: 60).
+            streaming_enabled: Enable real-time streaming mode on mount (default: False).
         """
         super().__init__()
         self._watchlist_manager = watchlist_manager
@@ -114,10 +145,15 @@ class WatchlistPanel(Widget):
         self._refresh_timer_active = False
         self._selected_index = 0
         self._initial_load = True  # Track if this is the first load
+        self._auto_enable_streaming = streaming_enabled  # Store for on_mount
+        self._streaming_enabled: bool = False
+        self._streaming_quotes: dict[str, StreamingQuote] = {}
+        self._streaming_service: StreamingService | None = None
+        self._connection_state: ConnectionState = ConnectionState.DISCONNECTED
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
-        yield Label("WATCHLIST", classes="panel-header")
+        yield Label("WATCHLIST", id="watchlist-header", classes="panel-header")
         yield VerticalScroll(id="watchlist-content")
 
     def on_mount(self) -> None:
@@ -129,9 +165,16 @@ class WatchlistPanel(Widget):
         self.set_interval(self._refresh_interval, self.refresh_quotes)
         self.run_worker(self.refresh_quotes())
 
+        # Enable streaming if configured
+        if self._auto_enable_streaming:
+            self.run_worker(self._enable_streaming())
+
     def on_unmount(self) -> None:
-        """Stop the refresh timer when unmounted."""
+        """Stop the refresh timer and streaming when unmounted."""
         self._refresh_timer_active = False
+        # Stop streaming service if running
+        if self._streaming_enabled and self._streaming_service:
+            self.run_worker(self._streaming_service.stop())
 
     async def refresh_quotes(self) -> None:
         """Fetch updated quotes for all watchlist items."""
@@ -154,6 +197,25 @@ class WatchlistPanel(Widget):
 
     def _render_items(self) -> None:
         """Render the watchlist items with current quotes."""
+        # Guard against rendering after widget is unmounted
+        if not self.is_mounted:
+            return
+
+        # Update header to show streaming state
+        header = self.query_one("#watchlist-header", Label)
+
+        if self._streaming_enabled:
+            if self._connection_state == ConnectionState.CONNECTED:
+                header.update("WATCHLIST \\[LIVE]")
+            elif self._connection_state == ConnectionState.CONNECTING:
+                header.update("WATCHLIST \\[CONNECTING...]")
+            elif self._connection_state == ConnectionState.RECONNECTING:
+                header.update("WATCHLIST \\[RECONNECTING...]")
+            else:
+                header.update("WATCHLIST")
+        else:
+            header.update("WATCHLIST")
+
         container = self.query_one("#watchlist-content", VerticalScroll)
         container.remove_children()
 
@@ -182,48 +244,49 @@ class WatchlistPanel(Widget):
             self._selected_index = 0
 
         for i, ticker in enumerate(tickers):
-            quote = self._quotes.get(ticker)
-            if quote is None:
-                # Quote not loaded yet
-                line = f"{ticker}: Loading..."
-                classes = "watchlist-item neutral"
-                if i == self._selected_index:
-                    classes += " selected"
-                label = Label(line, classes=classes)
-            elif isinstance(quote, QuoteError):
-                # Error fetching quote
-                line = f"{ticker}: Error"
-                classes = "watchlist-item neutral"
-                if i == self._selected_index:
-                    classes += " selected"
-                label = Label(line, classes=classes)
-            else:
-                # Successful quote
-                line = self._format_quote_line(ticker, quote)
+            # Prefer streaming quote if available and streaming is enabled
+            streaming_quote = (
+                self._streaming_quotes.get(ticker) if self._streaming_enabled else None
+            )
+            polling_quote = self._quotes.get(ticker)
+
+            if streaming_quote:
+                # Use streaming data - format it for display
+                line = self._format_streaming_quote_line(ticker, streaming_quote)
+                change_pct = streaming_quote.change_percent
+            elif polling_quote and not isinstance(polling_quote, QuoteError):
+                # Fall back to polling data
+                line = self._format_quote_line(ticker, polling_quote)
                 # Apply color class based on change
-                if hasattr(quote, "change_percent"):
+                if hasattr(polling_quote, "change_percent"):
                     # Stock quote
-                    change_pct = quote.change_percent
-                elif hasattr(quote, "change_24h_percent"):
+                    change_pct = polling_quote.change_percent
+                elif hasattr(polling_quote, "change_24h_percent"):
                     # Crypto quote
-                    change_pct = quote.change_24h_percent
+                    change_pct = polling_quote.change_24h_percent
                 else:
                     change_pct = 0.0
+            elif polling_quote:  # QuoteError
+                line = f"{ticker}: Error"
+                change_pct = 0.0
+            else:
+                line = f"{ticker}: Loading..."
+                change_pct = 0.0
 
-                if change_pct > 0:
-                    color_class = "positive"
-                elif change_pct < 0:
-                    color_class = "negative"
-                else:
-                    color_class = "neutral"
+            # Determine color class
+            if change_pct > 0:
+                color_class = "positive"
+            elif change_pct < 0:
+                color_class = "negative"
+            else:
+                color_class = "neutral"
 
-                # Add selected class if this is the selected item
-                classes = f"watchlist-item {color_class}"
-                if i == self._selected_index:
-                    classes += " selected"
+            # Add selected class if this is the selected item
+            classes = f"watchlist-item {color_class}"
+            if i == self._selected_index:
+                classes += " selected"
 
-                label = Label(line, classes=classes)
-
+            label = Label(line, classes=classes)
             container.mount(label)
 
     def _format_quote_line(self, ticker: str, quote: Quote) -> str:
@@ -265,6 +328,10 @@ class WatchlistPanel(Widget):
         Args:
             ticker: The ticker that was added.
         """
+        # Subscribe to streaming if active
+        if self._streaming_enabled and self._streaming_service:
+            self.run_worker(self._streaming_service.subscribe([ticker]))
+        # Always refresh polling quotes
         self.run_worker(self.refresh_quotes())
 
     def on_ticker_removed(self, ticker: str) -> None:
@@ -273,8 +340,14 @@ class WatchlistPanel(Widget):
         Args:
             ticker: The ticker that was removed.
         """
+        # Unsubscribe from streaming if active
+        if self._streaming_enabled and self._streaming_service:
+            self.run_worker(self._streaming_service.unsubscribe([ticker]))
+        # Clean up cached quotes
         if ticker in self._quotes:
             del self._quotes[ticker]
+        if ticker in self._streaming_quotes:
+            del self._streaming_quotes[ticker]
         self._render_items()
 
     def action_navigate_down(self) -> None:
@@ -308,3 +381,127 @@ class WatchlistPanel(Widget):
 
         # Emit the TickerSelected message
         self.post_message(self.TickerSelected(selected_ticker))
+
+    def _on_streaming_quote(self, quote: StreamingQuote) -> None:
+        """Callback from StreamingService - runs in same asyncio event loop.
+
+        Args:
+            quote: The streaming quote data.
+        """
+        self._streaming_quotes[quote.symbol] = quote
+        # Post message directly - we're in the same event loop as Textual
+        self.post_message(self.StreamingQuoteReceived(quote))
+
+    def _on_connection_state_change(self, state: ConnectionState) -> None:
+        """Callback from StreamingService when connection state changes.
+
+        Args:
+            state: The new connection state.
+        """
+        self._connection_state = state
+        # Only update UI if widget is still mounted (avoid crash on quit)
+        if not self.is_mounted:
+            return
+        # Update UI directly - we're in the same event loop as Textual
+        self._render_items()
+        # Also post message for any other listeners (like StatusBar)
+        self.post_message(self.StreamingStateChanged(state))
+
+    async def _enable_streaming(self) -> None:
+        """Enable real-time streaming mode."""
+        if self._streaming_enabled:
+            return  # Already enabled
+
+        try:
+            self._streaming_service = StreamingService.get_instance()
+            # Set flag BEFORE start/subscribe so callbacks see it as enabled
+            self._streaming_enabled = True
+
+            await self._streaming_service.start(
+                on_quote=self._on_streaming_quote,
+                on_state_change=self._on_connection_state_change,
+            )
+
+            # Subscribe to all current watchlist tickers
+            tickers = self._watchlist_manager.get_all()
+            if tickers:
+                await self._streaming_service.subscribe(tickers)
+
+            self._render_items()  # Re-render to show [LIVE] header
+        except Exception as e:
+            # Failed to start - stay in polling mode
+            from viper.utils.logger import get_logger
+
+            get_logger().error(f"Failed to enable streaming: {e}")
+            self._streaming_enabled = False
+            self._streaming_service = None
+            # Notify user via app notification if available
+            if self.app:
+                self.app.notify(
+                    "Streaming unavailable - using polling", severity="warning"
+                )
+
+    async def _disable_streaming(self) -> None:
+        """Disable streaming and return to polling-only mode."""
+        if not self._streaming_enabled:
+            return  # Already disabled
+
+        if self._streaming_service:
+            await self._streaming_service.stop()
+            self._streaming_service = None
+
+        self._streaming_enabled = False
+        self._streaming_quotes.clear()
+        self._connection_state = ConnectionState.DISCONNECTED
+        self._render_items()  # Re-render to remove [LIVE] header
+
+    def toggle_streaming(self) -> None:
+        """Toggle between polling and streaming modes."""
+        if self._streaming_enabled:
+            self.run_worker(self._disable_streaming())
+        else:
+            self.run_worker(self._enable_streaming())
+
+    def _format_streaming_quote_line(
+        self, ticker: str, quote: StreamingQuote
+    ) -> str:
+        """Format a streaming quote for display.
+
+        Args:
+            ticker: The ticker symbol.
+            quote: The streaming quote data.
+
+        Returns:
+            Formatted string for display.
+        """
+        price_str = f"${quote.price:,.2f}"
+
+        if quote.change_percent > 0:
+            change_str = f"+{quote.change_percent:.2f}%"
+        elif quote.change_percent < 0:
+            change_str = f"{quote.change_percent:.2f}%"
+        else:
+            change_str = "0.00%"
+
+        return f"{ticker:8s} {price_str:>12s} {change_str:>8s}"
+
+    def on_watchlist_panel_streaming_quote_received(
+        self, event: StreamingQuoteReceived
+    ) -> None:
+        """Handle streaming quote message - re-render display.
+
+        Args:
+            event: The StreamingQuoteReceived message.
+        """
+        self._render_items()
+
+    def on_watchlist_panel_streaming_state_changed(
+        self, event: StreamingStateChanged
+    ) -> None:
+        """Handle connection state change - update header.
+
+        Args:
+            event: The StreamingStateChanged message.
+        """
+        self._connection_state = event.state
+        self._render_items()

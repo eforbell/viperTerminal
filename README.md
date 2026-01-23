@@ -85,6 +85,7 @@ Viper can be customized via a config file at `~/.config/viper/config.toml`.
 ```toml
 # Watchlist settings
 refresh_interval = 60              # Auto-refresh interval in seconds
+streaming_enabled = false          # Enable real-time streaming mode on startup
 default_watchlist = ["AAPL", "MSFT", "BTC-USD"]
 
 # Chart settings
@@ -108,6 +109,7 @@ background = "#000000"
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `refresh_interval` | `60` | Watchlist auto-refresh interval in seconds |
+| `streaming_enabled` | `false` | Enable real-time streaming mode for watchlist on startup |
 | `default_watchlist` | `[]` | Tickers to load on startup |
 | `chart_style` | `"candlestick"` | Chart visualization: `braille`, `block`, or `candlestick` |
 | `default_chart_timeframe` | `"1Y"` | Initial chart timeframe |

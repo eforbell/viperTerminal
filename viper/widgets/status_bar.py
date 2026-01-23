@@ -3,7 +3,6 @@
 from datetime import datetime
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal
 from textual.widgets import Label, Static
 
 
@@ -16,13 +15,13 @@ class StatusBar(Static):
         self._connection_state = "Online"
         self._last_refresh: datetime | None = None
         self._message: str | None = None
+        self._streaming: bool = False
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the status bar."""
-        with Horizontal():
-            yield Label(id="connection-status")
-            yield Label(id="last-refresh")
-            yield Label(id="status-message")
+        yield Label("Status: Loading...", id="connection-status")
+        yield Label("Last refresh: Never", id="last-refresh")
+        yield Label("", id="status-message")
 
     def on_mount(self) -> None:
         """Update the display when mounted."""
@@ -54,6 +53,15 @@ class StatusBar(Static):
         self._message = None
         self._update_display()
 
+    def set_streaming(self, enabled: bool) -> None:
+        """Set the streaming state indicator.
+
+        Args:
+            enabled: Whether streaming is enabled.
+        """
+        self._streaming = enabled
+        self._update_display()
+
     def update_last_refresh(self) -> None:
         """Update the last refresh time to now."""
         self._last_refresh = datetime.now()
@@ -67,8 +75,11 @@ class StatusBar(Static):
             refresh_label = self.query_one("#last-refresh", Label)
             message_label = self.query_one("#status-message", Label)
 
-            # Update connection status
-            connection_label.update(f"Status: {self._connection_state}")
+            # Update connection status with streaming indicator
+            if self._streaming:
+                connection_label.update(f"Status: {self._connection_state} | LIVE")
+            else:
+                connection_label.update(f"Status: {self._connection_state}")
 
             # Update last refresh time
             if self._last_refresh:

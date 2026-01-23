@@ -1,13 +1,14 @@
 """Tests for the watchlist panel widget."""
 
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from textual.app import App
 
 from viper.services.crypto import CryptoQuote
 from viper.services.stock import StockError, StockQuote
+from viper.services.streaming import ConnectionState, StreamingQuote, StreamingService
 from viper.services.watchlist import WatchlistManager
 from viper.widgets.watchlist_panel import WatchlistPanel
 
@@ -662,3 +663,378 @@ async def test_selected_item_visual_highlight(watchlist_manager: WatchlistManage
             # Now second item should have 'selected' class
             second_label = labels.nodes[1]
             assert "selected" in second_label.classes
+
+
+# VPR-098: Streaming integration tests
+
+
+@pytest.mark.asyncio
+async def test_toggle_streaming_enables_streaming(watchlist_manager: WatchlistManager) -> None:
+    """Test that toggle_streaming() enables streaming mode."""
+    watchlist_manager.add("AAPL")
+    watchlist_manager.add("TSLA")
+
+    # Reset singleton before test
+    StreamingService._reset_instance()
+
+    with patch.object(
+        StreamingService, "start", new_callable=AsyncMock
+    ) as mock_start, patch.object(
+        StreamingService, "subscribe", new_callable=AsyncMock
+    ) as mock_subscribe:
+        app = WatchlistTestApp(watchlist_manager, refresh_interval=9999)
+
+        async with app.run_test() as pilot:
+            panel = app.query_one(WatchlistPanel)
+            await pilot.pause(0.1)
+
+            # Initially should not be streaming
+            assert panel._streaming_enabled is False
+
+            # Toggle streaming on
+            panel.toggle_streaming()
+            await pilot.pause(0.2)
+
+            # Should be enabled
+            assert panel._streaming_enabled is True
+            assert mock_start.called
+            assert mock_subscribe.called
+            # Should subscribe to all watchlist tickers
+            assert mock_subscribe.call_args[0][0] == ["AAPL", "TSLA"]
+
+
+@pytest.mark.asyncio
+async def test_toggle_streaming_disables_streaming(watchlist_manager: WatchlistManager) -> None:
+    """Test that toggle_streaming() disables streaming mode when already enabled."""
+    watchlist_manager.add("AAPL")
+
+    # Reset singleton before test
+    StreamingService._reset_instance()
+
+    with patch.object(
+        StreamingService, "start", new_callable=AsyncMock
+    ) as mock_start, patch.object(
+        StreamingService, "stop", new_callable=AsyncMock
+    ) as mock_stop, patch.object(
+        StreamingService, "subscribe", new_callable=AsyncMock
+    ):
+        app = WatchlistTestApp(watchlist_manager, refresh_interval=9999)
+
+        async with app.run_test() as pilot:
+            panel = app.query_one(WatchlistPanel)
+            await pilot.pause(0.1)
+
+            # Enable streaming first
+            panel.toggle_streaming()
+            await pilot.pause(0.2)
+            assert panel._streaming_enabled is True
+
+            # Toggle streaming off
+            panel.toggle_streaming()
+            await pilot.pause(0.2)
+
+            # Should be disabled
+            assert panel._streaming_enabled is False
+            assert mock_stop.called
+            assert len(panel._streaming_quotes) == 0
+
+
+@pytest.mark.asyncio
+async def test_render_prefers_streaming_quote(watchlist_manager: WatchlistManager) -> None:
+    """Test that _render_items() prefers streaming quotes over polling quotes."""
+    watchlist_manager.add("AAPL")
+
+    # Reset singleton before test
+    StreamingService._reset_instance()
+
+    app = WatchlistTestApp(watchlist_manager, refresh_interval=9999)
+
+    async with app.run_test() as pilot:
+        panel = app.query_one(WatchlistPanel)
+        await pilot.pause(0.1)
+
+        # Set up polling quote
+        panel._quotes["AAPL"] = StockQuote(
+            ticker="AAPL",
+            name="Apple Inc.",
+            price=150.0,
+            change=5.0,
+            change_percent=3.45,
+            volume=100000,
+            market_cap=2500000000,
+            high_52w=180.0,
+            low_52w=120.0,
+        )
+
+        # Set up streaming quote with different price
+        panel._streaming_enabled = True
+        panel._streaming_quotes["AAPL"] = StreamingQuote(
+            symbol="AAPL",
+            price=155.0,
+            change=10.0,
+            change_percent=6.89,
+        )
+
+        panel._render_items()
+        await pilot.pause()
+
+        # Check that streaming price is displayed
+        labels = panel.query(".watchlist-item")
+        label_texts = [str(label.render()) for label in labels]
+        # Streaming price should be shown (155.0), not polling (150.0)
+        assert any("155.00" in text for text in label_texts)
+
+
+@pytest.mark.asyncio
+async def test_render_falls_back_to_polling_quote(watchlist_manager: WatchlistManager) -> None:
+    """Test that _render_items() falls back to polling quote when streaming unavailable."""
+    watchlist_manager.add("AAPL")
+
+    # Reset singleton before test
+    StreamingService._reset_instance()
+
+    app = WatchlistTestApp(watchlist_manager, refresh_interval=9999)
+
+    async with app.run_test() as pilot:
+        panel = app.query_one(WatchlistPanel)
+        await pilot.pause(0.1)
+
+        # Set up only polling quote (no streaming quote)
+        panel._quotes["AAPL"] = StockQuote(
+            ticker="AAPL",
+            name="Apple Inc.",
+            price=150.0,
+            change=5.0,
+            change_percent=3.45,
+            volume=100000,
+            market_cap=2500000000,
+            high_52w=180.0,
+            low_52w=120.0,
+        )
+
+        # Streaming is disabled
+        panel._streaming_enabled = False
+
+        panel._render_items()
+        await pilot.pause()
+
+        # Check that polling price is displayed
+        labels = panel.query(".watchlist-item")
+        label_texts = [str(label.render()) for label in labels]
+        assert any("150.00" in text for text in label_texts)
+
+
+@pytest.mark.asyncio
+async def test_on_ticker_added_subscribes_to_streaming(
+    watchlist_manager: WatchlistManager,
+) -> None:
+    """Test that on_ticker_added() subscribes to streaming when active."""
+    # Reset singleton before test
+    StreamingService._reset_instance()
+
+    app = WatchlistTestApp(watchlist_manager, refresh_interval=9999)
+
+    async with app.run_test() as pilot:
+        panel = app.query_one(WatchlistPanel)
+        await pilot.pause(0.1)
+
+        # Manually enable streaming and mock the service
+        panel._streaming_enabled = True
+        panel._streaming_service = MagicMock()
+        panel._streaming_service.subscribe = AsyncMock()
+
+        # Add a ticker
+        watchlist_manager.add("TSLA")
+        panel.on_ticker_added("TSLA")
+        await pilot.pause(0.2)
+
+        # Should have subscribed to the new ticker
+        assert panel._streaming_service.subscribe.called
+        assert panel._streaming_service.subscribe.call_args[0][0] == ["TSLA"]
+
+
+@pytest.mark.asyncio
+async def test_on_ticker_removed_unsubscribes_from_streaming(
+    watchlist_manager: WatchlistManager,
+) -> None:
+    """Test that on_ticker_removed() unsubscribes from streaming when active."""
+    watchlist_manager.add("AAPL")
+
+    # Reset singleton before test
+    StreamingService._reset_instance()
+
+    app = WatchlistTestApp(watchlist_manager, refresh_interval=9999)
+
+    async with app.run_test() as pilot:
+        panel = app.query_one(WatchlistPanel)
+        await pilot.pause(0.1)
+
+        # Manually enable streaming and mock the service
+        panel._streaming_enabled = True
+        panel._streaming_service = MagicMock()
+        panel._streaming_service.unsubscribe = AsyncMock()
+
+        # Add a streaming quote
+        panel._streaming_quotes["AAPL"] = StreamingQuote(
+            symbol="AAPL", price=150.0, change=5.0, change_percent=3.45
+        )
+
+        # Remove the ticker
+        watchlist_manager.remove("AAPL")
+        panel.on_ticker_removed("AAPL")
+        await pilot.pause(0.2)
+
+        # Should have unsubscribed
+        assert panel._streaming_service.unsubscribe.called
+        assert panel._streaming_service.unsubscribe.call_args[0][0] == ["AAPL"]
+        # Should have cleared streaming quote
+        assert "AAPL" not in panel._streaming_quotes
+
+
+@pytest.mark.asyncio
+async def test_streaming_quote_received_triggers_render(
+    watchlist_manager: WatchlistManager,
+) -> None:
+    """Test that StreamingQuoteReceived message triggers re-render."""
+    watchlist_manager.add("AAPL")
+
+    # Reset singleton before test
+    StreamingService._reset_instance()
+
+    app = WatchlistTestApp(watchlist_manager, refresh_interval=9999)
+
+    async with app.run_test() as pilot:
+        panel = app.query_one(WatchlistPanel)
+        await pilot.pause(0.1)
+
+        # Enable streaming
+        panel._streaming_enabled = True
+
+        # Manually add quote via callback (simulating what would happen)
+        quote = StreamingQuote(
+            symbol="AAPL", price=155.0, change=10.0, change_percent=6.89
+        )
+        panel._streaming_quotes["AAPL"] = quote
+
+        # Post the message to trigger render
+        panel.post_message(panel.StreamingQuoteReceived(quote))
+        await pilot.pause()
+
+        # Should have stored the quote
+        assert "AAPL" in panel._streaming_quotes
+        assert panel._streaming_quotes["AAPL"].price == 155.0
+
+
+@pytest.mark.asyncio
+async def test_streaming_state_changed_updates_header(
+    watchlist_manager: WatchlistManager,
+) -> None:
+    """Test that StreamingStateChanged message updates connection state and triggers render."""
+    # Reset singleton before test
+    StreamingService._reset_instance()
+
+    app = WatchlistTestApp(watchlist_manager, refresh_interval=9999)
+
+    async with app.run_test() as pilot:
+        panel = app.query_one(WatchlistPanel)
+        await pilot.pause(0.1)
+
+        # Enable streaming
+        panel._streaming_enabled = True
+
+        # Test CONNECTED state
+        panel.post_message(panel.StreamingStateChanged(ConnectionState.CONNECTED))
+        await pilot.pause()
+        assert panel._connection_state == ConnectionState.CONNECTED
+
+        # Test CONNECTING state
+        panel.post_message(panel.StreamingStateChanged(ConnectionState.CONNECTING))
+        await pilot.pause()
+        assert panel._connection_state == ConnectionState.CONNECTING
+
+        # Test RECONNECTING state
+        panel.post_message(panel.StreamingStateChanged(ConnectionState.RECONNECTING))
+        await pilot.pause()
+        assert panel._connection_state == ConnectionState.RECONNECTING
+
+
+@pytest.mark.asyncio
+async def test_format_streaming_quote_line() -> None:
+    """Test that _format_streaming_quote_line() formats correctly."""
+    from viper.services.watchlist import WatchlistManager
+
+    manager = WatchlistManager()
+    panel = WatchlistPanel(manager, refresh_interval=9999)
+
+    # Test positive change
+    quote = StreamingQuote(
+        symbol="AAPL", price=155.50, change=10.0, change_percent=6.89
+    )
+    line = panel._format_streaming_quote_line("AAPL", quote)
+    assert "AAPL" in line
+    assert "$155.50" in line
+    assert "+6.89%" in line
+
+    # Test negative change
+    quote = StreamingQuote(
+        symbol="TSLA", price=200.25, change=-5.0, change_percent=-2.44
+    )
+    line = panel._format_streaming_quote_line("TSLA", quote)
+    assert "TSLA" in line
+    assert "$200.25" in line
+    assert "-2.44%" in line
+
+    # Test zero change
+    quote = StreamingQuote(symbol="MSFT", price=300.00, change=0.0, change_percent=0.0)
+    line = panel._format_streaming_quote_line("MSFT", quote)
+    assert "MSFT" in line
+    assert "$300.00" in line
+    assert "0.00%" in line
+
+
+@pytest.mark.asyncio
+async def test_streaming_callbacks_post_messages(
+    watchlist_manager: WatchlistManager,
+) -> None:
+    """Test that streaming callbacks post messages directly.
+
+    Since yfinance AsyncWebSocket runs in the same asyncio event loop as Textual,
+    we use post_message directly rather than call_from_thread.
+    """
+    watchlist_manager.add("AAPL")
+
+    # Reset singleton before test
+    StreamingService._reset_instance()
+
+    app = WatchlistTestApp(watchlist_manager, refresh_interval=9999)
+
+    async with app.run_test() as pilot:
+        panel = app.query_one(WatchlistPanel)
+        await pilot.pause(0.1)
+
+        # Mock post_message to track calls
+        original_post_message = panel.post_message
+        post_message_calls: list[object] = []
+
+        def mock_post_message(message: object) -> bool:
+            post_message_calls.append(message)
+            return original_post_message(message)
+
+        panel.post_message = mock_post_message  # type: ignore
+
+        # Call the streaming quote callback
+        quote = StreamingQuote(
+            symbol="AAPL", price=155.0, change=10.0, change_percent=6.89
+        )
+        panel._on_streaming_quote(quote)
+
+        # Should have posted a StreamingQuoteReceived message
+        assert len(post_message_calls) == 1
+        assert isinstance(post_message_calls[0], WatchlistPanel.StreamingQuoteReceived)
+
+        # Call the state change callback
+        panel._on_connection_state_change(ConnectionState.CONNECTED)
+
+        # Should have posted a StreamingStateChanged message
+        assert len(post_message_calls) == 2
+        assert isinstance(post_message_calls[1], WatchlistPanel.StreamingStateChanged)

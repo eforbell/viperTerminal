@@ -3,7 +3,7 @@
   "featureName": "Real-time Watchlist Mode",
   "prdPath": "features/feature-12.prd.json",
   "branch": "viper/feature-12-realtime-watchlist",
-  "status": "planning",
+  "status": "implementing",
   "completedFeatures": [
     {
       "feature": "feature-11",
