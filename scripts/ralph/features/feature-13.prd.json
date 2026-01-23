@@ -1,0 +1,80 @@
+{
+  "branchName": "viper/feature-13-realtime-charts",
+  "projectName": "Viper Terminal - Feature 13",
+  "description": "Real-time Chart Tip Updates: Extend the streaming infrastructure to update the most recent candle/point of the chart in real-time when streaming is active.",
+  "principles": [
+    "Build on Feature 12 - reuse StreamingService, don't reinvent",
+    "Minimal scope - only update the tip, not historical data",
+    "Clean lifecycle - proper subscribe/unsubscribe on ticker change and unmount",
+    "Graceful degradation - works fine when streaming disabled or unavailable",
+    "Performance first - avoid flicker, throttle if needed"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "tui": "Textual (built on Rich)",
+    "streaming": "yfinance AsyncWebSocket via StreamingService",
+    "testing": "pytest + pytest-asyncio + pytest-cov",
+    "typecheck": "mypy --strict"
+  },
+  "userStories": [
+    {
+      "id": "VPR-102",
+      "title": "Add multi-listener support to StreamingService",
+      "acceptanceCriteria": [
+        "Add add_quote_listener(callback) method to StreamingService",
+        "Add remove_quote_listener(callback) method to StreamingService",
+        "Maintain internal list of quote listeners",
+        "Invoke all registered listeners when quote arrives",
+        "Backward compatible: on_quote param in start() registers as first listener",
+        "remove_quote_listener is no-op if callback not found (no error)",
+        "Test: multiple listeners all receive quotes",
+        "Test: removing listener stops it from receiving quotes",
+        "Test: backward compatibility with existing start(on_quote=...) usage"
+      ],
+      "priority": 1,
+      "estimatedEffort": "Small",
+      "dependencies": ["Feature 12 complete"],
+      "notes": "Simple extension to existing StreamingService. Change _on_quote from single callback to list of callbacks."
+    },
+    {
+      "id": "VPR-103",
+      "title": "ChartPanel streaming integration",
+      "acceptanceCriteria": [
+        "ChartPanel registers quote listener with StreamingService when chart loads",
+        "ChartPanel subscribes to current ticker symbol",
+        "ChartPanel unsubscribes from previous ticker when switching",
+        "ChartPanel removes listener and unsubscribes on unmount",
+        "Quote listener filters to only process matching ticker",
+        "Candlestick: update last candle close price from streaming price",
+        "Candlestick: update last candle high if streaming day_high exceeds current",
+        "Candlestick: update last candle low if streaming day_low below current",
+        "Candlestick: update last candle volume from streaming volume",
+        "Braille/Line: update last price point from streaming price",
+        "Re-render chart after tip update (lightweight, no data fetch)",
+        "Recalculate stats row with updated tip data",
+        "No subscription when streaming globally disabled",
+        "No errors when streaming unavailable or fails",
+        "Test: tip updates in candlestick mode",
+        "Test: tip updates in braille mode",
+        "Test: cleanup on unmount",
+        "Test: cleanup on ticker switch"
+      ],
+      "priority": 2,
+      "estimatedEffort": "Medium",
+      "dependencies": ["VPR-102"],
+      "notes": "ChartPanel manages its own streaming lifecycle. Open price comes from historical data (unchanged). Symbol filtering happens in the listener callback."
+    }
+  ],
+  "technicalNotes": {
+    "openPrice": "StreamingQuote doesn't include open. Historical data provides correct open for the period.",
+    "symbolFiltering": "ChartPanel listener receives all quotes, filters by self._current_ticker.",
+    "coexistence": "WatchlistPanel and ChartPanel can subscribe to same symbol independently.",
+    "throttling": "Start without throttling. Add if flicker observed (follow-up optimization)."
+  },
+  "outOfScope": [
+    "Sub-daily chart intervals (1h, 15m, etc.)",
+    "Historical backfill from streaming data",
+    "Streaming-only mode (always load historical first)"
+  ],
+  "estimatedEffort": "Small-Medium (1-2 days)"
+}

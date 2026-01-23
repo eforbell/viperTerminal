@@ -1,10 +1,23 @@
 {
-  "currentFeature": "feature-12",
-  "featureName": "Real-time Watchlist Mode",
-  "prdPath": "features/feature-12.prd.json",
-  "branch": "viper/feature-12-realtime-watchlist",
-  "status": "implementing",
+  "currentFeature": "feature-13",
+  "featureName": "Real-time Chart Tip Updates",
+  "prdPath": "features/feature-13.prd.json",
+  "branch": "viper/feature-13-realtime-charts",
+  "status": "ready",
   "completedFeatures": [
+    {
+      "feature": "feature-12",
+      "featureName": "Real-time Watchlist Mode",
+      "prdPath": "features/feature-12.prd.json",
+      "branch": "viper/feature-12-realtime-watchlist",
+      "status": "complete",
+      "completedAt": "2026-01-23",
+      "stories": 5,
+      "testsPassing": 1100,
+      "coverage": "87%",
+      "notes": "Implemented StreamingService singleton with yfinance AsyncWebSocket, WatchlistPanel streaming integration with [LIVE] indicator, 's' keybinding toggle, StatusBar streaming indicator, streaming_enabled config option. Fixed visual indicators (Rich markup escaping, StatusBar layout).",
+      "description": "WebSocket streaming for real-time watchlist price updates. Exploratory feature validating streaming architecture."
+    },
     {
       "feature": "feature-11",
       "featureName": "Odds and Ends",
@@ -245,16 +258,18 @@
       "priority": "Medium",
       "relatedFeature": "feature-1",
       "effort": "Medium",
-      "notes": "Feature 12 implements this for watchlist using yfinance AsyncWebSocket. Exploratory scope - watchlist only before expanding to charts.",
-      "status": "IN_PROGRESS_FEATURE_12",
+      "notes": "Feature 12 completed watchlist streaming. Feature 13 extends to chart tip updates.",
+      "status": "COMPLETED_FEATURE_12_EXTENDING_FEATURE_13",
       "assignedStories": [
         "VPR-097",
         "VPR-098",
         "VPR-099",
         "VPR-100",
-        "VPR-101"
+        "VPR-101",
+        "VPR-102",
+        "VPR-103"
       ],
-      "lastUpdated": "2026-01-22"
+      "lastUpdated": "2026-01-23"
     }
   ]
 }
