@@ -48,7 +48,7 @@
         "Candlestick: update last candle close price from streaming price",
         "Candlestick: update last candle high if streaming day_high exceeds current",
         "Candlestick: update last candle low if streaming day_low below current",
-        "Candlestick: update last candle volume from streaming volume",
+        "Candlestick: update last candle volume from streaming volume (data.volumes[-1] - volume bars re-render automatically)",
         "Braille/Line: update last price point from streaming price",
         "Re-render chart after tip update (lightweight, no data fetch)",
         "Recalculate stats row with updated tip data",

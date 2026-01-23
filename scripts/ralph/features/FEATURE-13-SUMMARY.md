@@ -63,12 +63,14 @@ ChartPanel subscribes to StreamingService for its current ticker and updates the
 - Update `prices[-1]` (close) with streaming price
 - Update `highs[-1]` if streaming `day_high` exceeds current
 - Update `lows[-1]` if streaming `day_low` is below current
-- Update `volumes[-1]` with streaming volume
+- Update `volumes[-1]` with streaming volume (volume bars rendered separately but share same data list)
 - Open price unchanged (from historical data)
+- Call `_rebuild_content()` which re-renders both candlesticks and volume bars
 
 **Braille/Line mode:**
 - Update `prices[-1]` with streaming price
-- Re-render chart
+- Update `volumes[-1]` with streaming volume
+- Call `_rebuild_content()` to re-render
 
 ### Throttling
 Start without throttling (update on every quote). If visual flicker becomes an issue, add throttling as a follow-up optimization.
