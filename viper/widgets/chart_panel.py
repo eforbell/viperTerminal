@@ -5,6 +5,7 @@ from datetime import datetime
 from textual import work
 from textual.app import ComposeResult
 from textual.containers import Container
+from textual.message import Message
 from textual.timer import Timer
 from textual.widget import Widget
 from textual.widgets import Label, LoadingIndicator
@@ -115,6 +116,11 @@ class ChartPanel(Widget):
         width: 100%;
     }
     """
+
+    class ChartRefreshed(Message):
+        """Message sent when chart data has been refreshed."""
+
+        pass
 
     def __init__(
         self,
@@ -288,10 +294,6 @@ class ChartPanel(Widget):
             interval_display = self._get_interval_display()
             if interval_display:
                 header_text += f" [Candlestick · {interval_display}]"
-            # Show last refresh time if available
-            if self._last_refresh and self._refresh_interval > 0:
-                refresh_time = self._last_refresh.strftime("%H:%M:%S")
-                header_text += f" [dim](Updated {refresh_time})[/dim]"
 
         # Add MA legend if MAs are displayed
         if self._ma_mode != "off":
@@ -738,6 +740,8 @@ class ChartPanel(Widget):
             self._last_refresh = datetime.now()
             # Smooth update - just rebuild content (same as initial render)
             self._rebuild_content()
+            # Notify listeners that refresh completed
+            self.post_message(self.ChartRefreshed())
 
     def refresh_chart(self) -> None:
         """Trigger a manual chart refresh.

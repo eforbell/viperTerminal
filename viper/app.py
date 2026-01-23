@@ -864,6 +864,16 @@ class ViperApp(App[None]):
         is_streaming = event.state == ConnectionState.CONNECTED
         status_bar.set_streaming(is_streaming)
 
+    def on_chart_panel_chart_refreshed(self, event: ChartPanel.ChartRefreshed) -> None:
+        """Handle chart refresh completion.
+
+        Args:
+            event: The chart refreshed event.
+        """
+        # Clear the "Refreshing chart..." message and update timestamp
+        status_bar = self.query_one(StatusBar)
+        status_bar.update_last_refresh()
+
     def on_ticker_input_input_blurred(self, event: TickerInput.InputBlurred) -> None:
         """Handle input blur event when user exits input mode with Escape.
 
