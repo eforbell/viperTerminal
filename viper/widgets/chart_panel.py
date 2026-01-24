@@ -18,6 +18,7 @@ from viper.services.history_data import (
     fetch_historical_data,
 )
 from viper.services.indicators import calculate_macd, calculate_rsi, calculate_sma
+from viper.services.streaming import StreamingQuote, StreamingService
 from viper.widgets.chart_context import ChartContext
 from viper.widgets.chart_renderer import (
     ChartDimensions,
@@ -171,6 +172,9 @@ class ChartPanel(Widget):
         self._chart_area_width: int = 70  # Cached for indicator panel updates
         # ChartContext - single source of truth for dimensions and data
         self._chart_context: ChartContext | None = None
+        # Streaming service integration
+        self._streaming_service: StreamingService | None = None
+        self._subscribed_ticker: str | None = None  # Track what we're subscribed to
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -191,8 +195,9 @@ class ChartPanel(Widget):
         self._rebuild_content()
 
     def on_unmount(self) -> None:
-        """Clean up timer when unmounted."""
+        """Clean up timer and streaming when unmounted."""
         self._stop_refresh_timer()
+        self._cleanup_streaming()
 
     def show_loading(self, ticker: str, period: str) -> None:
         """Display loading state with spinner.
@@ -229,6 +234,8 @@ class ChartPanel(Widget):
         self._rebuild_content()
         # Start refresh timer if in candlestick mode
         self._update_refresh_timer()
+        # Set up streaming for real-time tip updates
+        self._setup_streaming(data.ticker)
 
     def show_error(self, error: HistoricalDataError) -> None:
         """Display an error state.
@@ -751,3 +758,123 @@ class ChartPanel(Widget):
         """
         if self._state == "success" and self._current_ticker:
             self._refresh_chart_data()
+
+    # --- Streaming Integration ---
+
+    def _setup_streaming(self, ticker: str) -> None:
+        """Set up streaming for the given ticker.
+
+        Registers as quote listener and subscribes to the ticker.
+        Only sets up if streaming service is running.
+
+        Args:
+            ticker: The ticker to subscribe to
+        """
+        try:
+            service = StreamingService.get_instance()
+
+            # Only subscribe if service is running (streaming is enabled globally)
+            if not service._running:
+                return
+
+            self._streaming_service = service
+
+            # Unsubscribe from old ticker if different
+            if self._subscribed_ticker and self._subscribed_ticker != ticker:
+                self.run_worker(service.unsubscribe([self._subscribed_ticker]))
+
+            # Register as listener (idempotent - won't add duplicate)
+            service.add_quote_listener(self._on_streaming_quote)
+
+            # Subscribe to new ticker
+            self._subscribed_ticker = ticker
+            self.run_worker(service.subscribe([ticker]))
+
+        except Exception:
+            # Streaming unavailable - that's fine, chart still works with historical data
+            pass
+
+    def _cleanup_streaming(self) -> None:
+        """Clean up streaming subscription and listener."""
+        if self._streaming_service:
+            # Remove our listener
+            self._streaming_service.remove_quote_listener(self._on_streaming_quote)
+
+            # Unsubscribe from ticker if subscribed
+            if self._subscribed_ticker:
+                self.run_worker(self._streaming_service.unsubscribe([self._subscribed_ticker]))
+                self._subscribed_ticker = None
+
+            self._streaming_service = None
+
+    def _on_streaming_quote(self, quote: StreamingQuote) -> None:
+        """Handle streaming quote callback.
+
+        Updates the chart tip (last candle/point) with real-time data.
+
+        Args:
+            quote: The streaming quote data
+        """
+        # Filter: only process quotes for our current ticker
+        if not self._current_ticker:
+            return
+
+        # Normalize symbols for comparison (handle BTC vs BTC-USD)
+        quote_symbol = quote.symbol.upper()
+        current_ticker = self._current_ticker.upper()
+
+        # Handle crypto suffix matching (BTC matches BTC-USD)
+        if not (
+            quote_symbol == current_ticker
+            or quote_symbol == f"{current_ticker}-USD"
+            or current_ticker == f"{quote_symbol}-USD"
+        ):
+            return
+
+        # Only update if we have valid chart data
+        if self._state != "success" or not isinstance(self._data, HistoricalData):
+            return
+
+        if len(self._data.prices) == 0:
+            return
+
+        # Update the tip (last element) of the chart data
+        self._update_chart_tip(quote)
+
+    def _update_chart_tip(self, quote: StreamingQuote) -> None:
+        """Update the chart tip with streaming data and re-render.
+
+        Args:
+            quote: The streaming quote with new price data
+        """
+        if not isinstance(self._data, HistoricalData):
+            return
+
+        data = self._data
+
+        # Update closing price (last price point)
+        data.prices[-1] = quote.price
+
+        # Update high if streaming day_high exceeds current
+        if quote.day_high is not None and quote.day_high > data.highs[-1]:
+            data.highs[-1] = quote.day_high
+
+        # Update low if streaming day_low is below current
+        if quote.day_low is not None and quote.day_low < data.lows[-1]:
+            data.lows[-1] = quote.day_low
+
+        # Update volume if available
+        if quote.volume is not None:
+            data.volumes[-1] = quote.volume
+
+        # Recalculate stats with updated data
+        self._stats = calculate_stats(data)
+
+        # Recalculate indicators with updated prices
+        self._calculate_moving_averages(data.prices)
+        self._calculate_rsi(data.prices)
+        self._calculate_macd(data.prices)
+
+        # Re-render chart (lightweight, no data fetch) - only if mounted
+        if self.is_mounted:
+            self._rebuild_content()

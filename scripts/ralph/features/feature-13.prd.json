@@ -64,7 +64,9 @@
       "priority": 2,
       "estimatedEffort": "Medium",
       "dependencies": ["VPR-102"],
-      "notes": "ChartPanel manages its own streaming lifecycle. Open price comes from historical data (unchanged). Symbol filtering happens in the listener callback."
+      "notes": "ChartPanel manages its own streaming lifecycle. Open price comes from historical data (unchanged). Symbol filtering happens in the listener callback.",
+      "passes": true,
+      "completedAt": "2026-01-24"
     }
   ],
   "technicalNotes": {

@@ -1353,3 +1353,39 @@ Extended StreamingService to support multiple quote listeners, enabling both Wat
 
 **Result**: All sync tests passing, multi-listener support ready for ChartPanel integration. VPR-102 complete.
 
+---
+
+## Feature 13: Real-time Chart Tip Updates - VPR-103
+
+**Task**: ChartPanel streaming integration
+**Date**: 2026-01-24
+**Status**: Complete
+
+### What Was Implemented
+
+Integrated streaming into ChartPanel to update the chart tip (last candle/point) in real-time when streaming is active.
+
+**Implementation Details**:
+1. **Streaming service integration**: Added `_streaming_service` and `_subscribed_ticker` attributes
+2. **Listener callback**: `_on_streaming_quote()` filters by ticker, updates tip data
+3. **Setup streaming**: `_setup_streaming()` registers listener, subscribes to ticker
+4. **Cleanup streaming**: `_cleanup_streaming()` removes listener, unsubscribes
+5. **Tip update**: Updates close price, high (if exceeds), low (if below), volume
+6. **Stats recalculation**: Recalculates stats and indicators after each update
+7. **Symbol matching**: Handles BTC vs BTC-USD crypto suffix matching
+
+**Key Learnings**:
+1. **Check is_mounted before UI updates**: `_rebuild_content()` queries DOM, fails if widget not mounted
+2. **Ticker normalization for matching**: Handle BTC vs BTC-USD by checking both directions
+3. **Mock run_worker for tests**: When testing cleanup, mock `run_worker` to avoid needing app context
+4. **period_high from highs list**: Stats `period_high` comes from `data.highs`, not `data.prices`
+5. **Only update high/low if new value is more extreme**: Check greater-than for high, less-than for low before updating
+6. **Streaming is piggyback**: ChartPanel does not control streaming enable/disable, just subscribes when available
+7. **Error isolation**: Wrap streaming setup in try/except, chart works fine without streaming
+
+**Files Modified**:
+- `viper/widgets/chart_panel.py`: Added streaming integration (~100 lines)
+- `tests/test_chart_panel.py`: Added TestChartPanelStreaming class with 10 tests
+
+**Result**: All 10 streaming tests passing, chart tip updates in real-time when streaming enabled. VPR-103 complete.
+
