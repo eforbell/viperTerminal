@@ -56,7 +56,7 @@ class StreamingService:
         self._ws: AsyncWebSocket | None = None
         self._state: ConnectionState = ConnectionState.DISCONNECTED
         self._subscriptions: set[str] = set()
-        self._on_quote: Callable[[StreamingQuote], None] | None = None
+        self._quote_listeners: list[Callable[[StreamingQuote], None]] = []
         self._on_state_change: Callable[[ConnectionState], None] | None = None
         self._listen_task: asyncio.Task[None] | None = None
         self._running: bool = False
@@ -167,7 +167,9 @@ class StreamingService:
             self._logger.warning("StreamingService already running")
             return
 
-        self._on_quote = on_quote
+        # Register on_quote as first listener for backward compatibility
+        if on_quote is not None:
+            self.add_quote_listener(on_quote)
         self._on_state_change = on_state_change
 
         self._set_state(ConnectionState.CONNECTING)
@@ -207,6 +209,34 @@ class StreamingService:
         self._subscriptions.clear()
         self._set_state(ConnectionState.DISCONNECTED)
         self._logger.info("StreamingService stopped")
+
+    def add_quote_listener(
+        self, callback: Callable[[StreamingQuote], None]
+    ) -> None:
+        """Add a quote listener callback.
+
+        Args:
+            callback: Function to call when quotes arrive
+        """
+        if callback not in self._quote_listeners:
+            self._quote_listeners.append(callback)
+            self._logger.debug(f"Added quote listener, total: {len(self._quote_listeners)}")
+
+    def remove_quote_listener(
+        self, callback: Callable[[StreamingQuote], None]
+    ) -> None:
+        """Remove a quote listener callback.
+
+        This is a no-op if the callback is not found.
+
+        Args:
+            callback: Function to remove from listeners
+        """
+        try:
+            self._quote_listeners.remove(callback)
+            self._logger.debug(f"Removed quote listener, total: {len(self._quote_listeners)}")
+        except ValueError:
+            pass  # No-op if callback not found
 
     async def subscribe(self, symbols: list[str]) -> None:
         """Subscribe to symbols for real-time updates.
@@ -288,8 +318,12 @@ class StreamingService:
 
         try:
             quote = self._parse_quote(data)
-            if quote and self._on_quote:
-                self._on_quote(quote)
+            if quote:
+                for listener in self._quote_listeners:
+                    try:
+                        listener(quote)
+                    except Exception as e:
+                        self._logger.error(f"Quote listener error: {e}")
         except Exception as e:
             self._logger.error(f"Failed to parse quote: {e}")
 

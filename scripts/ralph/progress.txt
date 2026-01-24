@@ -1,4 +1,25 @@
+## Codebase Patterns
+- **Multi-listener pattern**: Use list of callbacks with per-listener try/except for error isolation
+- **Sync tests for callback registration**: No need for pytest-asyncio when testing callback add/remove
+- **Backward compatibility via delegation**: Old API can delegate to new API (e.g., start(on_quote=...) calls add_quote_listener())
 
+---
+
+## 2026-01-24 - VPR-102
+- **What was implemented**: Multi-listener support for StreamingService, enabling multiple widgets to receive streaming quotes
+- **Files changed**:
+  - `viper/services/streaming.py`: Changed _on_quote to _quote_listeners list, added add/remove_quote_listener methods
+  - `tests/test_streaming.py`: Added TestStreamingServiceMultiListener class with 8 tests
+  - `AGENTS.md`: Added VPR-102 learnings section
+  - `scripts/ralph/features/feature-13.prd.json`: Marked VPR-102 complete
+- **Learnings**:
+  - **Multi-listener pattern**: Use list of callbacks, iterate and call each, catch exceptions per-listener to isolate errors
+  - **Duplicate prevention**: Check `if callback not in list` before appending
+  - **Silent removal**: Use try/except with pass for remove when callback not found (no-op behavior)
+  - **Backward compatibility**: Old API behavior preserved via add_quote_listener() call in start()
+  - **Error isolation**: Inner try/except per listener prevents one failing callback from blocking others
+  - **Sync tests for async code**: When testing callback registration, sync tests work fine without pytest-asyncio
+---
 
 ## 2026-01-22 - VPR-097
 - **What was implemented**: StreamingService singleton for WebSocket-based real-time quote streaming

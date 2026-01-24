@@ -34,7 +34,9 @@
       "priority": 1,
       "estimatedEffort": "Small",
       "dependencies": ["Feature 12 complete"],
-      "notes": "Simple extension to existing StreamingService. Change _on_quote from single callback to list of callbacks."
+      "notes": "Simple extension to existing StreamingService. Change _on_quote from single callback to list of callbacks.",
+      "passes": true,
+      "completedAt": "2026-01-24"
     },
     {
       "id": "VPR-103",

@@ -621,7 +621,7 @@ class TestStreamingServiceSubscriptions:
         def failing_callback(quote: StreamingQuote) -> None:
             raise Exception("Callback error")
 
-        service._on_quote = failing_callback
+        service.add_quote_listener(failing_callback)
 
         with patch.object(service._logger, "error") as mock_error:
             data = {
@@ -631,6 +631,177 @@ class TestStreamingServiceSubscriptions:
             }
             service._handle_message(data)
             mock_error.assert_called_once()
+
+
+class TestStreamingServiceMultiListener:
+    """Tests for multi-listener support (VPR-102)."""
+
+    def test_add_quote_listener(self) -> None:
+        """Test add_quote_listener adds callback to list."""
+        StreamingService._reset_instance()
+        service = StreamingService.get_instance()
+
+        def listener(quote: StreamingQuote) -> None:
+            pass
+
+        service.add_quote_listener(listener)
+        assert len(service._quote_listeners) == 1
+        assert listener in service._quote_listeners
+
+    def test_add_quote_listener_no_duplicates(self) -> None:
+        """Test add_quote_listener ignores duplicate callbacks."""
+        StreamingService._reset_instance()
+        service = StreamingService.get_instance()
+
+        def listener(quote: StreamingQuote) -> None:
+            pass
+
+        service.add_quote_listener(listener)
+        service.add_quote_listener(listener)
+        assert len(service._quote_listeners) == 1
+
+    def test_remove_quote_listener(self) -> None:
+        """Test remove_quote_listener removes callback from list."""
+        StreamingService._reset_instance()
+        service = StreamingService.get_instance()
+
+        def listener(quote: StreamingQuote) -> None:
+            pass
+
+        service.add_quote_listener(listener)
+        service.remove_quote_listener(listener)
+        assert len(service._quote_listeners) == 0
+
+    def test_remove_quote_listener_not_found(self) -> None:
+        """Test remove_quote_listener is no-op when callback not found."""
+        StreamingService._reset_instance()
+        service = StreamingService.get_instance()
+
+        def listener(quote: StreamingQuote) -> None:
+            pass
+
+        # Should not raise
+        service.remove_quote_listener(listener)
+        assert len(service._quote_listeners) == 0
+
+    def test_multiple_listeners_receive_quotes(self) -> None:
+        """Test multiple listeners all receive quotes."""
+        StreamingService._reset_instance()
+        service = StreamingService.get_instance()
+
+        received1: list[StreamingQuote] = []
+        received2: list[StreamingQuote] = []
+        received3: list[StreamingQuote] = []
+
+        def listener1(quote: StreamingQuote) -> None:
+            received1.append(quote)
+
+        def listener2(quote: StreamingQuote) -> None:
+            received2.append(quote)
+
+        def listener3(quote: StreamingQuote) -> None:
+            received3.append(quote)
+
+        service.add_quote_listener(listener1)
+        service.add_quote_listener(listener2)
+        service.add_quote_listener(listener3)
+
+        data = {
+            "id": "AAPL",
+            "price": 150.00,
+            "previousClose": 147.50,
+        }
+
+        service._handle_message(data)
+
+        assert len(received1) == 1
+        assert len(received2) == 1
+        assert len(received3) == 1
+        assert received1[0].symbol == "AAPL"
+        assert received2[0].price == 150.00
+        assert received3[0].change == pytest.approx(2.50)
+
+    def test_removed_listener_stops_receiving(self) -> None:
+        """Test removing listener stops it from receiving quotes."""
+        StreamingService._reset_instance()
+        service = StreamingService.get_instance()
+
+        received1: list[StreamingQuote] = []
+        received2: list[StreamingQuote] = []
+
+        def listener1(quote: StreamingQuote) -> None:
+            received1.append(quote)
+
+        def listener2(quote: StreamingQuote) -> None:
+            received2.append(quote)
+
+        service.add_quote_listener(listener1)
+        service.add_quote_listener(listener2)
+
+        # First message - both receive
+        service._handle_message({"id": "AAPL", "price": 150.00})
+        assert len(received1) == 1
+        assert len(received2) == 1
+
+        # Remove listener2
+        service.remove_quote_listener(listener2)
+
+        # Second message - only listener1 receives
+        service._handle_message({"id": "TSLA", "price": 250.00})
+        assert len(received1) == 2
+        assert len(received2) == 1  # Still 1, didn't receive second
+
+    def test_start_on_quote_backward_compatibility(self) -> None:
+        """Test on_quote param in start() registers as first listener.
+
+        Note: This test verifies the callback registration mechanism
+        synchronously. The actual start() call is async but we can test
+        the add_quote_listener behavior directly.
+        """
+        StreamingService._reset_instance()
+        service = StreamingService.get_instance()
+
+        received: list[StreamingQuote] = []
+
+        def on_quote(quote: StreamingQuote) -> None:
+            received.append(quote)
+
+        # Simulate what start() does with on_quote parameter
+        service.add_quote_listener(on_quote)
+
+        # Verify listener was added
+        assert len(service._quote_listeners) == 1
+        assert on_quote in service._quote_listeners
+
+        # Test it receives quotes via _handle_message
+        service._handle_message({"id": "AAPL", "price": 150.00})
+        assert len(received) == 1
+        assert received[0].symbol == "AAPL"
+
+    def test_listener_error_does_not_stop_others(self) -> None:
+        """Test error in one listener doesn't prevent others from receiving."""
+        StreamingService._reset_instance()
+        service = StreamingService.get_instance()
+
+        received: list[StreamingQuote] = []
+
+        def failing_listener(quote: StreamingQuote) -> None:
+            raise Exception("Listener error")
+
+        def working_listener(quote: StreamingQuote) -> None:
+            received.append(quote)
+
+        service.add_quote_listener(failing_listener)
+        service.add_quote_listener(working_listener)
+
+        with patch.object(service._logger, "error") as mock_error:
+            service._handle_message({"id": "AAPL", "price": 150.00})
+
+            # Failing listener error was logged
+            mock_error.assert_called_once()
+
+            # Working listener still received the quote
+            assert len(received) == 1
 
 
 class TestStreamingServiceMessageHandling:
@@ -647,7 +818,7 @@ class TestStreamingServiceMessageHandling:
         def on_quote(quote: StreamingQuote) -> None:
             received_quotes.append(quote)
 
-        service._on_quote = on_quote
+        service.add_quote_listener(on_quote)
 
         data = {
             "id": "AAPL",

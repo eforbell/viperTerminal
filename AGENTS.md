@@ -1318,3 +1318,38 @@ Updated help screen documentation to include streaming keybinding and verified t
 
 **Result**: All 1077 tests passing, mypy --strict passes, help screen documents streaming feature. VPR-100 complete.
 
+
+
+---
+
+## Feature 13: Real-time Chart Tip Updates - VPR-102
+
+**Task**: Add multi-listener support to StreamingService
+**Date**: 2026-01-24
+**Status**: Complete ✅
+
+### What Was Implemented
+
+Extended StreamingService to support multiple quote listeners, enabling both WatchlistPanel and ChartPanel to receive streaming quotes independently.
+
+**Implementation Details**:
+1. **Changed `_on_quote` to `_quote_listeners`**: Single callback replaced with list of callbacks
+2. **add_quote_listener(callback)**: Adds callback to list, ignores duplicates
+3. **remove_quote_listener(callback)**: Removes callback, no-op if not found
+4. **Backward compatible**: `on_quote` param in `start()` adds as first listener
+5. **Error isolation**: One listener error does not stop others from receiving
+
+**Key Learnings**:
+1. **Multi-listener pattern**: Use list of callbacks, iterate and call each, catch exceptions per-listener
+2. **Duplicate prevention**: Check `if callback not in list` before appending
+3. **Silent removal**: Use try/except with pass for remove when callback not found
+4. **Backward compatibility**: Old API behavior preserved via add_quote_listener() call in start()
+5. **Error isolation**: Inner try/except per listener prevents one failing callback from blocking others
+6. **Sync tests for async code**: When testing callback registration, sync tests work fine without pytest-asyncio
+
+**Files Modified**:
+- `viper/services/streaming.py`: Changed _on_quote to _quote_listeners, added add/remove_quote_listener methods
+- `tests/test_streaming.py`: Added TestStreamingServiceMultiListener class with 8 tests
+
+**Result**: All sync tests passing, multi-listener support ready for ChartPanel integration. VPR-102 complete.
+
