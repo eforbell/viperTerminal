@@ -1,3 +1,8 @@
+## Future Enhancements (Backlog)
+- **Extended hours data via `prepost=True`**: yfinance supports pre-market (4:00-9:30 AM ET) and after-hours (4:00-8:00 PM ET) data when `prepost=True` is passed to `stock.history()`. Currently not used. Most relevant for watchlist prices. Could be a config option in `~/.config/viper/config.toml`. Need to investigate if `AsyncWebSocket` streaming also supports this flag.
+
+---
+
 ## Codebase Patterns
 - **Multi-listener pattern**: Use list of callbacks with per-listener try/except for error isolation
 - **Sync tests for callback registration**: No need for pytest-asyncio when testing callback add/remove
