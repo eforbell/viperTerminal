@@ -2851,3 +2851,420 @@ async def test_chart_panel_refresh_timer_cleans_up_on_unmount() -> None:
 
         # Verify timer is stopped
         assert panel._refresh_timer is None
+
+
+# --- Streaming Tests (VPR-103) ---
+
+
+class TestChartPanelStreaming:
+    """Tests for ChartPanel streaming integration."""
+
+    def _create_test_data(self) -> tuple[HistoricalData, HistoricalStats]:
+        """Create test chart data and stats."""
+        dates = [datetime(2024, 1, i + 1) for i in range(30)]
+        prices = [float(100 + i % 10) for i in range(30)]
+        volumes = [int(1000000) for _ in range(30)]
+        opens = [float(100) for _ in range(30)]
+        highs = [p + 2.0 for p in prices]
+        lows = [p - 2.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="AAPL",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000000,
+            num_data_points=len(prices),
+        )
+
+        return data, stats
+
+    def test_update_chart_tip_candlestick_close(self) -> None:
+        """Test that streaming updates the last candle's close price."""
+        from viper.services.streaming import StreamingQuote
+
+        panel = ChartPanel()
+        data, stats = self._create_test_data()
+
+        # Set up panel state
+        panel._state = "success"
+        panel._data = data
+        panel._stats = stats
+        panel._current_ticker = "AAPL"
+
+        original_close = data.prices[-1]
+        new_price = original_close + 5.0
+
+        # Create streaming quote
+        quote = StreamingQuote(
+            symbol="AAPL",
+            price=new_price,
+            change=5.0,
+            change_percent=1.5,
+        )
+
+        # Update the tip
+        panel._update_chart_tip(quote)
+
+        # Verify close price was updated
+        assert data.prices[-1] == new_price
+
+    def test_update_chart_tip_candlestick_high(self) -> None:
+        """Test that streaming updates high only if exceeds current."""
+        from viper.services.streaming import StreamingQuote
+
+        panel = ChartPanel()
+        data, stats = self._create_test_data()
+
+        panel._state = "success"
+        panel._data = data
+        panel._stats = stats
+        panel._current_ticker = "AAPL"
+
+        original_high = data.highs[-1]
+        new_high = original_high + 5.0
+
+        # Quote with higher day_high
+        quote = StreamingQuote(
+            symbol="AAPL",
+            price=data.prices[-1],
+            change=0.0,
+            change_percent=0.0,
+            day_high=new_high,
+        )
+
+        panel._update_chart_tip(quote)
+        assert data.highs[-1] == new_high
+
+        # Quote with lower day_high should NOT update
+        lower_high = original_high - 1.0
+        quote2 = StreamingQuote(
+            symbol="AAPL",
+            price=data.prices[-1],
+            change=0.0,
+            change_percent=0.0,
+            day_high=lower_high,
+        )
+
+        panel._update_chart_tip(quote2)
+        assert data.highs[-1] == new_high  # Still the higher value
+
+    def test_update_chart_tip_candlestick_low(self) -> None:
+        """Test that streaming updates low only if below current."""
+        from viper.services.streaming import StreamingQuote
+
+        panel = ChartPanel()
+        data, stats = self._create_test_data()
+
+        panel._state = "success"
+        panel._data = data
+        panel._stats = stats
+        panel._current_ticker = "AAPL"
+
+        original_low = data.lows[-1]
+        new_low = original_low - 5.0
+
+        # Quote with lower day_low
+        quote = StreamingQuote(
+            symbol="AAPL",
+            price=data.prices[-1],
+            change=0.0,
+            change_percent=0.0,
+            day_low=new_low,
+        )
+
+        panel._update_chart_tip(quote)
+        assert data.lows[-1] == new_low
+
+        # Quote with higher day_low should NOT update
+        higher_low = original_low + 1.0
+        quote2 = StreamingQuote(
+            symbol="AAPL",
+            price=data.prices[-1],
+            change=0.0,
+            change_percent=0.0,
+            day_low=higher_low,
+        )
+
+        panel._update_chart_tip(quote2)
+        assert data.lows[-1] == new_low  # Still the lower value
+
+    def test_update_chart_tip_volume(self) -> None:
+        """Test that streaming updates volume."""
+        from viper.services.streaming import StreamingQuote
+
+        panel = ChartPanel()
+        data, stats = self._create_test_data()
+
+        panel._state = "success"
+        panel._data = data
+        panel._stats = stats
+        panel._current_ticker = "AAPL"
+
+        new_volume = 5000000
+
+        quote = StreamingQuote(
+            symbol="AAPL",
+            price=data.prices[-1],
+            change=0.0,
+            change_percent=0.0,
+            volume=new_volume,
+        )
+
+        panel._update_chart_tip(quote)
+        assert data.volumes[-1] == new_volume
+
+    def test_streaming_quote_filters_by_ticker(self) -> None:
+        """Test that quotes for other tickers are ignored."""
+        from viper.services.streaming import StreamingQuote
+
+        panel = ChartPanel()
+        data, stats = self._create_test_data()
+
+        panel._state = "success"
+        panel._data = data
+        panel._stats = stats
+        panel._current_ticker = "AAPL"
+
+        original_price = data.prices[-1]
+
+        # Quote for different ticker
+        quote = StreamingQuote(
+            symbol="TSLA",
+            price=999.99,
+            change=0.0,
+            change_percent=0.0,
+        )
+
+        # This should be ignored
+        panel._on_streaming_quote(quote)
+
+        # Price unchanged
+        assert data.prices[-1] == original_price
+
+    def test_streaming_quote_matches_crypto_suffix(self) -> None:
+        """Test that crypto symbols match with -USD suffix."""
+        from viper.services.streaming import StreamingQuote
+
+        panel = ChartPanel()
+
+        # Create data with BTC ticker
+        dates = [datetime(2024, 1, i + 1) for i in range(30)]
+        prices = [float(50000 + i * 100) for i in range(30)]
+        volumes = [int(1000) for _ in range(30)]
+        opens = [float(50000) for _ in range(30)]
+        highs = [p + 100.0 for p in prices]
+        lows = [p - 100.0 for p in prices]
+
+        data = HistoricalData(
+            ticker="BTC",
+            period="1M",
+            dates=dates,
+            prices=prices,
+            volumes=volumes,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            interval="1d",
+        )
+
+        stats = HistoricalStats(
+            period_high=max(prices),
+            period_low=min(prices),
+            change_percent=5.0,
+            avg_volume=1000,
+            num_data_points=len(prices),
+        )
+
+        panel._state = "success"
+        panel._data = data
+        panel._stats = stats
+        panel._current_ticker = "BTC"
+
+        new_price = 55000.0
+
+        # Quote arrives with BTC-USD (normalized by StreamingService)
+        quote = StreamingQuote(
+            symbol="BTC-USD",
+            price=new_price,
+            change=0.0,
+            change_percent=0.0,
+        )
+
+        panel._on_streaming_quote(quote)
+
+        # Price should be updated
+        assert data.prices[-1] == new_price
+
+    def test_cleanup_streaming_on_unmount(self) -> None:
+        """Test that streaming is cleaned up on unmount."""
+        from unittest.mock import MagicMock, patch
+
+        from viper.services.streaming import StreamingService
+
+        panel = ChartPanel()
+        data, stats = self._create_test_data()
+
+        # Mock the streaming service
+        mock_service = MagicMock(spec=StreamingService)
+        panel._streaming_service = mock_service
+        panel._subscribed_ticker = "AAPL"
+
+        # Set up panel state
+        panel._state = "success"
+        panel._data = data
+        panel._stats = stats
+        panel._current_ticker = "AAPL"
+
+        # Mock run_worker to avoid needing app context
+        with patch.object(panel, "run_worker"):
+            # Cleanup streaming
+            panel._cleanup_streaming()
+
+        # Verify listener was removed
+        mock_service.remove_quote_listener.assert_called_once_with(
+            panel._on_streaming_quote
+        )
+
+        # Verify state was cleaned up
+        assert panel._subscribed_ticker is None
+        assert panel._streaming_service is None
+
+    def test_show_empty_cleans_up_streaming(self) -> None:
+        """Test that show_empty() cleans up listener and subscription."""
+        from unittest.mock import MagicMock, patch
+
+        from viper.services.streaming import StreamingService
+
+        panel = ChartPanel()
+        mock_service = MagicMock(spec=StreamingService)
+        panel._streaming_service = mock_service
+        panel._subscribed_ticker = "AAPL"
+        panel._state = "success"
+        panel._current_ticker = "AAPL"
+
+        # Avoid DOM queries in _rebuild_content for this unit-level state test.
+        with patch.object(panel, "run_worker"), patch.object(panel, "_rebuild_content"):
+            panel.show_empty()
+
+        mock_service.remove_quote_listener.assert_called_once_with(
+            panel._on_streaming_quote
+        )
+        assert panel._subscribed_ticker is None
+        assert panel._streaming_service is None
+
+    def test_setup_streaming_same_ticker_does_not_resubscribe(self) -> None:
+        """Test _setup_streaming does not re-subscribe the same ticker."""
+        from unittest.mock import MagicMock, patch
+
+        from viper.services.streaming import StreamingService
+
+        panel = ChartPanel()
+        mock_service = MagicMock(spec=StreamingService)
+        mock_service._running = True
+        panel._streaming_service = mock_service
+        panel._subscribed_ticker = "AAPL"
+
+        with (
+            patch("viper.widgets.chart_panel.StreamingService.get_instance", return_value=mock_service),
+            patch.object(panel, "run_worker") as mock_run_worker,
+        ):
+            panel._setup_streaming("AAPL")
+
+        mock_service.add_quote_listener.assert_called_once_with(panel._on_streaming_quote)
+        mock_run_worker.assert_not_called()
+
+    def test_streaming_recalculates_stats(self) -> None:
+        """Test that stats are recalculated after tip update."""
+        from viper.services.streaming import StreamingQuote
+
+        panel = ChartPanel()
+        data, stats = self._create_test_data()
+
+        panel._state = "success"
+        panel._data = data
+        panel._stats = stats
+        panel._current_ticker = "AAPL"
+
+        original_stats = panel._stats
+        original_change_percent = original_stats.change_percent
+
+        # Large price change - also update day_high
+        new_price = 200.0
+        quote = StreamingQuote(
+            symbol="AAPL",
+            price=new_price,  # Much higher than original ~100-109
+            change=0.0,
+            change_percent=0.0,
+            day_high=new_price,  # Day high equals the new price
+        )
+
+        panel._update_chart_tip(quote)
+
+        # Stats should be different (recalculated)
+        assert panel._stats is not original_stats
+        assert panel._stats is not None
+
+        # The change_percent should be different now (large price change)
+        assert panel._stats.change_percent != original_change_percent
+
+        # The period high should reflect the updated high
+        assert panel._stats.period_high >= new_price
+
+    def test_streaming_no_update_when_not_success_state(self) -> None:
+        """Test that streaming quotes are ignored when not in success state."""
+        from viper.services.streaming import StreamingQuote
+
+        panel = ChartPanel()
+        data, stats = self._create_test_data()
+
+        panel._state = "loading"  # Not success
+        panel._data = data
+        panel._stats = stats
+        panel._current_ticker = "AAPL"
+
+        original_price = data.prices[-1]
+
+        quote = StreamingQuote(
+            symbol="AAPL",
+            price=999.99,
+            change=0.0,
+            change_percent=0.0,
+        )
+
+        panel._on_streaming_quote(quote)
+
+        # Price unchanged
+        assert data.prices[-1] == original_price
+
+    def test_streaming_no_update_when_no_ticker(self) -> None:
+        """Test that streaming quotes are ignored when no ticker selected."""
+        from viper.services.streaming import StreamingQuote
+
+        panel = ChartPanel()
+
+        panel._state = "empty"
+        panel._data = None
+        panel._stats = None
+        panel._current_ticker = None
+
+        quote = StreamingQuote(
+            symbol="AAPL",
+            price=999.99,
+            change=0.0,
+            change_percent=0.0,
+        )
+
+        # Should not raise
+        panel._on_streaming_quote(quote)

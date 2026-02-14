@@ -56,7 +56,8 @@ class StreamingService:
         self._ws: AsyncWebSocket | None = None
         self._state: ConnectionState = ConnectionState.DISCONNECTED
         self._subscriptions: set[str] = set()
-        self._on_quote: Callable[[StreamingQuote], None] | None = None
+        self._subscription_counts: dict[str, int] = {}
+        self._quote_listeners: list[Callable[[StreamingQuote], None]] = []
         self._on_state_change: Callable[[ConnectionState], None] | None = None
         self._listen_task: asyncio.Task[None] | None = None
         self._running: bool = False
@@ -167,7 +168,9 @@ class StreamingService:
             self._logger.warning("StreamingService already running")
             return
 
-        self._on_quote = on_quote
+        # Register on_quote as first listener for backward compatibility
+        if on_quote is not None:
+            self.add_quote_listener(on_quote)
         self._on_state_change = on_state_change
 
         self._set_state(ConnectionState.CONNECTING)
@@ -205,8 +208,37 @@ class StreamingService:
             self._ws = None
 
         self._subscriptions.clear()
+        self._subscription_counts.clear()
         self._set_state(ConnectionState.DISCONNECTED)
         self._logger.info("StreamingService stopped")
+
+    def add_quote_listener(
+        self, callback: Callable[[StreamingQuote], None]
+    ) -> None:
+        """Add a quote listener callback.
+
+        Args:
+            callback: Function to call when quotes arrive
+        """
+        if callback not in self._quote_listeners:
+            self._quote_listeners.append(callback)
+            self._logger.debug(f"Added quote listener, total: {len(self._quote_listeners)}")
+
+    def remove_quote_listener(
+        self, callback: Callable[[StreamingQuote], None]
+    ) -> None:
+        """Remove a quote listener callback.
+
+        This is a no-op if the callback is not found.
+
+        Args:
+            callback: Function to remove from listeners
+        """
+        try:
+            self._quote_listeners.remove(callback)
+            self._logger.debug(f"Removed quote listener, total: {len(self._quote_listeners)}")
+        except ValueError:
+            pass  # No-op if callback not found
 
     async def subscribe(self, symbols: list[str]) -> None:
         """Subscribe to symbols for real-time updates.
@@ -218,26 +250,28 @@ class StreamingService:
             self._logger.warning("Cannot subscribe: service not running")
             return
 
-        normalized = [self._normalize_symbol(s) for s in symbols]
-        new_symbols = [s for s in normalized if s not in self._subscriptions]
+        normalized_unique = list(dict.fromkeys(self._normalize_symbol(s) for s in symbols))
+        new_symbols = [
+            s for s in normalized_unique if self._subscription_counts.get(s, 0) == 0
+        ]
 
-        if not new_symbols:
-            return
+        if new_symbols:
+            try:
+                await self._ws.subscribe(new_symbols)
+                self._subscriptions.update(new_symbols)
+                self._logger.info(f"Subscribed to: {new_symbols}")
+            except Exception as e:
+                self._logger.error(f"Failed to subscribe to {new_symbols}: {e}")
+                self._set_state(ConnectionState.ERROR)
+                return
 
-        try:
-            await self._ws.subscribe(new_symbols)
-            self._subscriptions.update(new_symbols)
-            self._logger.info(f"Subscribed to: {new_symbols}")
+        for symbol in normalized_unique:
+            self._subscription_counts[symbol] = self._subscription_counts.get(symbol, 0) + 1
 
-            # Start listening after first subscription (yfinance needs subs before listen)
-            if self._listen_task is None:
-                self._listen_task = asyncio.create_task(self._listen_loop())
-                self._logger.info("Started listening for messages")
-        except Exception as e:
-            self._logger.error(f"Failed to subscribe to {new_symbols}: {e}")
-            # Set error state and re-raise so caller can handle gracefully
-            self._set_state(ConnectionState.ERROR)
-            raise
+        # Start listening after first effective subscription.
+        if self._listen_task is None and self._subscriptions:
+            self._listen_task = asyncio.create_task(self._listen_loop())
+            self._logger.info("Started listening for messages")
 
     async def unsubscribe(self, symbols: list[str]) -> None:
         """Unsubscribe from symbols.
@@ -249,18 +283,29 @@ class StreamingService:
             self._logger.warning("Cannot unsubscribe: service not running")
             return
 
-        normalized = [self._normalize_symbol(s) for s in symbols]
-        to_remove = [s for s in normalized if s in self._subscriptions]
+        normalized_unique = list(dict.fromkeys(self._normalize_symbol(s) for s in symbols))
+        to_remove: list[str] = []
 
-        if not to_remove:
-            return
+        for symbol in normalized_unique:
+            count = self._subscription_counts.get(symbol, 0)
+            if count <= 0:
+                continue
+            if count == 1:
+                del self._subscription_counts[symbol]
+                to_remove.append(symbol)
+            else:
+                self._subscription_counts[symbol] = count - 1
 
-        try:
-            await self._ws.unsubscribe(to_remove)
-            self._subscriptions.difference_update(to_remove)
-            self._logger.info(f"Unsubscribed from: {to_remove}")
-        except Exception as e:
-            self._logger.error(f"Failed to unsubscribe from {to_remove}: {e}")
+        if to_remove:
+            try:
+                await self._ws.unsubscribe(to_remove)
+                self._subscriptions.difference_update(to_remove)
+                self._logger.info(f"Unsubscribed from: {to_remove}")
+            except Exception as e:
+                for symbol in to_remove:
+                    self._subscription_counts[symbol] = 1
+                self._subscriptions.update(to_remove)
+                self._logger.error(f"Failed to unsubscribe from {to_remove}: {e}")
 
     async def _listen_loop(self) -> None:
         """Main loop for receiving WebSocket messages."""
@@ -288,8 +333,12 @@ class StreamingService:
 
         try:
             quote = self._parse_quote(data)
-            if quote and self._on_quote:
-                self._on_quote(quote)
+            if quote:
+                for listener in self._quote_listeners:
+                    try:
+                        listener(quote)
+                    except Exception as e:
+                        self._logger.error(f"Quote listener error: {e}")
         except Exception as e:
             self._logger.error(f"Failed to parse quote: {e}")
 

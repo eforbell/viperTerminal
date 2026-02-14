@@ -111,9 +111,14 @@ async def test_panel_displays_watchlist_items(
         assert any("GOOGL" in text for text in label_texts)
 
 
-async def test_panel_shows_loading_state(watchlist_manager: WatchlistManager) -> None:
+@patch("viper.widgets.watchlist_panel.fetch_quote")
+async def test_panel_shows_loading_state(
+    mock_fetch: AsyncMock, watchlist_manager: WatchlistManager
+) -> None:
     """Test that panel shows loading spinner during initial load."""
     watchlist_manager.add("AAPL")
+    # Keep mount-time worker from filling _quotes before assertion.
+    mock_fetch.side_effect = [StockError(ticker="AAPL", error_message="mock")]
 
     app = WatchlistTestApp(watchlist_manager, refresh_interval=9999)
 
@@ -323,15 +328,21 @@ async def test_on_ticker_added(
         assert len(labels) > 0
 
 
-async def test_on_ticker_removed(watchlist_manager: WatchlistManager) -> None:
+@patch("viper.widgets.watchlist_panel.fetch_quote")
+async def test_on_ticker_removed(
+    mock_fetch: AsyncMock, watchlist_manager: WatchlistManager
+) -> None:
     """Test that on_ticker_removed updates display."""
     watchlist_manager.add("AAPL")
     watchlist_manager.add("GOOGL")
+    mock_fetch.return_value = StockError(ticker="AAPL", error_message="mock")
 
     app = WatchlistTestApp(watchlist_manager, refresh_interval=9999)
 
     async with app.run_test() as pilot:
         panel = app.query_one(WatchlistPanel)
+        # Let mount-time refresh settle before local state assertions.
+        await pilot.pause(0.1)
 
         # Store a quote in the cache
         panel._quotes["AAPL"] = StockQuote(

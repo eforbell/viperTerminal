@@ -1726,7 +1726,7 @@ async def test_viper_commands_search_returns_matches() -> None:
 
     async with app.run_test() as pilot:
         # Create a ViperCommands provider instance
-        provider = ViperCommands(app.screen, app.focused)
+        provider = ViperCommands(app.screen)
 
         # Search for "chart" - should match multiple chart-related commands
         hits = []
@@ -1747,7 +1747,7 @@ async def test_viper_commands_search_empty_query() -> None:
     app = ViperApp()
 
     async with app.run_test() as pilot:
-        provider = ViperCommands(app.screen, app.focused)
+        provider = ViperCommands(app.screen)
 
         # Search with empty string - should return all commands
         hits = []
@@ -1765,7 +1765,7 @@ async def test_viper_commands_search_partial_match() -> None:
     app = ViperApp()
 
     async with app.run_test() as pilot:
-        provider = ViperCommands(app.screen, app.focused)
+        provider = ViperCommands(app.screen)
 
         # Search for "tog" - should match toggle commands
         hits = []
@@ -1782,7 +1782,7 @@ async def test_viper_commands_search_no_match() -> None:
     app = ViperApp()
 
     async with app.run_test() as pilot:
-        provider = ViperCommands(app.screen, app.focused)
+        provider = ViperCommands(app.screen)
 
         # Search for something that won't match
         hits = []
@@ -1799,7 +1799,7 @@ async def test_viper_commands_run_action_quit() -> None:
     app = ViperApp()
 
     async with app.run_test() as pilot:
-        provider = ViperCommands(app.screen, app.focused)
+        provider = ViperCommands(app.screen)
 
         # The quit action should schedule the action (we can't easily test the result
         # because it schedules via call_later)
@@ -1814,7 +1814,7 @@ async def test_viper_commands_run_action_info_only() -> None:
     app = ViperApp()
 
     async with app.run_test() as pilot:
-        provider = ViperCommands(app.screen, app.focused)
+        provider = ViperCommands(app.screen)
 
         # Info-only commands should return without taking action
         provider._run_action("nav_info")
@@ -1830,7 +1830,7 @@ async def test_viper_commands_run_action_options_panel() -> None:
     app = ViperApp()
 
     async with app.run_test() as pilot:
-        provider = ViperCommands(app.screen, app.focused)
+        provider = ViperCommands(app.screen)
 
         # Options panel actions need the panel to be visible and loaded
         # First toggle options panel
@@ -1854,7 +1854,7 @@ async def test_viper_commands_hit_has_help_text() -> None:
     app = ViperApp()
 
     async with app.run_test() as pilot:
-        provider = ViperCommands(app.screen, app.focused)
+        provider = ViperCommands(app.screen)
 
         # Search for specific command
         hits = []
@@ -1876,7 +1876,7 @@ async def test_viper_commands_search_technical() -> None:
     app = ViperApp()
 
     async with app.run_test() as pilot:
-        provider = ViperCommands(app.screen, app.focused)
+        provider = ViperCommands(app.screen)
 
         # Search for "rsi" - should find RSI toggle command
         hits = []
@@ -1894,7 +1894,7 @@ async def test_viper_commands_search_navigate() -> None:
     app = ViperApp()
 
     async with app.run_test() as pilot:
-        provider = ViperCommands(app.screen, app.focused)
+        provider = ViperCommands(app.screen)
 
         # Search for "navigate" - should find navigation commands
         hits = []

@@ -270,6 +270,15 @@
         "VPR-103"
       ],
       "lastUpdated": "2026-01-23"
+    },
+    {
+      "id": "FE-013",
+      "title": "Extended hours data (pre-market/after-hours)",
+      "description": "Enable pre-market (4:00-9:30 AM ET) and after-hours (4:00-8:00 PM ET) quote data via yfinance prepost=True parameter",
+      "priority": "Low",
+      "relatedFeature": "feature-12",
+      "effort": "Small",
+      "notes": "Most relevant for watchlist prices. Add prepost=True to stock.history() calls. Investigate if AsyncWebSocket streaming supports this flag. Could be a config option in ~/.config/viper/config.toml."
     }
   ]
 }
