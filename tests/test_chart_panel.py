@@ -3141,6 +3141,50 @@ class TestChartPanelStreaming:
         assert panel._subscribed_ticker is None
         assert panel._streaming_service is None
 
+    def test_show_empty_cleans_up_streaming(self) -> None:
+        """Test that show_empty() cleans up listener and subscription."""
+        from unittest.mock import MagicMock, patch
+
+        from viper.services.streaming import StreamingService
+
+        panel = ChartPanel()
+        mock_service = MagicMock(spec=StreamingService)
+        panel._streaming_service = mock_service
+        panel._subscribed_ticker = "AAPL"
+        panel._state = "success"
+        panel._current_ticker = "AAPL"
+
+        # Avoid DOM queries in _rebuild_content for this unit-level state test.
+        with patch.object(panel, "run_worker"), patch.object(panel, "_rebuild_content"):
+            panel.show_empty()
+
+        mock_service.remove_quote_listener.assert_called_once_with(
+            panel._on_streaming_quote
+        )
+        assert panel._subscribed_ticker is None
+        assert panel._streaming_service is None
+
+    def test_setup_streaming_same_ticker_does_not_resubscribe(self) -> None:
+        """Test _setup_streaming does not re-subscribe the same ticker."""
+        from unittest.mock import MagicMock, patch
+
+        from viper.services.streaming import StreamingService
+
+        panel = ChartPanel()
+        mock_service = MagicMock(spec=StreamingService)
+        mock_service._running = True
+        panel._streaming_service = mock_service
+        panel._subscribed_ticker = "AAPL"
+
+        with (
+            patch("viper.widgets.chart_panel.StreamingService.get_instance", return_value=mock_service),
+            patch.object(panel, "run_worker") as mock_run_worker,
+        ):
+            panel._setup_streaming("AAPL")
+
+        mock_service.add_quote_listener.assert_called_once_with(panel._on_streaming_quote)
+        mock_run_worker.assert_not_called()
+
     def test_streaming_recalculates_stats(self) -> None:
         """Test that stats are recalculated after tip update."""
         from viper.services.streaming import StreamingQuote

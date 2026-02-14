@@ -32,6 +32,9 @@ class ViperCommands(Provider):
 
     async def search(self, query: str) -> Hits:
         """Search for commands matching the query."""
+        if not query:
+            return
+
         matcher = self.matcher(query)
         app = self.app
 

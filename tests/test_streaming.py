@@ -445,6 +445,40 @@ class TestStreamingServiceSubscriptions:
             await service.stop()
 
     @pytest.mark.asyncio
+    async def test_unsubscribe_respects_reference_count(self) -> None:
+        """Test unsubscribe keeps symbol active until all subscribers release it."""
+        StreamingService._reset_instance()
+        service = StreamingService.get_instance()
+
+        with patch("viper.services.streaming.AsyncWebSocket") as mock_ws_class:
+            mock_ws = AsyncMock()
+            mock_ws_class.return_value = mock_ws
+
+            async def mock_listen(handler: Any) -> None:
+                await asyncio.sleep(1)
+
+            mock_ws.listen = mock_listen
+
+            await service.start()
+            await asyncio.sleep(0.05)
+
+            # Simulate two components subscribing to same symbol.
+            await service.subscribe(["AAPL"])
+            await service.subscribe(["AAPL"])
+
+            # First unsubscribe only decrements local ref-count.
+            await service.unsubscribe(["AAPL"])
+            mock_ws.unsubscribe.assert_not_called()
+            assert "AAPL" in service.subscriptions
+
+            # Second unsubscribe triggers actual WebSocket unsubscribe.
+            await service.unsubscribe(["AAPL"])
+            mock_ws.unsubscribe.assert_called_once_with(["AAPL"])
+            assert "AAPL" not in service.subscriptions
+
+            await service.stop()
+
+    @pytest.mark.asyncio
     async def test_subscribe_when_not_running(self) -> None:
         """Test subscribe() when service not running logs warning."""
         StreamingService._reset_instance()

@@ -247,6 +247,7 @@ class ChartPanel(Widget):
         self._data = error
         self._stats = None
         self._current_ticker = error.ticker
+        self._cleanup_streaming()
         self._rebuild_content()
 
     def show_empty(self) -> None:
@@ -255,6 +256,7 @@ class ChartPanel(Widget):
         self._data = None
         self._stats = None
         self._current_ticker = None
+        self._cleanup_streaming()
         self._rebuild_content()
 
     def _rebuild_content(self) -> None:
@@ -778,6 +780,11 @@ class ChartPanel(Widget):
                 return
 
             self._streaming_service = service
+
+            # Already streaming this ticker for this panel; avoid duplicate subscribe().
+            if self._subscribed_ticker == ticker:
+                service.add_quote_listener(self._on_streaming_quote)
+                return
 
             # Unsubscribe from old ticker if different
             if self._subscribed_ticker and self._subscribed_ticker != ticker:
