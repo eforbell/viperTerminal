@@ -15,6 +15,7 @@ This installs the `viper-mcp` command.
 | Tool | Description |
 |------|-------------|
 | `get_quote` | Real-time stock/crypto quotes |
+| `get_scan` | Multi-symbol indicator scanner with rule filters |
 | `get_price_history` | Historical OHLCV data |
 | `get_technical_indicators` | SMA, EMA, RSI, MACD |
 | `get_option_expirations` | Available option expiration dates |

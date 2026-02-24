@@ -19,4 +19,5 @@ import viper.mcp.tools.info  # noqa: F401, E402
 import viper.mcp.tools.news  # noqa: F401, E402
 import viper.mcp.tools.options  # noqa: F401, E402
 import viper.mcp.tools.quote  # noqa: F401, E402
+import viper.mcp.tools.scan  # noqa: F401, E402
 import viper.mcp.tools.watchlist  # noqa: F401, E402

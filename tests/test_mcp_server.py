@@ -15,12 +15,13 @@ class TestMCPServer:
         assert mcp.name == "viper-market-data"
 
     def test_all_tools_registered(self) -> None:
-        """All 11 tools should be registered."""
+        """All MCP tools should be registered."""
         tools = mcp._tool_manager._tools
         expected_tools = {
             "get_quote",
             "get_price_history",
             "get_technical_indicators",
+            "get_scan",
             "get_option_expirations",
             "get_options_chain",
             "get_news",

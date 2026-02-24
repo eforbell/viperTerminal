@@ -197,6 +197,7 @@ Add to your Claude Code config:
 ```
 
 Then ask Claude: *"What's the price of AAPL?"* and it will call `get_quote` automatically.
+You can also scan multiple symbols with indicator rules via `get_scan` (e.g., RSI/MA filters).
 
 See [docs/MCP_SETUP.md](docs/MCP_SETUP.md) for full setup instructions.
 
