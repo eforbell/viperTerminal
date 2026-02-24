@@ -40,7 +40,7 @@ class TestGetQuote:
             assert result["volume"] == 1000000
             assert result["market_cap"] == 2500000000
             assert result["name"] == "Apple Inc."
-            mock.assert_awaited_once_with("AAPL")
+            mock.assert_awaited_once_with("AAPL", timeout=20.0)
 
     @pytest.mark.asyncio
     async def test_crypto_quote_success(self) -> None:
@@ -64,7 +64,7 @@ class TestGetQuote:
             assert result["price_usd"] == 50000.0
             assert result["change_24h_percent"] == 2.5
             assert result["name"] == "Bitcoin"
-            mock.assert_awaited_once_with("BTC")
+            mock.assert_awaited_once_with("BTC", timeout=20.0)
 
     @pytest.mark.asyncio
     async def test_stock_error(self) -> None:

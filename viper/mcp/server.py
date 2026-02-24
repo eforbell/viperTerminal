@@ -6,6 +6,10 @@ so their @mcp.tool() decorators register with the server.
 
 from mcp.server.fastmcp import FastMCP
 
+from viper.mcp.runtime import configure_mcp_runtime
+
+configure_mcp_runtime()
+
 mcp = FastMCP("viper-market-data")
 
 # Import tool modules to register their @mcp.tool() decorators

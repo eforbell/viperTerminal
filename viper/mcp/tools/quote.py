@@ -9,18 +9,19 @@ from viper.services.stock import StockError, StockQuote
 
 
 @mcp.tool()
-async def get_quote(symbol: str) -> dict[str, object]:
+async def get_quote(symbol: str, timeout_seconds: float = 20.0) -> dict[str, object]:
     """Get a real-time quote for a stock or cryptocurrency.
 
     Supports auto-detection (AAPL, BTC) or explicit prefixes (AAPL:STOCK, BTC:CRYPTO).
 
     Args:
         symbol: Ticker symbol, e.g. "AAPL", "BTC", "TSLA:STOCK", "ETH:CRYPTO"
+        timeout_seconds: Quote fetch timeout in seconds (default: 20.0)
 
     Returns:
         Quote data including price, change, volume, and market cap.
     """
-    result = await fetch_quote(symbol)
+    result = await fetch_quote(symbol, timeout=timeout_seconds)
 
     if isinstance(result, (StockError, CryptoError)):
         if isinstance(result, StockError):

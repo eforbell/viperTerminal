@@ -94,6 +94,12 @@ async def _auto_detect_and_fetch(symbol: str, timeout: float) -> QuoteResult:
     if symbol in SYMBOL_TO_ID:
         return await fetch_crypto_quote(symbol, timeout=timeout)
 
+    # Check known crypto trading pairs (e.g., BTC-USD, ETH-USD)
+    if symbol.endswith("-USD"):
+        base_symbol = symbol.removesuffix("-USD")
+        if base_symbol in SYMBOL_TO_ID:
+            return await fetch_crypto_quote(symbol, timeout=timeout)
+
     # Fall back to stock lookup
     return await fetch_stock_quote(symbol, timeout=timeout)
 

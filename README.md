@@ -200,6 +200,8 @@ Then ask Claude: *"What's the price of AAPL?"* and it will call `get_quote` auto
 
 See [docs/MCP_SETUP.md](docs/MCP_SETUP.md) for full setup instructions.
 
+Note: Viper MCP uses stdio transport by default. Your MCP client should launch `viper-mcp` itself; running a separate manual background process is not required for normal use.
+
 ## Data Sources
 
 - Stock/crypto data: [yfinance](https://github.com/ranaroussi/yfinance) (Yahoo Finance)

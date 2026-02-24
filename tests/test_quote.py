@@ -121,6 +121,25 @@ class TestAutoDetectAndFetch:
             assert isinstance(result, CryptoQuote)
             mock_crypto.assert_awaited_once_with("ETH", timeout=10.0)
 
+    @pytest.mark.asyncio
+    async def test_known_crypto_usd_pair_fetches_crypto(self) -> None:
+        """Should treat known -USD crypto pairs as crypto."""
+        with patch(
+            "viper.services.quote.fetch_crypto_quote", new_callable=AsyncMock
+        ) as mock_crypto:
+            mock_crypto.return_value = CryptoQuote(
+                symbol="BTC",
+                price_usd=50000.0,
+                change_24h_percent=1.0,
+                market_cap_usd=1000000000,
+                volume_24h_usd=20000000,
+            )
+
+            result = await _auto_detect_and_fetch("BTC-USD", timeout=10.0)
+
+            assert isinstance(result, CryptoQuote)
+            mock_crypto.assert_awaited_once_with("BTC-USD", timeout=10.0)
+
 
 class TestFetchQuote:
     """Tests for unified fetch_quote function."""

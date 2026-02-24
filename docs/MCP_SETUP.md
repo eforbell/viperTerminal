@@ -41,6 +41,27 @@ Add to your Claude Code MCP settings (`~/.claude/claude_code_config.json`):
 }
 ```
 
+## Codex (Optional)
+
+If you use Codex locally, add an MCP server entry and allow network access in `~/.codex/config.toml`:
+
+```toml
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = true
+
+[mcp_servers.viper]
+command = "/home/forbell/workspace/viper/.venv/bin/viper-mcp"
+args = []
+startup_timeout_sec = 30
+tool_timeout_sec = 120
+
+[mcp_servers.viper.env]
+VIPER_MCP_YF_TZ_CACHE_DIR = "/home/forbell/.cache/viper/yfinance"
+```
+
 Or if installed in a virtualenv:
 
 ```json
@@ -87,6 +108,13 @@ python -m viper.mcp
 
 The MCP server shares the same watchlist file as the Viper TUI at `~/.config/viper/watchlist.json`. Changes made via MCP tools are immediately visible in the TUI, and vice versa.
 
+## Logging
+
+`viper-mcp` writes logs to `~/.config/viper/viper-mcp.log` with rotation:
+
+- Max file size: 5MB
+- Backups kept: 3
+
 ## Troubleshooting
 
 **"command not found: viper-mcp"**
@@ -95,5 +123,17 @@ Ensure the package is installed (`pip install -e .`) and the install location is
 **Tools not appearing**
 Restart your MCP client after updating the config. Check the client's MCP logs for connection errors.
 
+**I started `viper-mcp` manually, but the client can't use it**
+With stdio transport, the MCP client must launch and own the server process.
+Do not start a separate background `viper-mcp` process for normal usage.
+
 **Import errors**
 Ensure all dependencies are installed: `pip install -e ".[dev]"`
+
+**Quotes time out or fail in sandboxed environments**
+Ensure outbound network is enabled for your client/sandbox.
+If your environment has restricted writes, set a writable timezone cache path:
+`VIPER_MCP_YF_TZ_CACHE_DIR=/path/to/writable/dir`.
+
+**`BTC-USD` appears as stock instead of crypto**
+Update to the latest code and restart your MCP client/server process. The quote router now treats known `-USD` crypto pairs as crypto.
