@@ -171,6 +171,35 @@ ruff check .
 - Terminal with Unicode support (for charts)
 - Internet connection (for market data)
 
+## MCP Server
+
+Viper includes an MCP (Model Context Protocol) server that exposes market data to LLM clients like Claude Code and Claude Desktop.
+
+```bash
+# Install
+pip install -e .
+
+# The viper-mcp command is now available
+viper-mcp
+```
+
+Add to your Claude Code config:
+
+```json
+{
+  "mcpServers": {
+    "viper-market-data": {
+      "command": "viper-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+Then ask Claude: *"What's the price of AAPL?"* and it will call `get_quote` automatically.
+
+See [docs/MCP_SETUP.md](docs/MCP_SETUP.md) for full setup instructions.
+
 ## Data Sources
 
 - Stock/crypto data: [yfinance](https://github.com/ranaroussi/yfinance) (Yahoo Finance)

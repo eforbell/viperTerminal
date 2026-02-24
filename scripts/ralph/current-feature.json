@@ -1,10 +1,20 @@
 {
-  "currentFeature": "feature-13",
-  "featureName": "Real-time Chart Tip Updates",
-  "prdPath": "features/feature-13.prd.json",
-  "branch": "viper/feature-13-realtime-charts",
-  "status": "ready",
+  "currentFeature": "feature-14",
+  "featureName": "MCP Market Intelligence Server",
+  "prdPath": "features/feature-14.prd.json",
+  "branch": "viper/feature-14-mcp-server",
+  "status": "in-progress",
   "completedFeatures": [
+    {
+      "feature": "feature-13",
+      "featureName": "Real-time Chart Tip Updates",
+      "prdPath": "features/feature-13.prd.json",
+      "branch": "viper/feature-13-realtime-charts",
+      "status": "complete",
+      "completedAt": "2026-01-24",
+      "stories": 2,
+      "description": "Extended streaming infrastructure to update chart tip (most recent candle/point) in real-time. Multi-listener support for StreamingService, ChartPanel streaming integration."
+    },
     {
       "feature": "feature-12",
       "featureName": "Real-time Watchlist Mode",

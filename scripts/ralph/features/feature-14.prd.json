@@ -1,0 +1,131 @@
+{
+  "branchName": "viper/feature-14-mcp-server",
+  "projectName": "Viper Terminal - Feature 14",
+  "description": "MCP Market Intelligence Server: Expose Viper's market data services to MCP-compatible LLM clients (Claude Code, Claude Desktop, etc.) via a stdio-based FastMCP server. No API key required.",
+  "principles": [
+    "No TUI dependency - viper/mcp/ imports only from viper/services/",
+    "Thin adapters - each tool is 10-30 lines wrapping existing services",
+    "stdio transport - required for Claude Code compatibility",
+    "Shared watchlist - MCP server reads/writes the same ~/.config/viper/watchlist.json",
+    "Error convention - return {error, symbol} dicts, no exceptions crossing MCP boundary",
+    "All tools return dict[str, object] - consistent, JSON-serializable"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "mcp": "FastMCP (mcp>=1.0.0)",
+    "transport": "stdio (JSON-RPC)",
+    "testing": "pytest + pytest-asyncio + pytest-cov",
+    "typecheck": "mypy --strict"
+  },
+  "userStories": [
+    {
+      "id": "VPR-104",
+      "title": "Core MCP Server + get_quote Tool",
+      "acceptanceCriteria": [
+        "FastMCP('viper-market-data') server instance created",
+        "viper-mcp entry point registered in pyproject.toml",
+        "mcp>=1.0.0 added as required dependency",
+        "get_quote(symbol) tool wraps fetch_quote() service",
+        "Stock quotes return type, ticker, price, change, volume, market_cap",
+        "Crypto quotes return type, symbol, price_usd, change_24h_percent",
+        "Errors return {error, symbol} dict",
+        "serialize_datetime() helper for ISO 8601 conversion",
+        "Test: server creation and tool registration",
+        "Test: stock quote success and error paths",
+        "Test: crypto quote success and error paths"
+      ],
+      "priority": 1,
+      "estimatedEffort": "Small",
+      "dependencies": [],
+      "notes": "Foundation story. All subsequent tools depend on the server instance.",
+      "passes": true
+    },
+    {
+      "id": "VPR-105",
+      "title": "Historical Data + Technical Indicators Tools",
+      "acceptanceCriteria": [
+        "get_price_history(symbol, period) returns OHLCV data with stats",
+        "Dates serialized to ISO 8601 strings",
+        "Stats include period_high, period_low, change_percent, avg_volume",
+        "get_technical_indicators(symbol, period, indicators, *_period) returns current values",
+        "Supports sma, ema, rsi, macd indicators",
+        "Returns only current (last) value for each indicator, not full arrays",
+        "Invalid indicator names return error dict",
+        "Custom periods supported for sma_period, ema_period, rsi_period",
+        "Test: OHLCV success with datetime serialization",
+        "Test: all indicators, subset, custom periods, error paths"
+      ],
+      "priority": 2,
+      "estimatedEffort": "Small-Medium",
+      "dependencies": ["VPR-104"],
+      "notes": "Indicators tool prevents massive responses by returning only current values.",
+      "passes": true
+    },
+    {
+      "id": "VPR-106",
+      "title": "Options + News + Info Tools",
+      "acceptanceCriteria": [
+        "get_option_expirations(ticker) returns list of expiration dates",
+        "get_options_chain(ticker, expiration) returns calls and puts as dicts",
+        "get_news(ticker, max_items) returns news items with serialized dates",
+        "get_stock_info(ticker) returns extended stock information",
+        "get_crypto_info(symbol) returns extended crypto information",
+        "All error paths return {error, symbol} dicts",
+        "Test: success and error paths for all 5 tools"
+      ],
+      "priority": 3,
+      "estimatedEffort": "Small-Medium",
+      "dependencies": ["VPR-104"],
+      "notes": "Five tools across three modules. All are thin wrappers over existing services.",
+      "passes": true
+    },
+    {
+      "id": "VPR-107",
+      "title": "Watchlist Tools + User Documentation",
+      "acceptanceCriteria": [
+        "get_watchlist() returns current tickers with count",
+        "add_to_watchlist(ticker) adds ticker and returns updated list",
+        "remove_from_watchlist(ticker) removes ticker and indicates if was_present",
+        "Watchlist uses lazy-initialized WatchlistManager singleton",
+        "Shares ~/.config/viper/watchlist.json with TUI",
+        "docs/MCP_SETUP.md with config for Claude Code, Claude Desktop, generic clients",
+        "README.md updated with MCP server section",
+        "Test: add/remove/get round-trips",
+        "Test: empty watchlist, nonexistent removal, ticker normalization"
+      ],
+      "priority": 4,
+      "estimatedEffort": "Small",
+      "dependencies": ["VPR-104"],
+      "notes": "Watchlist tests automatically isolated via conftest.py autouse fixture.",
+      "passes": true
+    }
+  ],
+  "technicalNotes": {
+    "architecture": "viper/mcp/ imports only viper/services/ - no Textual/Rich dependency",
+    "transport": "stdio JSON-RPC, required for Claude Code MCP protocol",
+    "errorHandling": "Services return error dataclasses, tools convert to {error, symbol} dicts",
+    "indicatorDesign": "Returns current (last non-None) value only to prevent massive LLM context",
+    "watchlistSingleton": "Lazy-initialized on first tool call, shares persistence with TUI"
+  },
+  "outOfScope": [
+    "SSE or HTTP transport (stdio only for v1)",
+    "Authentication or API keys",
+    "Rate limiting",
+    "Streaming/real-time via MCP (use polling tools)",
+    "Custom resource endpoints"
+  ],
+  "estimatedEffort": "Medium (2-3 days)",
+  "toolInventory": [
+    {"tool": "get_quote", "service": "quote.fetch_quote", "params": "symbol"},
+    {"tool": "get_price_history", "service": "history_data.fetch_historical_data", "params": "symbol, period"},
+    {"tool": "get_technical_indicators", "service": "indicators.* + history_data", "params": "symbol, period, indicators, *_period"},
+    {"tool": "get_option_expirations", "service": "options.fetch_option_expirations", "params": "ticker"},
+    {"tool": "get_options_chain", "service": "options.fetch_option_chain", "params": "ticker, expiration"},
+    {"tool": "get_news", "service": "news.fetch_news", "params": "ticker, max_items"},
+    {"tool": "get_stock_info", "service": "stock.fetch_stock_info", "params": "ticker"},
+    {"tool": "get_crypto_info", "service": "crypto.fetch_crypto_info", "params": "symbol"},
+    {"tool": "get_watchlist", "service": "watchlist.WatchlistManager.get_all", "params": "none"},
+    {"tool": "add_to_watchlist", "service": "watchlist.WatchlistManager.add", "params": "ticker"},
+    {"tool": "remove_from_watchlist", "service": "watchlist.WatchlistManager.remove", "params": "ticker"}
+  ]
+}
